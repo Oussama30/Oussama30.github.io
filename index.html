@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Ouafik Studio Offres</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: agency price sheet. Statement header, three pack columns that stack on phone, comparison table, how-it-works, contact strip */
+:root{
+  --bg:#f4f4ef; --surface:#ffffff; --ink:#121410; --muted:#5d6158; --line:#dcdcd2;
+  --lime:#c6f432; --lime-ink:#1b2400; --deep:#121410; --deep-fg:#f4f4ef;
+  --display:"Bricolage Grotesque", "Arial Narrow", sans-serif;
+  --body:"Instrument Sans", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f110d; --surface:#181b15; --ink:#eef0e8; --muted:#a3a89b; --line:#2b2f26;
+  --deep:#1d2118; --deep-fg:#eef0e8; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f110d; --surface:#181b15; --ink:#eef0e8; --muted:#a3a89b; --line:#2b2f26;
+  --deep:#1d2118; --deep-fg:#eef0e8; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 var(--body)}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:20px}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--lime);outline-offset:3px;border-radius:6px}
+
+.top{display:flex;justify-content:space-between;align-items:center;gap:16px;padding-block:20px}
+.logo{font-family:var(--display);font-weight:800;font-size:20px;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+.logo i{width:14px;height:14px;background:var(--lime);border-radius:3px;transform:rotate(45deg);display:inline-block}
+.top a.wa{font-weight:600;font-size:14px;text-decoration:none;border:1.5px solid var(--ink);padding:8px 14px;border-radius:999px}
+
+.hero{padding-block:40px 56px;display:grid;gap:24px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(40px,8.5vw,96px);line-height:.95;letter-spacing:-.035em;margin:0;text-wrap:balance;max-width:14ch}
+h1 mark{background:var(--lime);color:var(--lime-ink);padding:0 .12em;border-radius:.12em}
+.hero p{font-size:19px;color:var(--muted);max-width:56ch;margin:0}
+
+.packs{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:20px;align-items:start}
+.pack{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:28px;display:flex;flex-direction:column;gap:20px;min-width:0}
+.pack.feat{background:var(--deep);color:var(--deep-fg);border-color:var(--deep)}
+.pack.feat .muted, .pack.feat li{color:color-mix(in srgb,var(--deep-fg) 78%,transparent)}
+.tag{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;display:flex;justify-content:space-between;gap:8px}
+.tag b{background:var(--lime);color:var(--lime-ink);padding:2px 8px;border-radius:999px;font-weight:500}
+.pack h2{font-family:var(--display);font-weight:700;font-size:34px;letter-spacing:-.02em;margin:0;line-height:1}
+.price{font-family:var(--display);font-weight:800;font-size:52px;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+.price small{font-family:var(--body);font-size:16px;font-weight:500;letter-spacing:0;color:var(--muted)}
+.pack.feat .price small{color:color-mix(in srgb,var(--deep-fg) 70%,transparent)}
+.muted{color:var(--muted);margin:0}
+.pack ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.pack li{display:grid;grid-template-columns:18px 1fr;gap:10px;color:var(--muted);font-size:15px}
+.pack li::before{content:"";width:10px;height:10px;margin-top:7px;border-radius:2px;background:var(--lime);transform:rotate(45deg)}
+.pack li strong{color:inherit;font-weight:600}
+.pack:not(.feat) li strong{color:var(--ink)}
+.demo-link{display:flex;justify-content:space-between;align-items:center;gap:12px;text-decoration:none;font-weight:600;padding:14px 18px;border-radius:12px;background:var(--lime);color:var(--lime-ink)}
+.demo-link span:last-child{font-family:var(--mono);font-size:13px}
+.ex{font-size:13px;margin-top:-8px}
+
+section{padding-block:72px 0}
+h3.sec{font-family:var(--display);font-weight:700;font-size:clamp(28px,4.5vw,44px);letter-spacing:-.025em;margin:0 0 24px;line-height:1.05}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:15px}
+th,td{padding:14px 16px;text-align:left;border-bottom:1px solid var(--line)}
+th{font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500}
+td:not(:first-child),th:not(:first-child){text-align:center}
+tr:last-child td{border-bottom:0}
+.y{display:inline-block;width:10px;height:10px;background:var(--ink);border-radius:2px;transform:rotate(45deg)}
+.n{color:var(--muted)}
+
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;counter-reset:s}
+.step{border-top:2px solid var(--ink);padding-top:16px;min-width:0}
+.step::before{counter-increment:s;content:"0" counter(s);font-family:var(--mono);font-size:13px;color:var(--muted)}
+.step h4{font-family:var(--display);font-size:22px;margin:6px 0;font-weight:700}
+.step p{margin:0;color:var(--muted)}
+
+.extra{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.extra div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.extra b{font-family:var(--display);font-size:22px;white-space:nowrap;font-variant-numeric:tabular-nums}
+
+.cta{margin-block:72px 48px;background:var(--deep);color:var(--deep-fg);border-radius:24px;padding:40px 28px;display:grid;gap:20px}
+.cta h3{font-family:var(--display);font-size:clamp(30px,5vw,52px);font-weight:800;letter-spacing:-.03em;line-height:1;margin:0;max-width:18ch}
+.cta .row{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center}
+.cta a.btn{background:var(--lime);color:var(--lime-ink);text-decoration:none;font-weight:600;padding:14px 22px;border-radius:999px}
+.cta .num{font-family:var(--mono);font-size:15px}
+footer{padding-block:0 40px;color:var(--muted);font-size:13px}
+@media (prefers-reduced-motion:no-preference){
+  .pack{transition:transform .2s ease}
+  .pack:hover{transform:translateY(-4px)}
+  .hero h1{animation:rise .7s cubic-bezier(.2,.7,.2,1) both}
+  @keyframes rise{from{transform:translateY(16px)}to{transform:none}}
+}
+</style>
+
+<div class="wrap">
+  <nav class="top">
+    <div class="logo"><i aria-hidden="true"></i>Ouafik Studio</div>
+    <a class="wa" href="https://wa.me/212641061370" target="_blank" rel="noopener">WhatsApp</a>
+  </nav>
+
+  <header class="hero">
+    <span class="eyebrow">Sites web pour commerces à Kénitra</span>
+    <h1>Votre commerce mérite un <mark>vrai site</mark>.</h1>
+    <p>Des clients vous cherchent sur Google tous les jours. Un site rapide, beau sur téléphone, avec votre menu ou vos services et un bouton WhatsApp, transforme ces recherches en clients. Choisissez votre pack et regardez la démo.</p>
+  </header>
+
+  <div class="packs">
+    <article class="pack">
+      <div class="tag"><span>Pack 01</span></div>
+      <h2>Lancement</h2>
+      <div class="price">1 900 <small>DH · une fois</small></div>
+      <p class="muted">Pour être trouvé sur Google et recevoir des commandes sur WhatsApp. Idéal pour cafés, snacks, boutiques.</p>
+      <ul>
+        <li><span><strong>Site une page</strong> pensé pour le téléphone</span></li>
+        <li><span>Menu ou services avec prix</span></li>
+        <li><span>Boutons WhatsApp, appel et itinéraire</span></li>
+        <li><span>Fiche Google Maps créée ou corrigée</span></li>
+        <li><span>Nom de domaine et hébergement 1 an</span></li>
+        <li><span>Livré en 5 jours</span></li>
+      </ul>
+      <a class="demo-link" href="cafe/" target="_blank" rel="noopener"><span>Voir la démo café</span><span>→</span></a>
+      <p class="muted ex">Exemple : Kahwa &amp; Co, café à Casablanca</p>
+    </article>
+
+    <article class="pack feat">
+      <div class="tag"><span>Pack 02</span><b>Le plus choisi</b></div>
+      <h2>Pro</h2>
+      <div class="price">3 900 <small>DH · une fois</small></div>
+      <p class="muted">Pour les restaurants, riads et commerces qui veulent une image haut de gamme et des réservations.</p>
+      <ul>
+        <li><span><strong>Tout le pack Lancement</strong></span></li>
+        <li><span>Site complet en 3 langues : français, anglais, arabe</span></li>
+        <li><span>Carte interactive par catégories</span></li>
+        <li><span>Galerie photos avec agrandissement</span></li>
+        <li><span>Formulaire de réservation envoyé sur WhatsApp</span></li>
+        <li><span>Référencement Google de base</span></li>
+        <li><span>1 mois de modifications offertes</span></li>
+      </ul>
+      <a class="demo-link" href="restaurant/" target="_blank" rel="noopener"><span>Voir la démo restaurant</span><span>→</span></a>
+      <p class="muted ex">Exemple : Maison Safran, restaurant à Marrakech</p>
+    </article>
+
+    <article class="pack">
+      <div class="tag"><span>Pack 03</span></div>
+      <h2>Prestige</h2>
+      <div class="price">7 900 <small>DH · une fois</small></div>
+      <p class="muted">Pour cliniques, cabinets et centres qui veulent prendre des rendez-vous en ligne et inspirer confiance.</p>
+      <ul>
+        <li><span><strong>Tout le pack Pro</strong></span></li>
+        <li><span>Prise de rendez-vous en ligne en plusieurs étapes</span></li>
+        <li><span>Comparateur avant / après, avis, FAQ</span></li>
+        <li><span>Design sur mesure, mode clair et sombre</span></li>
+        <li><span>Référencement Google avancé et statistiques</span></li>
+        <li><span>3 mois de support et modifications</span></li>
+      </ul>
+      <a class="demo-link" href="dentiste/" target="_blank" rel="noopener"><span>Voir la démo cabinet dentaire</span><span>→</span></a>
+      <p class="muted ex">Exemple : Sourire Studio, dentiste à Rabat</p>
+    </article>
+  </div>
+
+  <section>
+    <h3 class="sec">Comparer les packs</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Inclus</th><th>Lancement</th><th>Pro</th><th>Prestige</th></tr></thead>
+        <tbody>
+          <tr><td>Site adapté au téléphone</td><td><span class="y" aria-label="oui"></span></td><td><span class="y" aria-label="oui"></span></td><td><span class="y" aria-label="oui"></span></td></tr>
+          <tr><td>Bouton WhatsApp et Google Maps</td><td><span class="y" aria-label="oui"></span></td><td><span class="y" aria-label="oui"></span></td><td><span class="y" aria-label="oui"></span></td></tr>
+          <tr><td>Domaine et hébergement 1 an</td><td><span class="y" aria-label="oui"></span></td><td><span class="y" aria-label="oui"></span></td><td><span class="y" aria-label="oui"></span></td></tr>
+          <tr><td>Nombre de langues</td><td>1</td><td>3</td><td>2 à 3</td></tr>
+          <tr><td>Galerie photos</td><td class="n">–</td><td><span class="y" aria-label="oui"></span></td><td><span class="y" aria-label="oui"></span></td></tr>
+          <tr><td>Réservation par formulaire</td><td class="n">–</td><td><span class="y" aria-label="oui"></span></td><td><span class="y" aria-label="oui"></span></td></tr>
+          <tr><td>Rendez-vous avec calendrier et créneaux</td><td class="n">–</td><td class="n">–</td><td><span class="y" aria-label="oui"></span></td></tr>
+          <tr><td>Avant / après, avis, FAQ</td><td class="n">–</td><td class="n">–</td><td><span class="y" aria-label="oui"></span></td></tr>
+          <tr><td>Modifications incluses</td><td class="n">–</td><td>1 mois</td><td>3 mois</td></tr>
+          <tr><td>Délai de livraison</td><td>5 jours</td><td>10 jours</td><td>15 jours</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h3 class="sec">Comment ça se passe</h3>
+    <div class="steps">
+      <div class="step"><h4>On se rencontre</h4><p>10 minutes dans votre commerce pour comprendre ce que vous vendez.</p></div>
+      <div class="step"><h4>Vous envoyez le contenu</h4><p>Menu, photos, horaires. On peut aussi prendre les photos sur place.</p></div>
+      <div class="step"><h4>On construit</h4><p>Vous voyez le site avancer et vous demandez les changements.</p></div>
+      <div class="step"><h4>En ligne</h4><p>Le site est publié sur votre domaine et relié à Google Maps.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h3 class="sec">Options</h3>
+    <div class="extra">
+      <div><span>Maintenance et petites modifications</span><b>150 DH/mois</b></div>
+      <div><span>Fiche Google Maps seule</span><b>300 DH</b></div>
+      <div><span>Séance photo sur place</span><b>500 DH</b></div>
+    </div>
+  </section>
+
+  <div class="cta">
+    <h3>Prêt à recevoir plus de clients ?</h3>
+    <div class="row">
+      <a class="btn" href="https://wa.me/212641061370" target="_blank" rel="noopener">Écrire sur WhatsApp</a>
+      <span class="num">06 41 06 13 70</span>
+    </div>
+    <p class="muted" style="color:inherit;opacity:.75">50 % à la commande, 50 % à la mise en ligne. Paiement en espèces ou par virement.</p>
+  </div>
+
+  <footer>Ouafik Studio · Les sites présentés sont des démonstrations, les commerces sont fictifs.</footer>
+</div>
+
+</body>
+</html>

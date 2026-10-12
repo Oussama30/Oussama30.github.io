@@ -1,0 +1,2231 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Maison Safran Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&amp;family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..600&amp;family=Jost:wght@300..600&amp;family=Reem+Kufi:wght@400..600&amp;display=swap">
+<style>
+/* Layout: a walk through a riad at night. Arched openings frame each room (hero, story, chef),
+   dusk-coloured rooms sit under a crenellated parapet, everything hangs on one 1180px axis. */
+:root {
+  color-scheme: dark;
+  --night: #0B1120;
+  --night-deep: #070B16;
+  --dusk: #111A2E;
+  --dusk-2: #18233A;
+  --saffron: #E4A847;
+  --saffron-soft: #F2CB7E;
+  --brass: #B98B4E;
+  --emerald: #2BA88E;
+  --emerald-soft: #74D6BE;
+  --emerald-deep: #0E3B35;
+  --ivory: #F3E9D6;
+  --mist: #BDB5A5;
+  --mist-2: #978F80;
+  --on-saffron: #1A1206;
+  --line: rgba(228, 168, 71, .26);
+  --line-soft: rgba(243, 233, 214, .11);
+  --error: #F4A290;
+  --wa: #0F7A55;
+  --f-display: "Bodoni Moda", "Bodoni 72", Didot, "Times New Roman", serif;
+  --f-body: "Jost", "Futura", "Avenir Next", "Trebuchet MS", sans-serif;
+  --f-label: "Jost", "Futura", "Avenir Next", "Trebuchet MS", sans-serif;
+  --track: .2em;
+  --track-sm: .12em;
+  --wrap: 1180px;
+  --gutter: clamp(16px, 5vw, 40px);
+  --radius: 12px;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+}
+:root[lang="ar"] {
+  --f-display: "Amiri", "Noto Naskh Arabic", "Geeza Pro", serif;
+  --f-body: "Amiri", "Noto Naskh Arabic", "Geeza Pro", serif;
+  --f-label: "Reem Kufi", "Amiri", "Geeza Pro", sans-serif;
+  --track: 0;
+  --track-sm: 0;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; background: var(--night); }
+body {
+  margin: 0;
+  background: var(--night);
+  color: var(--ivory);
+  font-family: var(--f-body);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  overflow-x: clip;
+  -webkit-font-smoothing: antialiased;
+}
+:root[lang="ar"] body { font-size: 1.2rem; line-height: 1.85; }
+[hidden] { display: none !important; }
+img, svg { max-width: 100%; }
+a { color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--saffron); outline-offset: 3px; }
+p { margin: 0; }
+ul { margin: 0; padding: 0; list-style: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+.skip { position: absolute; inset-inline-start: 12px; top: -60px; z-index: 100; background: var(--saffron); color: var(--on-saffron); padding: 10px 16px; border-radius: 999px; text-decoration: none; font-family: var(--f-label); }
+.skip:focus { top: 12px; }
+.wrap { max-width: var(--wrap); margin-inline: auto; padding-inline: var(--gutter); }
+.nowrap { white-space: nowrap; }
+
+h1, h2, h3 { font-family: var(--f-display); font-weight: 400; line-height: 1.08; margin: 0; text-wrap: balance; letter-spacing: -.01em; font-optical-sizing: auto; }
+:root[lang="ar"] :is(h1, h2, h3) { line-height: 1.4; letter-spacing: 0; font-weight: 700; }
+h1 em, h2 em { font-style: italic; color: var(--saffron-soft); }
+:root[lang="ar"] em { font-style: normal; }
+
+.ico { width: 1.1em; height: 1.1em; flex: none; display: inline-block; vertical-align: middle; fill: currentColor; }
+[dir="rtl"] .flip { transform: scaleX(-1); }
+
+.eyebrow { display: inline-flex; align-items: center; gap: .65em; font: 500 .76rem/1.3 var(--f-label); letter-spacing: var(--track); text-transform: uppercase; color: var(--saffron); }
+.eyebrow .ico { width: .95em; height: .95em; }
+.eyebrow sup { text-transform: lowercase; font-size: .75em; line-height: 0; letter-spacing: 0; }
+:root[lang="ar"] .eyebrow { font-size: .98rem; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: .6em; min-height: 50px; padding: .75em 1.55em; border-radius: 999px; border: 1px solid transparent; font: 500 .86rem/1.2 var(--f-label); letter-spacing: var(--track-sm); text-transform: uppercase; text-decoration: none; text-align: center; transition: transform .25s var(--ease), background-color .25s, border-color .25s, color .25s, box-shadow .25s; }
+:root[lang="ar"] .btn { font-size: 1.02rem; }
+.btn-primary { background: linear-gradient(180deg, #F1C066, #D99B37); color: var(--on-saffron); box-shadow: 0 10px 28px -12px rgba(228, 168, 71, .7), inset 0 1px 0 rgba(255, 255, 255, .35); }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 14px 32px -12px rgba(228, 168, 71, .85), inset 0 1px 0 rgba(255, 255, 255, .45); }
+.btn-ghost { border-color: var(--line); color: var(--ivory); background: rgba(243, 233, 214, .03); }
+.btn-ghost:hover { border-color: var(--saffron); color: var(--saffron-soft); }
+.btn-wa { background: var(--wa); color: #FFFFFF; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18); }
+.btn-wa:hover { background: #12915F; transform: translateY(-1px); }
+.btn-sm { min-height: 40px; padding: .55em 1.1em; font-size: .78rem; }
+.btn .ico { width: 1.15em; height: 1.15em; }
+
+/* Demo banner */
+.demo-bar { background: var(--emerald-deep); color: var(--ivory); border-bottom: 1px solid rgba(116, 214, 190, .18); }
+.demo-inner { display: flex; align-items: center; justify-content: center; gap: 10px; padding-block: 7px; font: 400 .74rem/1.4 var(--f-label); letter-spacing: .06em; text-align: center; }
+.demo-inner strong { font-weight: 600; color: var(--emerald-soft); letter-spacing: var(--track-sm); text-transform: uppercase; }
+.demo-inner .ico { color: var(--saffron); width: .9em; height: .9em; }
+.demo-more { color: var(--mist); }
+:root[lang="ar"] .demo-inner { font-size: .9rem; }
+@media (max-width: 699px) { .demo-more { display: none; } }
+
+/* Header */
+.site-header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 50; background: rgba(11, 17, 32, .74); -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2); border-bottom: 1px solid transparent; transition: background-color .3s, border-color .3s; }
+.site-header.is-scrolled { background: rgba(8, 12, 24, .94); border-bottom-color: var(--line-soft); }
+.header-inner { position: relative; display: flex; align-items: center; gap: 12px; min-height: 66px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ivory); margin-inline-end: auto; min-width: 0; }
+.brand-mark { width: 34px; height: 34px; flex: none; color: var(--saffron); }
+.brand-name { display: grid; line-height: 1; font-family: "Bodoni Moda", Didot, serif; }
+.brand-name small { font: 500 .56rem/1 "Jost", sans-serif; letter-spacing: .38em; text-transform: uppercase; color: var(--saffron); margin-bottom: 3px; }
+.brand-name span { font-size: 1.42rem; font-style: italic; letter-spacing: -.01em; }
+.site-nav ul { display: flex; flex-direction: column; }
+.site-nav a { text-decoration: none; }
+.lang { display: flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; flex: none; }
+.lang button { min-width: 34px; height: 32px; padding: 0 8px; border: 0; border-radius: 999px; background: none; color: var(--mist); font: 500 .74rem/1 "Jost", sans-serif; letter-spacing: .08em; transition: background-color .2s, color .2s; }
+.lang button[lang="ar"] { font: 700 1.02rem/1 "Amiri", serif; letter-spacing: 0; padding-bottom: 3px; }
+.lang button:hover { color: var(--ivory); }
+.lang button[aria-pressed="true"] { background: var(--saffron); color: var(--on-saffron); }
+.nav-toggle { width: 44px; height: 44px; flex: none; display: inline-grid; place-items: center; border: 1px solid var(--line-soft); border-radius: 999px; background: none; color: var(--ivory); }
+.nav-toggle .ico { width: 20px; height: 20px; }
+.header-cta { display: none; }
+@media (min-width: 640px) { .header-cta { display: inline-flex; } }
+@media (max-width: 979px) {
+  .site-nav { position: absolute; top: 100%; inset-inline: calc(var(--gutter) * -1); display: none; padding: 6px calc(var(--gutter) + 0px) 22px; background: rgba(7, 11, 22, .98); border-bottom: 1px solid var(--line-soft); }
+  .site-nav.is-open { display: block; }
+  .site-nav li a { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line-soft); font: 400 1.55rem/1.2 var(--f-display); color: var(--ivory); }
+  .site-nav li a::after { content: ""; width: 7px; height: 7px; border-top: 1px solid var(--saffron); border-inline-end: 1px solid var(--saffron); transform: rotate(45deg); }
+  [dir="rtl"] .site-nav li a::after { transform: rotate(-45deg); }
+}
+@media (min-width: 980px) {
+  .nav-toggle { display: none; }
+  .site-nav ul { flex-direction: row; gap: 26px; }
+  .site-nav a { position: relative; font: 500 .76rem/1 var(--f-label); letter-spacing: var(--track-sm); text-transform: uppercase; color: var(--mist); padding-block: 8px; transition: color .2s; }
+  :root[lang="ar"] .site-nav a { font-size: .98rem; }
+  .site-nav a::after { content: ""; position: absolute; inset-inline: 0; bottom: 0; height: 1px; background: var(--saffron); transform: scaleX(0); transition: transform .3s var(--ease); }
+  .site-nav a:hover { color: var(--ivory); }
+  .site-nav a:hover::after { transform: scaleX(1); }
+  .site-nav { margin-inline-end: 18px; }
+}
+
+/* Hero */
+.hero { position: relative; padding-block: clamp(28px, 6vw, 72px) clamp(56px, 8vw, 104px); overflow: clip; }
+.hero::before { content: ""; position: absolute; inset: 0; pointer-events: none; background:
+  radial-gradient(55% 45% at 78% 42%, rgba(228, 168, 71, .13), transparent 70%),
+  radial-gradient(45% 40% at 5% 0%, rgba(43, 168, 142, .10), transparent 70%); }
+.hero-grid { position: relative; display: grid; gap: 44px; }
+.hero-copy { display: grid; gap: 22px; align-content: center; min-width: 0; }
+.hero h1 { font-size: clamp(2.6rem, 1.2rem + 5.2vw, 5.2rem); line-height: 1.02; letter-spacing: -.02em; }
+:root[lang="ar"] .hero h1 { line-height: 1.3; letter-spacing: 0; }
+.hero-lead { font-size: clamp(1.05rem, .98rem + .35vw, 1.24rem); color: var(--mist); max-width: 33em; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.hero-actions .btn { flex: 1 1 auto; }
+@media (min-width: 520px) { .hero-actions .btn { flex: 0 0 auto; } }
+.status { display: inline-flex; align-items: center; gap: 10px; justify-self: start; padding: 8px 15px 8px 13px; border: 1px solid var(--line-soft); border-radius: 999px; font: 400 .88rem/1.3 var(--f-label); color: var(--ivory); background: rgba(243, 233, 214, .03); }
+.status .dot { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--brass); flex: none; }
+.status.is-open .dot { background: var(--emerald-soft); }
+.status .dot::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 1px solid currentColor; color: var(--emerald-soft); opacity: 0; }
+
+.hero-art { position: relative; width: 100%; max-width: 470px; margin-inline: auto; filter: drop-shadow(0 34px 50px rgba(0, 0, 0, .55)); min-width: 0; }
+.art-svg { display: block; width: 100%; height: auto; }
+.hero-card { position: absolute; inset-inline-start: 14px; bottom: 7%; display: grid; gap: 2px; padding: 12px 16px 13px; background: rgba(8, 12, 24, .84); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 14px; max-width: 72%; }
+.hero-card .k { font: 500 .64rem/1.3 var(--f-label); letter-spacing: var(--track); text-transform: uppercase; color: var(--saffron); }
+:root[lang="ar"] .hero-card .k { font-size: .85rem; }
+.hero-card .v { font: italic 400 1.15rem/1.25 var(--f-display); }
+:root[lang="ar"] .hero-card .v { font-style: normal; font-weight: 700; }
+.hero-card .p { font: 400 1rem/1.2 var(--f-display); color: var(--saffron-soft); font-variant-numeric: lining-nums tabular-nums; }
+@media (min-width: 900px) {
+  .hero-grid { grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); gap: 64px; align-items: center; }
+  .hero-art { margin-inline: auto 0; }
+  .hero-card { inset-inline-start: -34px; }
+}
+.facts { position: relative; display: grid; gap: 14px; margin-top: clamp(40px, 6vw, 72px); padding-top: 26px; border-top: 1px solid var(--line-soft); }
+.fact { display: flex; align-items: center; gap: 14px; color: var(--mist); font-size: .98rem; min-width: 0; }
+.fact-ico { width: 42px; height: 42px; flex: none; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--saffron); }
+.fact-ico .ico { width: 19px; height: 19px; }
+@media (min-width: 760px) { .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; } }
+
+/* Shared section rhythm */
+.section { position: relative; padding-block: clamp(76px, 11vw, 140px); scroll-margin-top: 66px; }
+.sec-head { display: grid; gap: 16px; margin-bottom: clamp(36px, 5vw, 60px); max-width: 44rem; }
+.sec-head h2 { font-size: clamp(2.25rem, 1.4rem + 3.4vw, 3.8rem); }
+.lede { color: var(--mist); max-width: 36rem; }
+.parapet { background: var(--dusk); }
+.parapet::before { content: ""; position: absolute; left: 0; right: 0; top: -17px; height: 18px; pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='18' viewBox='0 0 36 18'%3E%3Cpath d='M6 18V12H9V6H12V0H24V6H27V12H30V18Z' fill='%23111A2E'/%3E%3C/svg%3E") repeat-x center bottom / 36px 18px; }
+.zellige-bg::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .07;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cg fill='none' stroke='%23E4A847' stroke-width='1'%3E%3Cpolygon points='60,30 51.21,38.79 51.21,51.21 38.79,51.21 30,60 21.21,51.21 8.79,51.21 8.79,38.79 0,30 8.79,21.21 8.79,8.79 21.21,8.79 30,0 38.79,8.79 51.21,8.79 51.21,21.21'/%3E%3Cpolygon points='47,30 42.02,34.98 42.02,42.02 34.98,42.02 30,47 25.02,42.02 17.98,42.02 17.98,34.98 13,30 17.98,25.02 17.98,17.98 25.02,17.98 30,13 34.98,17.98 42.02,17.98 42.02,25.02'/%3E%3C/g%3E%3C/svg%3E") repeat center / 60px 60px;
+  -webkit-mask-image: linear-gradient(90deg, #000, transparent 38%); mask-image: linear-gradient(90deg, #000, transparent 38%); }
+[dir="rtl"] .zellige-bg::after { -webkit-mask-image: linear-gradient(270deg, #000, transparent 38%); mask-image: linear-gradient(270deg, #000, transparent 38%); }
+.section > .wrap { position: relative; z-index: 1; }
+
+/* Story */
+.story-grid { display: grid; gap: 44px; }
+.story-text { display: grid; gap: 20px; min-width: 0; }
+.story-text h2 { font-size: clamp(2.25rem, 1.4rem + 3.4vw, 3.8rem); }
+.story-text p.body { color: var(--mist); max-width: 34em; }
+:root:not([lang="ar"]) .story-text p.body.first::first-letter { float: left; font: 400 3.7em/.82 var(--f-display); color: var(--saffron); margin: .06em .12em 0 0; }
+.story-media { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 22px; align-items: end; }
+.story-art svg { display: block; width: 100%; height: auto; filter: drop-shadow(0 26px 40px rgba(0, 0, 0, .5)); }
+.stats { display: grid; gap: 20px; }
+.stat { display: grid; gap: 4px; padding-top: 12px; border-top: 1px solid var(--line); }
+.stat b { font: 400 clamp(2rem, 1.5rem + 2vw, 3.1rem)/1 var(--f-display); color: var(--saffron-soft); font-variant-numeric: lining-nums tabular-nums; }
+.stat span { font-size: .88rem; line-height: 1.4; color: var(--mist); }
+@media (min-width: 900px) {
+  .story-grid { grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 80px; align-items: center; }
+  .story-media { order: -1; }
+}
+
+/* Chef */
+.chef-grid { display: grid; gap: 44px; }
+.chef-art { width: 100%; max-width: 380px; margin-inline: auto; min-width: 0; }
+.chef-art svg { display: block; width: 100%; height: auto; filter: drop-shadow(0 30px 46px rgba(0, 0, 0, .55)); }
+.chef-text { display: grid; gap: 18px; min-width: 0; }
+.chef-text h2 { font-size: clamp(2.4rem, 1.4rem + 3.8vw, 4rem); }
+.chef-role { font: 500 .8rem/1.4 var(--f-label); letter-spacing: var(--track-sm); text-transform: uppercase; color: var(--mist-2); }
+:root[lang="ar"] .chef-role { font-size: 1rem; }
+.chef-quote { margin: 10px 0 4px; padding-inline-start: 22px; border-inline-start: 1px solid var(--saffron); font: italic 400 clamp(1.45rem, 1.1rem + 1.4vw, 2.15rem)/1.3 var(--f-display); color: var(--ivory); max-width: 22em; }
+:root[lang="ar"] .chef-quote { font-style: normal; line-height: 1.6; }
+.chef-bio { color: var(--mist); max-width: 34em; }
+.chef-facts { display: grid; gap: 12px; margin: 8px 0 0; }
+.chef-facts div { display: grid; gap: 2px; padding: 16px 18px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: rgba(243, 233, 214, .025); }
+.chef-facts dt { font: 500 .72rem/1.3 var(--f-label); letter-spacing: var(--track); text-transform: uppercase; color: var(--saffron); }
+:root[lang="ar"] .chef-facts dt { font-size: .95rem; }
+.chef-facts dd { margin: 0; font: 400 1.18rem/1.35 var(--f-display); }
+@media (min-width: 520px) { .chef-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 900px) {
+  .chef-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 80px; align-items: center; }
+  .chef-art { order: 2; max-width: 440px; }
+}
+
+/* Menu */
+.menu-top { display: grid; gap: 28px; margin-bottom: 40px; }
+.menu-top .sec-head { margin-bottom: 0; }
+.tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.tab { min-height: 48px; padding: .6em 1.1em; border: 1px solid var(--line-soft); border-radius: 999px; background: transparent; color: var(--mist); font: 400 1rem/1.2 var(--f-label); transition: border-color .2s, color .2s, background-color .2s; }
+.tab:hover { color: var(--ivory); border-color: var(--line); }
+.tab[aria-selected="true"] { background: rgba(228, 168, 71, .12); border-color: var(--saffron); color: var(--saffron-soft); }
+@media (min-width: 760px) { .tabs { display: flex; flex-wrap: wrap; } }
+@media (min-width: 1000px) { .menu-top { grid-template-columns: minmax(0, 1fr) auto; align-items: end; } }
+.dishes { display: grid; gap: 30px 72px; }
+@media (min-width: 860px) { .dishes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.dish { display: grid; gap: 6px; min-width: 0; }
+.dish-top { display: flex; align-items: baseline; gap: 12px; }
+.dish-name { flex: 0 1 auto; min-width: 0; font: 400 1.32rem/1.25 var(--f-display); }
+:root[lang="ar"] .dish-name { font-weight: 700; font-size: 1.35rem; }
+.dish-dots { flex: 1 1 20px; min-width: 20px; border-bottom: 1px dotted rgba(228, 168, 71, .5); transform: translateY(-.28em); }
+.dish-price { flex: none; white-space: nowrap; font: 400 1.3rem/1 var(--f-display); color: var(--saffron-soft); font-variant-numeric: lining-nums tabular-nums; }
+.dish-price .cur { font: 500 .66rem/1 var(--f-label); letter-spacing: var(--track-sm); color: var(--mist); margin-inline-start: .35em; }
+:root[lang="ar"] .dish-price .cur { font-size: .9rem; }
+.dish-desc { color: var(--mist); font-size: .96rem; max-width: 36em; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.tag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid; border-radius: 999px; font: 500 .66rem/1 var(--f-label); letter-spacing: var(--track-sm); text-transform: uppercase; }
+:root[lang="ar"] .tag { font-size: .85rem; padding-block: 4px 6px; }
+.tag .ico { width: 11px; height: 11px; }
+.tag-sig { color: var(--saffron); border-color: rgba(228, 168, 71, .45); }
+.tag-veg { color: var(--emerald-soft); border-color: rgba(116, 214, 190, .4); }
+.tag-share { color: var(--ivory); border-color: var(--line-soft); }
+.menu-foot { display: grid; gap: 22px; margin-top: 52px; }
+.tasting { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px 28px; padding: 24px clamp(18px, 3vw, 32px); border: 1px solid var(--line); border-radius: var(--radius); background: radial-gradient(120% 140% at 0% 0%, rgba(228, 168, 71, .12), transparent 60%), var(--night); }
+.tasting-text { display: grid; gap: 4px; min-width: 0; flex: 1 1 260px; }
+.tasting-text b { font: 400 1.5rem/1.2 var(--f-display); font-style: italic; color: var(--ivory); }
+:root[lang="ar"] .tasting-text b { font-style: normal; font-weight: 700; }
+.tasting-text span { color: var(--mist); font-size: .96rem; }
+.menu-note { color: var(--mist-2); font-size: .92rem; }
+.panel-in { animation: none; }
+
+/* Gallery */
+.gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.g-item { position: relative; display: block; aspect-ratio: 1 / 1; padding: 0; border: 0; border-radius: 6px; overflow: hidden; background: var(--dusk); cursor: zoom-in; text-align: start; min-width: 0; }
+.g-item[data-key="g1"] { grid-column: 1 / -1; aspect-ratio: 16 / 11; }
+.g-item[data-key="g6"] { grid-column: 1 / -1; aspect-ratio: 5 / 2; }
+.g-item > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; transition: transform .9s var(--ease); }
+.g-item:hover > svg { transform: scale(1.045); }
+.g-cap { position: absolute; inset-inline: 0; bottom: 0; display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; padding: 36px 14px 12px; background: linear-gradient(180deg, transparent, rgba(7, 11, 22, .88)); }
+.g-t { font: 400 1.02rem/1.25 var(--f-display); color: var(--ivory); min-width: 0; }
+:root[lang="ar"] .g-t { font-weight: 700; font-size: 1.08rem; }
+.g-zoom { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(243, 233, 214, .3); color: var(--ivory); transition: background-color .25s, color .25s, border-color .25s; }
+.g-zoom .ico { width: 14px; height: 14px; }
+.g-item:hover .g-zoom { background: var(--saffron); color: var(--on-saffron); border-color: var(--saffron); }
+@media (min-width: 900px) {
+  .gallery { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: clamp(170px, 19vw, 250px); gap: 14px; }
+  .g-item, .g-item[data-key="g1"], .g-item[data-key="g6"] { aspect-ratio: auto; }
+  .g-item[data-key="g1"] { grid-column: span 2; grid-row: span 2; }
+  .g-item[data-key="g6"] { grid-column: 1 / -1; }
+  .g-t { font-size: 1.12rem; }
+}
+
+/* Lightbox */
+.lb { width: min(960px, calc(100vw - 24px)); max-width: none; max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--night-deep); color: var(--ivory); overflow: auto; }
+.lb::backdrop { background: rgba(4, 7, 15, .86); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.lb-inner { position: relative; display: grid; gap: 16px; padding: 14px 14px 18px; }
+.lb-art { width: min(100%, calc(66dvh * var(--ar, 1))); margin-inline: auto; aspect-ratio: var(--ar, 1); border-radius: 10px; overflow: hidden; touch-action: pan-y; }
+.lb-art svg { display: block; width: 100%; height: 100%; }
+.lb-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.lb-text { display: grid; gap: 3px; flex: 1 1 220px; min-width: 0; }
+.lb-count { font: 500 .72rem/1 var(--f-label); letter-spacing: var(--track); color: var(--saffron); font-variant-numeric: tabular-nums; }
+.lb-text h3 { font-size: 1.45rem; }
+.lb-text p { color: var(--mist); font-size: .96rem; }
+.lb-nav { display: flex; gap: 8px; }
+.icon-btn { width: 46px; height: 46px; display: inline-grid; place-items: center; flex: none; border: 1px solid var(--line); border-radius: 50%; background: rgba(7, 11, 22, .6); color: var(--ivory); transition: border-color .2s, color .2s, background-color .2s; }
+.icon-btn:hover { border-color: var(--saffron); color: var(--saffron-soft); }
+.icon-btn .ico { width: 18px; height: 18px; }
+.lb-close { position: absolute; top: 22px; inset-inline-end: 22px; z-index: 2; }
+
+/* Reviews */
+.reviews-grid { display: grid; gap: 18px; }
+@media (min-width: 860px) { .reviews-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; } }
+.review { display: flex; flex-direction: column; gap: 18px; padding: 26px 24px 24px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: linear-gradient(180deg, rgba(243, 233, 214, .04), rgba(243, 233, 214, 0)); min-width: 0; }
+.review-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.stars { display: flex; gap: 3px; color: var(--saffron); }
+.stars .ico { width: 15px; height: 15px; }
+.badge { padding: 4px 9px; border: 1px dashed rgba(243, 233, 214, .3); border-radius: 999px; font: 500 .64rem/1 var(--f-label); letter-spacing: var(--track-sm); text-transform: uppercase; color: var(--mist); }
+:root[lang="ar"] .badge { font-size: .85rem; }
+.review blockquote { margin: 0; flex: 1; font: 400 1.16rem/1.5 var(--f-display); color: var(--ivory); }
+:root[lang="ar"] .review blockquote { font-size: 1.25rem; line-height: 1.7; }
+.who { display: flex; align-items: center; gap: 12px; }
+.avatar { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--emerald-deep); border: 1px solid rgba(116, 214, 190, .3); font: italic 400 1.1rem/1 var(--f-display); color: var(--emerald-soft); }
+.who-name { display: grid; line-height: 1.3; }
+.who-name b { font-weight: 500; font-size: .98rem; }
+.who-name span { font-size: .85rem; color: var(--mist-2); }
+.reviews-note { margin-top: 22px; font-size: .9rem; color: var(--mist-2); font-style: italic; }
+:root[lang="ar"] .reviews-note { font-style: normal; }
+
+/* Booking */
+.book { overflow: clip; }
+.book::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(50% 40% at 85% 20%, rgba(228, 168, 71, .09), transparent 70%); }
+.book-grid { display: grid; gap: 32px; }
+@media (min-width: 980px) { .book-grid { grid-template-columns: minmax(0, 1.12fr) minmax(0, .88fr); gap: 52px; align-items: start; } }
+.book-card { position: relative; min-width: 0; scroll-margin-top: 84px; padding: 54px clamp(18px, 4vw, 40px) clamp(22px, 4vw, 38px); border: 1px solid var(--line); border-radius: 240px 240px 16px 16px / 64px 64px 16px 16px; background: linear-gradient(180deg, var(--dusk-2), var(--dusk) 55%); box-shadow: 0 40px 80px -40px rgba(0, 0, 0, .7); }
+.book-card::before { content: ""; position: absolute; top: 18px; left: 50%; width: 18px; height: 18px; transform: translateX(-50%); background: var(--saffron);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpolygon points='16,8 13.66,10.34 13.66,13.66 10.34,13.66 8,16 5.66,13.66 2.34,13.66 2.34,10.34 0,8 2.34,5.66 2.34,2.34 5.66,2.34 8,0 10.34,2.34 13.66,2.34 13.66,5.66'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpolygon points='16,8 13.66,10.34 13.66,13.66 10.34,13.66 8,16 5.66,13.66 2.34,13.66 2.34,10.34 0,8 2.34,5.66 2.34,2.34 5.66,2.34 8,0 10.34,2.34 13.66,2.34 13.66,5.66'/%3E%3C/svg%3E") center / contain no-repeat; }
+.book-card .sec-head { margin-bottom: 28px; }
+.book-card .sec-head h2 { font-size: clamp(2rem, 1.4rem + 2.6vw, 3.1rem); }
+.form-grid { display: grid; gap: 18px; }
+@media (min-width: 560px) { .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .span-2 { grid-column: 1 / -1; } }
+.field { display: grid; gap: 7px; min-width: 0; align-content: start; }
+.field > label, .field legend { font: 500 .74rem/1.3 var(--f-label); letter-spacing: var(--track-sm); text-transform: uppercase; color: var(--mist); padding: 0; }
+:root[lang="ar"] .field > label, :root[lang="ar"] .field legend { font-size: .95rem; }
+fieldset.field { border: 0; margin: 0; padding: 0; min-width: 0; }
+fieldset.field legend { margin-bottom: 7px; }
+.input { width: 100%; min-width: 0; min-height: 52px; padding: 12px 14px; border: 1px solid rgba(243, 233, 214, .16); border-radius: 10px; background: rgba(5, 8, 18, .55); color: var(--ivory); font-size: 1rem; transition: border-color .2s, box-shadow .2s; }
+.input::placeholder { color: var(--mist-2); opacity: 1; }
+.input:hover { border-color: rgba(243, 233, 214, .28); }
+.input:focus { outline: none; border-color: var(--saffron); box-shadow: 0 0 0 3px rgba(228, 168, 71, .22); }
+.input[aria-invalid="true"] { border-color: var(--error); }
+textarea.input { min-height: 96px; resize: vertical; line-height: 1.5; }
+select.input { appearance: none; -webkit-appearance: none; padding-inline-end: 40px; background: rgba(5, 8, 18, .55) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23E4A847' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 15px center / 12px 8px; }
+[dir="rtl"] select.input { background-position: left 15px center; }
+select.input option, select.input optgroup { background: #111A2E; color: #F3E9D6; }
+input[type="date"].input { -webkit-appearance: none; appearance: none; }
+input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.75) sepia(.6) saturate(3) hue-rotate(-12deg); cursor: pointer; }
+.stepper { display: flex; align-items: stretch; min-height: 52px; border: 1px solid rgba(243, 233, 214, .16); border-radius: 10px; background: rgba(5, 8, 18, .55); overflow: hidden; }
+.stepper button { width: 52px; flex: none; border: 0; background: none; color: var(--saffron); display: grid; place-items: center; transition: background-color .2s; }
+.stepper button:hover { background: rgba(228, 168, 71, .1); }
+.stepper .ico { width: 18px; height: 18px; }
+.stepper input { flex: 1; min-width: 0; width: 100%; border: 0; border-inline: 1px solid rgba(243, 233, 214, .1); background: none; text-align: center; font: 400 1.25rem/1 var(--f-display); color: var(--ivory); -moz-appearance: textfield; appearance: textfield; font-variant-numeric: lining-nums tabular-nums; }
+.stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.stepper input:focus { outline: none; background: rgba(228, 168, 71, .08); }
+.stepper:focus-within { border-color: var(--saffron); }
+.stepper.invalid { border-color: var(--error); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.chip label { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 16px; border: 1px solid rgba(243, 233, 214, .16); border-radius: 999px; cursor: pointer; font-size: .95rem; color: var(--mist); transition: border-color .2s, color .2s, background-color .2s; }
+.chip label:hover { border-color: var(--line); color: var(--ivory); }
+.chip input:checked + label { border-color: var(--saffron); color: var(--saffron-soft); background: rgba(228, 168, 71, .1); }
+.chip input:focus-visible + label { outline: 2px solid var(--saffron); outline-offset: 3px; }
+.field-err { color: var(--error); font-size: .86rem; line-height: 1.4; }
+.field-err:empty { display: none; }
+.form-alert { padding: 12px 16px; border: 1px solid rgba(244, 162, 144, .45); border-radius: 10px; background: rgba(244, 162, 144, .08); color: var(--error); font-size: .94rem; }
+.form-submit { display: grid; gap: 12px; margin-top: 6px; }
+.form-submit .btn { width: 100%; min-height: 56px; }
+.form-hint { color: var(--mist-2); font-size: .88rem; text-align: center; }
+
+.conf { display: grid; gap: 18px; justify-items: start; }
+.conf-seal { width: 64px; height: 64px; color: var(--saffron); }
+.conf h3 { font-size: clamp(2rem, 1.5rem + 2vw, 2.8rem); }
+.conf h3:focus { outline: none; }
+.conf > p { color: var(--mist); max-width: 34em; }
+.conf-list { width: 100%; margin: 4px 0; display: grid; border-top: 1px solid var(--line-soft); }
+.conf-list div { display: flex; justify-content: space-between; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--line-soft); }
+.conf-list dt { color: var(--mist-2); font-size: .92rem; flex: none; }
+.conf-list dd { margin: 0; text-align: end; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.conf-actions { display: flex; flex-wrap: wrap; gap: 10px; width: 100%; }
+.conf-actions .btn { flex: 1 1 220px; }
+.conf-note { font-size: .86rem; color: var(--mist-2); }
+
+.visit { display: grid; gap: 22px; min-width: 0; }
+.map-card { border: 1px solid var(--line-soft); border-radius: 16px; overflow: hidden; background: #0E1527; }
+.map-svg { display: block; width: 100%; height: auto; direction: ltr; }
+.map-t { fill: #BDB5A5; font: 500 11px var(--f-label); letter-spacing: .03em; }
+.map-t-sq { fill: #F2CB7E; font-size: 11.5px; }
+.map-t-us { fill: #F3E9D6; font: 600 13px var(--f-label); }
+.map-t-walk { fill: #74D6BE; font-size: 10px; }
+.map-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; padding: 16px 18px; border-top: 1px solid var(--line-soft); }
+.addr { display: flex; gap: 10px; align-items: flex-start; font-size: .98rem; line-height: 1.45; min-width: 0; }
+.addr .ico { color: var(--saffron); margin-top: 2px; }
+.access { color: var(--mist); font-size: .96rem; }
+.contact-rows { display: grid; gap: 10px; }
+.crow { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--line-soft); border-radius: var(--radius); }
+.crow .fact-ico { width: 40px; height: 40px; }
+.crow div { display: grid; line-height: 1.35; min-width: 0; }
+.crow .k { font: 500 .7rem/1.3 var(--f-label); letter-spacing: var(--track); text-transform: uppercase; color: var(--mist-2); }
+:root[lang="ar"] .crow .k { font-size: .9rem; }
+.crow .v { font: 400 1.22rem/1.3 var(--f-display); text-decoration: none; color: var(--ivory); font-variant-numeric: lining-nums; }
+.crow .v:hover { color: var(--saffron-soft); }
+.hours { padding: 20px 20px 8px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: rgba(243, 233, 214, .02); }
+.hours h3 { font-size: 1.4rem; }
+.hours-days { color: var(--mist-2); font-size: .9rem; margin-top: 2px; }
+.hours dl { margin: 12px 0 0; }
+.hours dl div { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line-soft); }
+.hours dt { color: var(--mist); }
+.hours dd { margin: 0; font-variant-numeric: tabular-nums; text-align: end; }
+.hours .closed dd { color: var(--saffron); }
+
+/* Footer */
+.site-footer { position: relative; background: var(--night-deep); padding-block: 64px 36px; overflow: clip; border-top: 1px solid var(--line-soft); }
+.foot-word { margin: 0 0 40px; font: italic 400 clamp(3rem, 12.5vw, 10rem)/.95 "Bodoni Moda", Didot, serif; letter-spacing: -.03em; background: linear-gradient(100deg, #8A6230, #F2CB7E 45%, #B98B4E 70%, #6E4A22); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.foot-word span { font-style: normal; }
+.foot-grid { display: grid; gap: 28px; padding-bottom: 32px; border-bottom: 1px solid var(--line-soft); }
+@media (min-width: 760px) { .foot-grid { grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 32px; } }
+.foot-grid h3 { font: 500 .72rem/1.3 var(--f-label); letter-spacing: var(--track); text-transform: uppercase; color: var(--saffron); margin-bottom: 10px; }
+:root[lang="ar"] .foot-grid h3 { font-size: .95rem; }
+.foot-grid p { color: var(--mist); font-size: .95rem; line-height: 1.6; }
+.foot-grid a { text-decoration: none; }
+.foot-grid a:hover { color: var(--saffron-soft); }
+.foot-bottom { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 24px; padding-top: 22px; font-size: .84rem; color: var(--mist-2); }
+.foot-bottom p:first-child { max-width: 56em; }
+
+/* Mobile booking bar */
+.mbar { position: fixed; inset-inline: 0; bottom: 0; z-index: 60; display: flex; gap: 10px; padding: 10px var(--gutter) calc(10px + env(safe-area-inset-bottom, 0px)); background: rgba(7, 11, 22, .92); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-top: 1px solid var(--line-soft); }
+.mbar .btn-primary { flex: 1 1 auto; min-height: 50px; }
+.mbar .btn-wa { width: 50px; min-height: 50px; padding: 0; flex: none; }
+.mbar .btn-wa .ico { width: 22px; height: 22px; }
+@media (max-width: 759px) { .site-footer { padding-bottom: calc(36px + 72px + env(safe-area-inset-bottom, 0px)); } }
+@media (min-width: 760px) { .mbar { display: none; } }
+
+/* Motion: one orchestrated dusk-to-night load, then quiet ambient light */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+  .ld { animation: rise 1s var(--ease) both; animation-delay: calc(var(--i, 0) * 110ms + 100ms); }
+  .hero-art .art-svg { animation: dusk 2.4s ease-out both; }
+  .lamp-glow { animation: ignite 1.4s ease-out both, flicker 5s ease-in-out infinite; animation-delay: var(--d, .6s), calc(var(--d, .6s) + 1.4s); }
+  .win { animation: ignite 1.1s ease-out both; animation-delay: var(--d, 1s); }
+  .tw { animation: twinkle 4.5s ease-in-out infinite; animation-delay: var(--d, 0s); }
+  .steam path { animation: steam 4.8s ease-in-out infinite; }
+  .steam path:nth-child(2) { animation-delay: -1.6s; }
+  .steam path:nth-child(3) { animation-delay: -3.2s; }
+  .ember { animation: flicker 2.4s ease-in-out infinite; }
+  .ember:nth-child(even) { animation-delay: -1.1s; }
+  .pulse { transform-box: fill-box; transform-origin: center; animation: pulse 2.6s ease-out infinite; }
+  .route { animation: march 1.4s linear infinite; }
+  .status.is-open .dot::after { animation: ping 2.2s ease-out infinite; }
+  .panel-in { animation: fadeUp .55s var(--ease) both; }
+  .lb[open] .lb-inner { animation: fadeUp .4s var(--ease) both; }
+  .float { animation: floaty 7s ease-in-out infinite; }
+  .float:nth-child(2n) { animation-duration: 9s; animation-delay: -3s; }
+}
+@keyframes rise { from { opacity: .12; transform: translateY(22px); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes dusk { from { filter: brightness(.42) saturate(.55); } to { filter: none; } }
+@keyframes ignite { from { opacity: 0; } to { opacity: 1; } }
+@keyframes flicker { 0%, 100% { opacity: 1; } 30% { opacity: .84; } 52% { opacity: .97; } 74% { opacity: .8; } }
+@keyframes twinkle { 50% { opacity: .15; } }
+@keyframes steam { 0% { transform: translateY(8px); opacity: 0; } 40% { opacity: .55; } 100% { transform: translateY(-16px); opacity: 0; } }
+@keyframes pulse { from { transform: scale(.45); opacity: .7; } to { transform: scale(1.7); opacity: 0; } }
+@keyframes march { to { stroke-dashoffset: -16; } }
+@keyframes ping { 0% { transform: scale(.6); opacity: .8; } 100% { transform: scale(2.2); opacity: 0; } }
+@keyframes fadeUp { from { opacity: .25; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes floaty { 50% { transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+</style>
+
+<!-- Shared SVG library: gradients, zellige pattern, lanterns, icons -->
+<svg class="defs" aria-hidden="true" focusable="false" width="0" height="0">
+  <defs>
+    <linearGradient id="g-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#050916"/>
+      <stop offset=".42" stop-color="#0F1A35"/>
+      <stop offset=".7" stop-color="#1F2647"/>
+      <stop offset=".88" stop-color="#4A3347"/>
+      <stop offset="1" stop-color="#8E5634"/>
+    </linearGradient>
+    <radialGradient id="g-glow">
+      <stop offset="0" stop-color="#FFD98E" stop-opacity=".95"/>
+      <stop offset=".25" stop-color="#F2B252" stop-opacity=".5"/>
+      <stop offset=".6" stop-color="#E4A847" stop-opacity=".12"/>
+      <stop offset="1" stop-color="#E4A847" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="g-moonglow">
+      <stop offset=".3" stop-color="#F7E6BC" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#F7E6BC" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="g-maskglow">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".9"/>
+      <stop offset=".6" stop-color="#FFFFFF" stop-opacity=".25"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="g-lampin" cx=".5" cy=".55" r=".6">
+      <stop offset="0" stop-color="#FFE7AE"/>
+      <stop offset=".55" stop-color="#EFA845"/>
+      <stop offset="1" stop-color="#8A4A14"/>
+    </radialGradient>
+    <linearGradient id="g-brass" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6B4720"/>
+      <stop offset=".3" stop-color="#D9A653"/>
+      <stop offset=".5" stop-color="#F4D58E"/>
+      <stop offset=".72" stop-color="#B8843E"/>
+      <stop offset="1" stop-color="#5E3E1B"/>
+    </linearGradient>
+    <linearGradient id="g-copper" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4E220E"/>
+      <stop offset=".35" stop-color="#C06A34"/>
+      <stop offset=".55" stop-color="#F0A46A"/>
+      <stop offset=".78" stop-color="#A9542A"/>
+      <stop offset="1" stop-color="#43200D"/>
+    </linearGradient>
+    <linearGradient id="g-silver" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#58606B"/>
+      <stop offset=".3" stop-color="#C9CFD8"/>
+      <stop offset=".5" stop-color="#F3F5F8"/>
+      <stop offset=".72" stop-color="#9AA2AD"/>
+      <stop offset="1" stop-color="#474D56"/>
+    </linearGradient>
+    <linearGradient id="g-glaze" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#06302A"/>
+      <stop offset=".35" stop-color="#1D8F78"/>
+      <stop offset=".52" stop-color="#4CC3A6"/>
+      <stop offset=".75" stop-color="#157361"/>
+      <stop offset="1" stop-color="#052620"/>
+    </linearGradient>
+    <linearGradient id="g-clay" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4E2412"/>
+      <stop offset=".4" stop-color="#B5643A"/>
+      <stop offset=".6" stop-color="#D08453"/>
+      <stop offset="1" stop-color="#4A2210"/>
+    </linearGradient>
+    <linearGradient id="g-wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#211925"/>
+      <stop offset=".5" stop-color="#31211F"/>
+      <stop offset="1" stop-color="#40271F"/>
+    </linearGradient>
+    <linearGradient id="g-wood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3D2717"/>
+      <stop offset="1" stop-color="#160E09"/>
+    </linearGradient>
+    <linearGradient id="g-window" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F8D486"/>
+      <stop offset="1" stop-color="#B8692A"/>
+    </linearGradient>
+    <linearGradient id="g-doorglow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E4A847" stop-opacity="0"/>
+      <stop offset=".55" stop-color="#E4A847" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#F2B252" stop-opacity=".55"/>
+    </linearGradient>
+    <linearGradient id="g-water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0A3833"/>
+      <stop offset="1" stop-color="#1E8C78"/>
+    </linearGradient>
+    <radialGradient id="g-pool">
+      <stop offset="0" stop-color="#3CC2A4"/>
+      <stop offset=".7" stop-color="#147062"/>
+      <stop offset="1" stop-color="#0A3833"/>
+    </radialGradient>
+    <linearGradient id="g-tea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E6A845"/>
+      <stop offset="1" stop-color="#8A4410"/>
+    </linearGradient>
+    <radialGradient id="g-ember">
+      <stop offset="0" stop-color="#FFE29A"/>
+      <stop offset=".3" stop-color="#FFA53A" stop-opacity=".9"/>
+      <stop offset=".62" stop-color="#C8461C" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#7A1E0E" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="g-vignette" cx=".5" cy=".5" r=".72">
+      <stop offset=".55" stop-color="#050812" stop-opacity="0"/>
+      <stop offset="1" stop-color="#050812" stop-opacity=".78"/>
+    </radialGradient>
+    <linearGradient id="g-fadev" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B1120" stop-opacity=".15"/>
+      <stop offset="1" stop-color="#0B1120" stop-opacity=".96"/>
+    </linearGradient>
+    <linearGradient id="g-deep" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0F2D2E"/>
+      <stop offset=".6" stop-color="#0C1A26"/>
+      <stop offset="1" stop-color="#0A1120"/>
+    </linearGradient>
+    <linearGradient id="g-kitchen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#120F1A"/>
+      <stop offset=".6" stop-color="#21171A"/>
+      <stop offset="1" stop-color="#2E1B14"/>
+    </linearGradient>
+    <radialGradient id="g-petal" cx=".5" cy="1" r="1.05">
+      <stop offset="0" stop-color="#3B2266"/>
+      <stop offset=".55" stop-color="#7D5AB0"/>
+      <stop offset="1" stop-color="#BDA0E6"/>
+    </radialGradient>
+    <radialGradient id="g-petal-back" cx=".5" cy="1" r="1.05">
+      <stop offset="0" stop-color="#25153F"/>
+      <stop offset=".6" stop-color="#5A3F8C"/>
+      <stop offset="1" stop-color="#8E72C4"/>
+    </radialGradient>
+    <linearGradient id="g-sheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset=".44" stop-color="#FFFFFF" stop-opacity=".1"/>
+      <stop offset=".56" stop-color="#FFFFFF" stop-opacity=".02"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+
+    <pattern id="p-zellige" width="60" height="60" patternUnits="userSpaceOnUse">
+      <rect width="60" height="60" fill="#0F4A42"/>
+      <polygon points="60,30 51.21,38.79 51.21,51.21 38.79,51.21 30,60 21.21,51.21 8.79,51.21 8.79,38.79 0,30 8.79,21.21 8.79,8.79 21.21,8.79 30,0 38.79,8.79 51.21,8.79 51.21,21.21" fill="#D9A247" stroke="#0A0F1C" stroke-width="1.4"/>
+      <polygon points="47,30 42.02,34.98 42.02,42.02 34.98,42.02 30,47 25.02,42.02 17.98,42.02 17.98,34.98 13,30 17.98,25.02 17.98,17.98 25.02,17.98 30,13 34.98,17.98 42.02,17.98 42.02,25.02" fill="#0D1426" stroke="#0A0F1C" stroke-width="1"/>
+      <circle cx="30" cy="30" r="4.5" fill="#2BA88E"/>
+      <path d="M0,-9 L9,0 L0,9 L-9,0Z M60,-9 L69,0 L60,9 L51,0Z M0,51 L9,60 L0,69 L-9,60Z M60,51 L69,60 L60,69 L51,60Z" fill="#EADFC8" stroke="#0A0F1C" stroke-width="1"/>
+    </pattern>
+    <pattern id="p-perf" width="4.5" height="4.5" patternUnits="userSpaceOnUse">
+      <path d="M0,2.25 L2.25,0 L4.5,2.25 L2.25,4.5 Z" fill="none" stroke="#2A1608" stroke-width="1.1"/>
+    </pattern>
+    <pattern id="p-lattice" width="6" height="6" patternUnits="userSpaceOnUse">
+      <path d="M0,0 L6,6 M6,0 L0,6" stroke="#3A2412" stroke-width=".9"/>
+    </pattern>
+    <pattern id="p-grid" width="10" height="10" patternUnits="userSpaceOnUse">
+      <path d="M0,5 L5,0 L10,5 L5,10 Z" fill="none" stroke="#E4A847" stroke-width=".7"/>
+    </pattern>
+    <pattern id="p-baluster" width="6" height="12" patternUnits="userSpaceOnUse">
+      <rect x="2" width="2" height="12" fill="#6E4526"/>
+    </pattern>
+    <pattern id="p-bejmat" width="16" height="8" patternUnits="userSpaceOnUse">
+      <rect width="16" height="8" fill="#7E4126"/>
+      <path d="M0,0 H16 M0,4 H16 M4,0 V4 M12,4 V8" stroke="#4E2414" stroke-width=".9"/>
+    </pattern>
+    <pattern id="p-spill" width="14" height="14" patternUnits="userSpaceOnUse">
+      <path d="M7,4 L7.8,6.2 L10,7 L7.8,7.8 L7,10 L6.2,7.8 L4,7 L6.2,6.2Z" fill="#F2C46D"/>
+    </pattern>
+    <pattern id="p-merlon" width="20" height="8" patternUnits="userSpaceOnUse">
+      <path d="M3,8 V5 H5 V2 H7 V0 H13 V2 H15 V5 H17 V8 Z" fill="#3B2A2C"/>
+    </pattern>
+    <mask id="m-spill" maskUnits="userSpaceOnUse" x="0" y="0" width="400" height="400">
+      <circle cx="96" cy="153" r="150" fill="url(#g-maskglow)"/>
+      <circle cx="206" cy="127" r="190" fill="url(#g-maskglow)"/>
+      <circle cx="318" cy="191" r="130" fill="url(#g-maskglow)"/>
+      <circle cx="150" cy="282" r="100" fill="url(#g-maskglow)"/>
+      <circle cx="284" cy="312" r="110" fill="url(#g-maskglow)"/>
+    </mask>
+
+    <g id="lantern">
+      <circle cx="0" cy="3" r="3" fill="none" stroke="#C99A55" stroke-width="1.2"/>
+      <path d="M-6,9 Q0,1 6,9 L10,17 L-10,17 Z" fill="url(#g-brass)"/>
+      <rect x="-16" y="17" width="32" height="4" rx="1" fill="url(#g-brass)"/>
+      <path d="M-15,21 L15,21 L20,41 L13,64 L-13,64 L-20,41 Z" fill="url(#g-lampin)"/>
+      <path d="M-15,21 L15,21 L20,41 L13,64 L-13,64 L-20,41 Z" fill="url(#p-perf)"/>
+      <path d="M-15,21 L15,21 L20,41 L13,64 L-13,64 L-20,41 Z M-7,21 L-9,41 L-6,64 M7,21 L9,41 L6,64 M-20,41 H20" fill="none" stroke="#C99A55" stroke-width="1.3" stroke-linejoin="round"/>
+      <rect x="-14" y="64" width="28" height="4" rx="1" fill="url(#g-brass)"/>
+      <path d="M-7,68 L0,80 L7,68 Z" fill="url(#g-brass)"/>
+      <circle cx="0" cy="82" r="2.2" fill="#E8C27A"/>
+    </g>
+    <g id="tree-top">
+      <rect x="-48" y="-48" width="96" height="96" fill="#1A1216" stroke="#E8DCC2" stroke-width="3"/>
+      <rect x="-41" y="-41" width="82" height="82" fill="#2A1C14"/>
+      <circle cx="8" cy="10" r="42" fill="#000000" opacity=".35"/>
+      <circle cx="0" cy="0" r="40" fill="#143A2B"/>
+      <circle cx="-14" cy="-10" r="24" fill="#1C4F37"/>
+      <circle cx="16" cy="-8" r="21" fill="#194733"/>
+      <circle cx="-6" cy="16" r="22" fill="#17432F"/>
+      <circle cx="14" cy="16" r="17" fill="#21573E"/>
+      <circle cx="-12" cy="-16" r="10" fill="#2E6E4E" opacity=".7"/>
+      <g fill="#F29C38">
+        <circle cx="-18" cy="4" r="3.6"/><circle cx="10" cy="-20" r="3.6"/><circle cx="22" cy="8" r="3.6"/>
+        <circle cx="-4" cy="26" r="3.6"/><circle cx="4" cy="-4" r="3.6"/><circle cx="-24" cy="-18" r="3.6"/><circle cx="26" cy="-10" r="3.6"/>
+      </g>
+    </g>
+    <g id="spice">
+      <path d="M-52,0 H52 C50,28 30,42 0,42 C-30,42 -50,28 -52,0 Z" fill="#DCCFB4"/>
+      <path d="M-49,12 Q0,25 49,12" stroke="#1D8F78" stroke-width="4" fill="none"/>
+      <path d="M-45,21 Q0,32 45,21" stroke="#E4A847" stroke-width="1.8" stroke-dasharray="0 5" stroke-linecap="round" fill="none"/>
+      <path d="M-52,0 A52,9 0 0 1 52,0" fill="none" stroke="#B9A57F" stroke-width="3"/>
+      <ellipse cx="0" cy="0" rx="48" ry="7.5" fill="currentColor"/>
+      <path d="M-42,0 C-30,-16 -12,-58 0,-70 C12,-58 30,-16 42,0 Z" fill="currentColor"/>
+      <path d="M0,-70 C12,-58 30,-16 42,0 Q20,6 0,6 Z" fill="#000000" opacity=".22"/>
+      <path d="M-30,-6 C-20,-22 -8,-50 -2,-62" stroke="#FFFFFF" stroke-opacity=".18" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <path d="M-36,-2 C-24,-18 -10,-50 0,-64 M8,-56 C16,-40 26,-18 36,-4" stroke="#FFFFFF" stroke-opacity=".3" stroke-width="2" stroke-dasharray="0 6" stroke-linecap="round" fill="none"/>
+      <path d="M-52,0 A52,9 0 0 0 52,0" fill="none" stroke="#B9A57F" stroke-width="3"/>
+    </g>
+
+    <symbol id="i-star8" viewBox="0 0 16 16"><polygon points="16,8 13.66,10.34 13.66,13.66 10.34,13.66 8,16 5.66,13.66 2.34,13.66 2.34,10.34 0,8 2.34,5.66 2.34,2.34 5.66,2.34 8,0 10.34,2.34 13.66,2.34 13.66,5.66"/></symbol>
+    <symbol id="i-star5" viewBox="0 0 24 24"><polygon points="12,2.5 14.9,8.6 21.5,9.3 16.5,13.8 17.9,20.4 12,17 6.1,20.4 7.5,13.8 2.5,9.3 9.1,8.6"/></symbol>
+    <symbol id="i-leaf" viewBox="0 0 16 16"><path d="M2.5 13.5C2.5 7 6.5 2.8 13.8 2.2 13.2 9.5 9 13.5 2.5 13.5Z"/></symbol>
+    <symbol id="i-people" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.5" cy="9" r="2.6"/><path d="M15.5 14.2c2.4 0 4.3 1.6 4.9 4.3"/></g></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></g></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3.5l1.7 4.2-2.2 1.4a11 11 0 0 0 6.4 6.4l1.4-2.2L20 15.5V19a1.5 1.5 0 0 1-1.6 1.5C10.6 20 4 13.4 3.5 5.6A1.5 1.5 0 0 1 5 4z"/></g></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.2 20l1.3-4.1A8.2 8.2 0 1 1 8.6 18.6z"/><path d="M9.3 8.4c.2 3.3 2.9 6 6.2 6.3l.9-1.5-2-1-.8.7a4.6 4.6 0 0 1-2.6-2.6l.7-.8-1-2z"/></g></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></g></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></g></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 12h14"/></g></symbol>
+    <symbol id="i-music" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l10-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></g></symbol>
+    <symbol id="i-roof" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3 20V11h3V8h3v3h6V8h3v3h3v9z"/><path d="M10 20v-4.5a2 2 0 0 1 4 0V20"/></g></symbol>
+    <symbol id="i-walk" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4.5" r="1.8"/><path d="M10.5 21l2-6-2.5-2.5 1-5 3 2.5 3 1M10 8l-3 2-1 3.5M12.5 15l2.5 2 1 4"/></g></symbol>
+    <symbol id="i-zoom" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6"/></g></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 9h16M4 15h16"/></g></symbol>
+    <symbol id="i-mark" viewBox="0 0 40 40"><g fill="none" stroke="currentColor"><polygon stroke-width="1.4" points="38,20 32.73,25.27 32.73,32.73 25.27,32.73 20,38 14.73,32.73 7.27,32.73 7.27,25.27 2,20 7.27,14.73 7.27,7.27 14.73,7.27 20,2 25.27,7.27 32.73,7.27 32.73,14.73"/><circle cx="20" cy="20" r="8.5" stroke-width="1"/></g><g fill="currentColor"><path d="M20 13.5c1.6 2.2 1.6 4.6 0 6.5-1.6-1.9-1.6-4.3 0-6.5z"/><path d="M20 20c2.6-.6 4.6.4 5.6 2.6-2.5.7-4.5-.2-5.6-2.6z"/><path d="M20 20c-2.6-.6-4.6.4-5.6 2.6 2.5.7 4.5-.2 5.6-2.6z"/></g></symbol>
+  </defs>
+</svg>
+
+<a class="skip" href="#main" data-i18n="skip">Aller au contenu</a>
+
+<div class="demo-bar" role="note">
+  <div class="wrap demo-inner">
+    <svg class="ico" aria-hidden="true"><use href="#i-star8"/></svg>
+    <strong data-i18n="demo_tag">Site démo · Pack Pro</strong>
+    <span class="demo-more" data-i18n="demo_more">Trilingue, menu interactif, galerie et réservation WhatsApp</span>
+  </div>
+</div>
+
+<header class="site-header" id="top">
+  <div class="wrap header-inner">
+    <a class="brand" href="#main" aria-label="Maison Safran">
+      <svg class="brand-mark" aria-hidden="true"><use href="#i-mark"/></svg>
+      <span class="brand-name" lang="fr" dir="ltr"><small>Maison</small><span>Safran</span></span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="Navigation">
+      <ul>
+        <li><a href="#histoire" data-i18n="nav_story">Histoire</a></li>
+        <li><a href="#chef" data-i18n="nav_chef">Le chef</a></li>
+        <li><a href="#menu" data-i18n="nav_menu">Menu</a></li>
+        <li><a href="#galerie" data-i18n="nav_gallery">Galerie</a></li>
+        <li><a href="#avis" data-i18n="nav_reviews">Avis</a></li>
+      </ul>
+    </nav>
+    <div class="lang" role="group" aria-label="Langue" data-i18n-aria="lang_label">
+      <button type="button" id="lang-fr" data-lang="fr" lang="fr" aria-label="Français" aria-pressed="true">FR</button>
+      <button type="button" id="lang-en" data-lang="en" lang="en" aria-label="English" aria-pressed="false">EN</button>
+      <button type="button" id="lang-ar" data-lang="ar" lang="ar" aria-label="العربية" aria-pressed="false">ع</button>
+    </div>
+    <a class="btn btn-primary btn-sm header-cta" href="#reserver" data-i18n="nav_book">Réserver</a>
+    <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu de navigation" data-i18n-aria="menu_toggle">
+      <svg class="ico" aria-hidden="true"><use href="#i-menu"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- HERO -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap">
+      <div class="hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow ld" style="--i:0"><svg class="ico" aria-hidden="true"><use href="#i-star8"/></svg><span data-i18n="hero_eyebrow">Riad du XVIII<sup>e</sup> siècle · Médina de Marrakech</span></p>
+          <h1 id="hero-title" class="ld" style="--i:1" data-i18n="hero_title">Une nuit de <em>safran</em> au cœur de la médina</h1>
+          <p class="hero-lead ld" style="--i:2" data-i18n="hero_lead">Cuisine marocaine d’auteur, servie à la lueur des lanternes autour du bassin d’un riad de 1772. Douze tables seulement, des recettes de famille et les produits du souk du matin.</p>
+          <div class="hero-actions ld" style="--i:3">
+            <a class="btn btn-primary" href="#reserver"><span data-i18n="hero_cta1">Réserver une table</span><svg class="ico flip" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+            <a class="btn btn-ghost" href="#menu" data-i18n="hero_cta2">Voir le menu</a>
+          </div>
+          <p class="status ld" style="--i:4" id="status" aria-live="polite"><span class="dot" aria-hidden="true"></span><span id="status-text" data-i18n="status_fallback">Ouvert du mardi au dimanche</span></p>
+        </div>
+
+        <div class="hero-art">
+          <svg class="art-svg" viewBox="0 0 400 500" role="img" aria-labelledby="hero-art-t">
+            <title id="hero-art-t" data-i18n="hero_art">Le patio de Maison Safran à la nuit tombée, éclairé par des lanternes</title>
+            <defs>
+              <clipPath id="c-hero"><path d="M28,500 L28,236 C11,214 3,190 3,164 C3,75 92,12 200,2 C308,12 397,75 397,164 C397,190 389,214 372,236 L372,500 Z"/></clipPath>
+              <mask id="m-moon" maskUnits="userSpaceOnUse" x="270" y="60" width="70" height="70"><circle cx="316" cy="92" r="20" fill="#FFFFFF"/><circle cx="325" cy="85" r="17" fill="#000000"/></mask>
+            </defs>
+            <g clip-path="url(#c-hero)">
+              <rect width="400" height="262" fill="url(#g-sky)"/>
+              <g fill="#F3E9D6">
+                <circle cx="60" cy="122" r="1" opacity=".7"/><circle class="tw" style="--d:-1s" cx="84" cy="70" r="1.4" opacity=".9"/>
+                <circle cx="140" cy="40" r=".9" opacity=".6"/><circle class="tw" style="--d:-2.4s" cx="166" cy="98" r="1.1" opacity=".8"/>
+                <circle cx="236" cy="54" r="1.2" opacity=".9"/><circle cx="252" cy="126" r=".8" opacity=".6"/>
+                <circle cx="222" cy="168" r=".9" opacity=".5"/><circle class="tw" style="--d:-3.1s" cx="150" cy="160" r=".8" opacity=".6"/>
+                <circle cx="48" cy="178" r=".9" opacity=".6"/><circle cx="362" cy="150" r="1" opacity=".7"/>
+                <circle cx="372" cy="206" r=".7" opacity=".5"/><circle cx="30" cy="214" r=".8" opacity=".5"/>
+                <circle cx="190" cy="24" r=".8" opacity=".7"/><circle class="tw" style="--d:-.6s" cx="262" cy="22" r="1" opacity=".7"/>
+                <circle cx="118" cy="30" r=".7" opacity=".5"/><circle cx="96" cy="190" r=".7" opacity=".45"/>
+                <circle cx="300" cy="44" r=".8" opacity=".6"/><circle cx="330" cy="136" r=".7" opacity=".5"/>
+                <circle cx="182" cy="200" r=".6" opacity=".4"/><circle cx="270" cy="206" r=".7" opacity=".4"/>
+              </g>
+              <circle cx="316" cy="92" r="58" fill="url(#g-moonglow)"/>
+              <circle cx="316" cy="92" r="20" fill="#F7E6BC" mask="url(#m-moon)"/>
+              <ellipse cx="200" cy="262" rx="240" ry="70" fill="url(#g-glow)" opacity=".32"/>
+              <g fill="#0A1124">
+                <rect x="334" y="178" width="26" height="90"/>
+                <path d="M334,178 V172 H339 V178 H344.5 V172 H349.5 V178 H355 V172 H360 V178 Z"/>
+                <rect x="341" y="156" width="12" height="18"/>
+                <path d="M341,156 Q347,148 353,156 Z"/>
+                <rect x="346.3" y="132" width="1.4" height="18"/>
+                <circle cx="347" cy="144" r="2.3"/><circle cx="347" cy="139.5" r="1.9"/><circle cx="347" cy="135.5" r="1.4"/>
+              </g>
+              <rect x="344" y="196" width="6" height="10" rx="3" fill="#E4A847" opacity=".35"/>
+              <rect x="344" y="222" width="6" height="10" rx="3" fill="#E4A847" opacity=".25"/>
+              <g fill="none" stroke="#0A1124" stroke-linecap="round">
+                <path d="M56,262 C54,236 52,214 46,196" stroke-width="4"/>
+                <g stroke-width="3.4">
+                  <path d="M46,196 C34,188 22,190 12,198"/><path d="M46,196 C36,182 26,178 18,180"/>
+                  <path d="M46,196 C46,182 52,172 62,166"/><path d="M46,196 C58,188 72,190 80,198"/>
+                  <path d="M46,196 C42,182 36,176 28,172"/><path d="M46,196 C54,184 64,180 72,182"/>
+                </g>
+              </g>
+              <path d="M0,262 V246 H34 V238 H78 V250 H120 V242 H162 V252 H208 V240 H246 V248 H292 V236 H330 V250 H372 V242 H400 V262 Z" fill="#0D1428"/>
+
+              <rect y="258" width="400" height="242" fill="url(#g-wall)"/>
+              <rect y="250" width="400" height="8" fill="url(#p-merlon)"/>
+              <rect y="257" width="400" height="5" fill="#3B2A2C"/>
+              <ellipse cx="200" cy="330" rx="230" ry="130" fill="url(#g-glow)" opacity=".16"/>
+
+              <g>
+                <ellipse cx="56" cy="294" rx="34" ry="30" fill="url(#g-glow)" opacity=".22"/>
+                <ellipse cx="200" cy="294" rx="34" ry="30" fill="url(#g-glow)" opacity=".22"/>
+                <ellipse cx="344" cy="294" rx="34" ry="30" fill="url(#g-glow)" opacity=".22"/>
+                <path class="win" style="--d:1.0s" d="M41,318 V292 C41,280 48,273 56,270 C64,273 71,280 71,292 V318 Z" fill="url(#g-window)"/>
+                <path d="M113,318 V292 C113,280 120,273 128,270 C136,273 143,280 143,292 V318 Z" fill="#1A1218"/>
+                <path class="win" style="--d:1.35s" d="M185,318 V292 C185,280 192,273 200,270 C208,273 215,280 215,292 V318 Z" fill="url(#g-window)"/>
+                <path class="win" style="--d:1.6s" d="M257,318 V292 C257,280 264,273 272,270 C280,273 287,280 287,292 V318 Z" fill="url(#g-window)" opacity=".75"/>
+                <path class="win" style="--d:1.15s" d="M329,318 V292 C329,280 336,273 344,270 C352,273 359,280 359,292 V318 Z" fill="url(#g-window)"/>
+                <g fill="url(#p-lattice)">
+                  <path d="M41,318 V292 C41,280 48,273 56,270 C64,273 71,280 71,292 V318 Z"/>
+                  <path d="M185,318 V292 C185,280 192,273 200,270 C208,273 215,280 215,292 V318 Z"/>
+                  <path d="M257,318 V292 C257,280 264,273 272,270 C280,273 287,280 287,292 V318 Z"/>
+                  <path d="M329,318 V292 C329,280 336,273 344,270 C352,273 359,280 359,292 V318 Z"/>
+                </g>
+                <g fill="none" stroke="#6B4A2E" stroke-width="2">
+                  <path d="M41,318 V292 C41,280 48,273 56,270 C64,273 71,280 71,292 V318 Z"/>
+                  <path d="M113,318 V292 C113,280 120,273 128,270 C136,273 143,280 143,292 V318 Z"/>
+                  <path d="M185,318 V292 C185,280 192,273 200,270 C208,273 215,280 215,292 V318 Z"/>
+                  <path d="M257,318 V292 C257,280 264,273 272,270 C280,273 287,280 287,292 V318 Z"/>
+                  <path d="M329,318 V292 C329,280 336,273 344,270 C352,273 359,280 359,292 V318 Z"/>
+                </g>
+              </g>
+              <rect y="324" width="400" height="4" fill="#5A3A22"/>
+              <rect y="328" width="400" height="12" fill="url(#p-baluster)"/>
+              <rect y="340" width="400" height="3" fill="#5A3A22"/>
+              <g opacity=".5"><g transform="translate(0,346) scale(.18)"><rect width="2223" height="56" fill="url(#p-zellige)"/></g></g>
+
+              <g opacity=".85"><g transform="translate(0,440) scale(.2333)"><rect width="1715" height="180" fill="url(#p-zellige)"/></g></g>
+              <rect y="440" width="400" height="42" fill="#0B1120" opacity=".35"/>
+              <rect y="438" width="400" height="3" fill="#C9A36A" opacity=".5"/>
+
+              <g>
+                <path d="M44,482 V422 C36,413 34,404 34,396 C34,378 54,368 80,364 C106,368 126,378 126,396 C126,404 124,413 116,422 V482 Z" fill="#0F0A0E"/>
+                <path d="M164,482 V422 C156,413 154,404 154,396 C154,378 174,368 200,364 C226,368 246,378 246,396 C246,404 244,413 236,422 V482 Z" fill="#0F0A0E"/>
+                <path d="M284,482 V422 C276,413 274,404 274,396 C274,378 294,368 320,364 C346,368 366,378 366,396 C366,404 364,413 356,422 V482 Z" fill="#0F0A0E"/>
+                <path d="M164,482 V422 C156,413 154,404 154,396 C154,378 174,368 200,364 C226,368 246,378 246,396 C246,404 244,413 236,422 V482 Z" fill="url(#g-doorglow)"/>
+                <ellipse cx="80" cy="470" rx="40" ry="24" fill="url(#g-glow)" opacity=".3"/>
+                <ellipse cx="320" cy="470" rx="40" ry="24" fill="url(#g-glow)" opacity=".3"/>
+                <g fill="none" stroke="#C9A36A" stroke-opacity=".5" stroke-width="2.5">
+                  <path d="M44,482 V422 C36,413 34,404 34,396 C34,378 54,368 80,364 C106,368 126,378 126,396 C126,404 124,413 116,422 V482"/>
+                  <path d="M164,482 V422 C156,413 154,404 154,396 C154,378 174,368 200,364 C226,368 246,378 246,396 C246,404 244,413 236,422 V482"/>
+                  <path d="M284,482 V422 C276,413 274,404 274,396 C274,378 294,368 320,364 C346,368 366,378 366,396 C366,404 364,413 356,422 V482"/>
+                </g>
+                <g fill="none" stroke="#C9A36A" stroke-opacity=".2" stroke-width="1">
+                  <path d="M38,482 V424 C28,414 26,404 26,396 C26,374 50,361 80,357 C110,361 134,374 134,396 C134,404 132,414 122,424 V482"/>
+                  <path d="M158,482 V424 C148,414 146,404 146,396 C146,374 170,361 200,357 C230,361 254,374 254,396 C254,404 252,414 242,424 V482"/>
+                  <path d="M278,482 V424 C268,414 266,404 266,396 C266,374 290,361 320,357 C350,361 374,374 374,396 C374,404 372,414 362,424 V482"/>
+                </g>
+              </g>
+
+              <rect y="482" width="400" height="18" fill="#1A1418"/>
+              <ellipse cx="200" cy="492" rx="96" ry="18" fill="url(#g-glow)" opacity=".28"/>
+
+              <g>
+                <path d="M38,458 L78,458 L73,494 L43,494 Z" fill="url(#g-clay)"/>
+                <rect x="38" y="461" width="40" height="3" fill="#E4A847" opacity=".5"/>
+                <rect x="56" y="420" width="4" height="40" fill="#3A2616"/>
+                <circle cx="58" cy="404" r="26" fill="#12352A"/>
+                <circle cx="42" cy="414" r="16" fill="#0F2E25"/>
+                <circle cx="73" cy="410" r="17" fill="#16402F"/>
+                <circle cx="60" cy="390" r="18" fill="#1A4A36"/>
+                <circle cx="64" cy="396" r="8" fill="#24604A" opacity=".6"/>
+                <g fill="#EE9A3A"><circle cx="46" cy="404" r="2.6"/><circle cx="66" cy="384" r="2.6"/><circle cx="74" cy="412" r="2.6"/><circle cx="54" cy="418" r="2.6"/><circle cx="40" cy="392" r="2.4"/></g>
+                <path d="M322,458 L362,458 L357,494 L327,494 Z" fill="url(#g-clay)"/>
+                <rect x="322" y="461" width="40" height="3" fill="#E4A847" opacity=".5"/>
+                <rect x="340" y="420" width="4" height="40" fill="#3A2616"/>
+                <circle cx="342" cy="404" r="26" fill="#12352A"/>
+                <circle cx="358" cy="414" r="16" fill="#0F2E25"/>
+                <circle cx="327" cy="410" r="17" fill="#16402F"/>
+                <circle cx="340" cy="390" r="18" fill="#1A4A36"/>
+                <circle cx="336" cy="396" r="8" fill="#24604A" opacity=".6"/>
+                <g fill="#EE9A3A"><circle cx="354" cy="404" r="2.6"/><circle cx="334" cy="384" r="2.6"/><circle cx="326" cy="412" r="2.6"/><circle cx="346" cy="418" r="2.6"/><circle cx="360" cy="392" r="2.4"/></g>
+              </g>
+
+              <g>
+                <path d="M128,486 V500 H272 V486 Z" fill="#CDBB98"/>
+                <path d="M128,486 V492 Q200,506 272,492 V486 Z" fill="#B9A57F" opacity=".6"/>
+                <ellipse cx="200" cy="486" rx="72" ry="11" fill="#E8DCC2"/>
+                <ellipse cx="200" cy="486" rx="64" ry="8" fill="url(#g-water)"/>
+                <path d="M182,485 h14 M206,488 h10 M190,490 h6" stroke="#F7E6BC" stroke-width="1" opacity=".55"/>
+                <rect x="197" y="466" width="6" height="20" fill="#CDBB98"/>
+                <ellipse cx="200" cy="466" rx="16" ry="4" fill="#E8DCC2"/>
+                <path d="M188,466 Q184,474 182,484 M212,466 Q216,474 218,484" stroke="#9FE3D3" stroke-width="1.2" fill="none" opacity=".5"/>
+                <path d="M200,466 V452" stroke="#CFF3EA" stroke-width="1.5" opacity=".6"/>
+              </g>
+
+              <circle class="lamp-glow" style="--d:.5s" cx="116" cy="132" r="72" fill="url(#g-glow)" opacity=".75"/>
+              <circle class="lamp-glow" style="--d:.8s" cx="200" cy="92" r="100" fill="url(#g-glow)" opacity=".8"/>
+              <circle class="lamp-glow" style="--d:1.1s" cx="286" cy="156" r="62" fill="url(#g-glow)" opacity=".7"/>
+              <g stroke="#9C7440" stroke-width="1.4" stroke-dasharray="3 2">
+                <path d="M116,0 V92"/><path d="M200,0 V40"/><path d="M286,0 V120"/>
+              </g>
+              <use href="#lantern" transform="translate(116 92) scale(.95)"/>
+              <use href="#lantern" transform="translate(200 40) scale(1.25)"/>
+              <use href="#lantern" transform="translate(286 120) scale(.85)"/>
+            </g>
+            <path d="M28,500 L28,236 C11,214 3,190 3,164 C3,75 92,12 200,2 C308,12 397,75 397,164 C397,190 389,214 372,236 L372,500" fill="none" stroke="url(#g-brass)" stroke-width="3"/>
+            <path d="M40,500 L40,240 C24,219 16,195 16,168 C16,86 100,26 200,16 C300,26 384,86 384,168 C384,195 376,219 360,240 L360,500" fill="none" stroke="#E4A847" stroke-opacity=".3" stroke-width="1"/>
+          </svg>
+          <div class="hero-card ld" style="--i:5">
+            <span class="k" data-i18n="hero_card_k">Signature du chef</span>
+            <span class="v" data-i18n="hero_card_v">Pastilla au pigeon</span>
+            <span class="p" data-i18n="hero_card_p">140 DH</span>
+          </div>
+        </div>
+      </div>
+
+      <ul class="facts">
+        <li class="fact"><span class="fact-ico"><svg class="ico" aria-hidden="true"><use href="#i-roof"/></svg></span><span data-i18n="fact1">Terrasse sur les toits, face à la Koutoubia</span></li>
+        <li class="fact"><span class="fact-ico"><svg class="ico" aria-hidden="true"><use href="#i-music"/></svg></span><span data-i18n="fact2">Musique andalouse le jeudi soir</span></li>
+        <li class="fact"><span class="fact-ico"><svg class="ico" aria-hidden="true"><use href="#i-walk"/></svg></span><span data-i18n="fact3">À 4 minutes à pied de Jemaa el-Fna</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- STORY -->
+  <section class="section zellige-bg" id="histoire" aria-labelledby="story-title">
+    <div class="wrap story-grid">
+      <div class="story-text">
+        <p class="eyebrow"><svg class="ico" aria-hidden="true"><use href="#i-star8"/></svg><span data-i18n="story_eyebrow">Notre histoire</span></p>
+        <h2 id="story-title" data-i18n="story_title">La maison du marchand de <em>safran</em></h2>
+        <p class="body first" data-i18n="story_p1">En 1772, un marchand de safran venu de Taliouine fit bâtir ce riad à quelques ruelles de Jemaa el-Fna. Il stockait ses récoltes dans les pièces fraîches du rez-de-chaussée et recevait ses acheteurs autour du bassin.</p>
+        <p class="body" data-i18n="story_p2">Deux siècles et demi plus tard, la famille Alaoui a restauré la maison pièce par pièce, avec les maîtres zelligeurs et les ébénistes de la médina. On y reçoit aujourd’hui comme autrefois : lentement, généreusement, sous les orangers.</p>
+      </div>
+      <div class="story-media">
+        <div class="story-art">
+          <svg viewBox="0 0 300 400" role="img" aria-labelledby="story-art-t">
+            <title id="story-art-t" data-i18n="story_art">Une fleur de safran encadrée par un arc marocain</title>
+            <defs><clipPath id="c-lancet"><path d="M2,400 L2,150 C2,70 70,14 150,2 C230,14 298,70 298,150 L298,400 Z"/></clipPath></defs>
+            <g clip-path="url(#c-lancet)">
+              <rect width="300" height="400" fill="url(#g-deep)"/>
+              <g opacity=".55"><g transform="translate(0,336) scale(.5)"><rect width="600" height="130" fill="url(#p-zellige)"/></g></g>
+              <rect y="330" width="300" height="70" fill="url(#g-fadev)" opacity=".6"/>
+              <rect y="334" width="300" height="2" fill="#C9A36A" opacity=".5"/>
+              <circle cx="150" cy="190" r="140" fill="url(#g-glow)" opacity=".28"/>
+              <g fill="none" stroke-linecap="round">
+                <path d="M150,400 C146,320 130,262 110,206" stroke="#1E6A4C" stroke-width="5"/>
+                <path d="M150,400 C153,320 170,262 192,212" stroke="#1E6A4C" stroke-width="5"/>
+                <path d="M150,400 C140,330 110,292 84,262" stroke="#185A40" stroke-width="5"/>
+                <path d="M150,400 C160,330 190,294 216,268" stroke="#185A40" stroke-width="5"/>
+                <path d="M150,400 C146,320 130,262 110,206" stroke="#5FAE8A" stroke-width="1.1" opacity=".7"/>
+                <path d="M150,400 C153,320 170,262 192,212" stroke="#5FAE8A" stroke-width="1.1" opacity=".7"/>
+                <path d="M150,400 C150,350 150,300 150,262" stroke="#D6CCE6" stroke-width="7" opacity=".55"/>
+              </g>
+              <g transform="translate(150,262)">
+                <path transform="rotate(-42)" d="M0,0 C-28,-28 -34,-92 0,-126 C34,-92 28,-28 0,0 Z" fill="url(#g-petal-back)"/>
+                <path transform="rotate(42)" d="M0,0 C-28,-28 -34,-92 0,-126 C34,-92 28,-28 0,0 Z" fill="url(#g-petal-back)"/>
+                <path transform="scale(1.06)" d="M0,0 C-28,-28 -34,-92 0,-126 C34,-92 28,-28 0,0 Z" fill="url(#g-petal-back)"/>
+                <g fill="url(#g-petal)" stroke="#C9B0EE" stroke-width=".8" stroke-opacity=".5">
+                  <path transform="rotate(-18) scale(.94)" d="M0,0 C-28,-28 -34,-92 0,-126 C34,-92 28,-28 0,0 Z"/>
+                  <path transform="rotate(18) scale(.94)" d="M0,0 C-28,-28 -34,-92 0,-126 C34,-92 28,-28 0,0 Z"/>
+                </g>
+                <g fill="none" stroke="#3E2468" stroke-width="1" opacity=".6">
+                  <path transform="rotate(-18) scale(.94)" d="M0,-8 C-2,-50 -2,-90 0,-116 M-8,-20 C-12,-50 -12,-80 -6,-104 M8,-20 C12,-50 12,-80 6,-104"/>
+                  <path transform="rotate(18) scale(.94)" d="M0,-8 C-2,-50 -2,-90 0,-116 M-8,-20 C-12,-50 -12,-80 -6,-104 M8,-20 C12,-50 12,-80 6,-104"/>
+                </g>
+              </g>
+              <g fill="none" stroke-linecap="round">
+                <path d="M150,236 C144,214 140,200 134,184" stroke="#E8B83A" stroke-width="2.2"/>
+                <path d="M150,236 C156,214 160,200 166,186" stroke="#E8B83A" stroke-width="2.2"/>
+                <path d="M150,232 C146,196 134,160 116,132" stroke="#C8301C" stroke-width="3.4"/>
+                <path d="M150,232 C151,190 152,150 150,116" stroke="#D23A1E" stroke-width="3.4"/>
+                <path d="M150,232 C156,196 168,162 186,134" stroke="#C8301C" stroke-width="3.4"/>
+                <path d="M109,136 Q113,124 123,128" stroke="#EA5A2C" stroke-width="4"/>
+                <path d="M144,112 Q150,102 156,112" stroke="#EA5A2C" stroke-width="4"/>
+                <path d="M179,130 Q188,124 193,136" stroke="#EA5A2C" stroke-width="4"/>
+              </g>
+              <ellipse cx="134" cy="182" rx="2.8" ry="8" transform="rotate(-20 134 182)" fill="#F2C94C"/>
+              <ellipse cx="166" cy="184" rx="2.8" ry="8" transform="rotate(20 166 184)" fill="#F2C94C"/>
+              <g fill="#E4A847">
+                <circle class="float" cx="70" cy="120" r="1.6" opacity=".7"/>
+                <circle class="float" cx="232" cy="96" r="1.3" opacity=".6"/>
+                <circle class="float" cx="250" cy="200" r="1.8" opacity=".5"/>
+                <circle class="float" cx="52" cy="230" r="1.2" opacity=".6"/>
+                <circle class="float" cx="200" cy="58" r="1.1" opacity=".7"/>
+                <circle class="float" cx="98" cy="70" r="1" opacity=".5"/>
+              </g>
+              <g stroke="#C8301C" stroke-width="1.8" stroke-linecap="round" fill="none" opacity=".85">
+                <path d="M96,356 q6,-3 12,1"/><path d="M196,362 q7,-4 13,0"/><path d="M228,350 q5,-5 11,-2"/>
+              </g>
+            </g>
+            <path d="M2,400 L2,150 C2,70 70,14 150,2 C230,14 298,70 298,150 L298,400" fill="none" stroke="url(#g-brass)" stroke-width="2.5"/>
+          </svg>
+        </div>
+        <div class="stats">
+          <div class="stat"><b>1772</b><span data-i18n="stat1_l">année de construction du riad</span></div>
+          <div class="stat"><b>12</b><span data-i18n="stat2_l">tables, jamais une de plus</span></div>
+          <div class="stat"><b>3</b><span data-i18n="stat3_l">générations de recettes</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CHEF -->
+  <section class="section" id="chef" aria-labelledby="chef-title">
+    <div class="wrap chef-grid">
+      <div class="chef-art">
+        <svg viewBox="0 0 400 400" role="img" aria-labelledby="chef-art-t">
+          <title id="chef-art-t" data-i18n="chef_art">La cuisine de la maison : un tajine sur le kanoun, sous les cuivres</title>
+          <defs><clipPath id="c-chef"><circle cx="200" cy="200" r="194"/></clipPath></defs>
+          <g clip-path="url(#c-chef)">
+            <rect width="400" height="400" fill="url(#g-kitchen)"/>
+            <g opacity=".45"><g transform="translate(0,170) scale(.4)"><rect width="1000" height="190" fill="url(#p-zellige)"/></g></g>
+            <rect y="170" width="400" height="76" fill="#0B1120" opacity=".35"/>
+            <rect y="168" width="400" height="3" fill="#C9A36A" opacity=".45"/>
+            <rect y="244" width="400" height="3" fill="#C9A36A" opacity=".45"/>
+            <ellipse cx="200" cy="300" rx="190" ry="110" fill="url(#g-ember)" opacity=".45"/>
+            <rect x="56" y="58" width="288" height="5" rx="2.5" fill="url(#g-brass)"/>
+            <g fill="none" stroke="#B98B4E" stroke-width="1.6">
+              <path d="M120,63 v8 a4,4 0 1 0 4,4"/><path d="M286,63 v6"/>
+            </g>
+            <g>
+              <path d="M110,88 C110,80 130,80 130,88" fill="none" stroke="#D08453" stroke-width="2.4"/>
+              <rect x="93" y="88" width="54" height="6" rx="3" fill="#E39A5E"/>
+              <path d="M96,94 H144 C144,122 136,136 120,136 C104,136 96,122 96,94 Z" fill="url(#g-copper)"/>
+              <path d="M102,104 C104,118 110,128 118,130" fill="none" stroke="#FFFFFF" stroke-opacity=".22" stroke-width="3" stroke-linecap="round"/>
+            </g>
+            <g>
+              <rect x="196" y="63" width="8" height="48" rx="3" fill="url(#g-brass)"/>
+              <circle cx="200" cy="70" r="2.4" fill="#2A1A0C"/>
+              <rect x="164" y="108" width="72" height="7" rx="3" fill="#E39A5E"/>
+              <path d="M168,115 H232 V144 C232,156 222,162 210,162 H190 C178,162 168,156 168,144 Z" fill="url(#g-copper)"/>
+              <path d="M176,122 V146" stroke="#FFFFFF" stroke-opacity=".2" stroke-width="3" stroke-linecap="round"/>
+            </g>
+            <g>
+              <rect x="284" y="63" width="4" height="70" rx="2" fill="url(#g-brass)"/>
+              <path d="M270,132 H302 C302,146 294,152 286,152 C278,152 270,146 270,132 Z" fill="url(#g-copper)"/>
+            </g>
+            <g>
+              <rect x="316" y="63" width="3" height="40" rx="1.5" fill="#B98B4E"/>
+              <ellipse cx="317.5" cy="112" rx="11" ry="12" fill="url(#g-brass)"/>
+            </g>
+
+            <path d="M150,332 L250,332 L234,400 L166,400 Z" fill="url(#g-clay)"/>
+            <path d="M160,354 l8,-8 l8,8 l8,-8 l8,8 l8,-8 l8,8 l8,-8 l8,8 l8,-8 l8,8" fill="none" stroke="#F0B888" stroke-opacity=".45" stroke-width="1.4"/>
+            <path d="M138,302 H262 L250,334 H150 Z" fill="url(#g-clay)"/>
+            <ellipse cx="200" cy="302" rx="62" ry="9" fill="#9B4E2C"/>
+            <ellipse cx="200" cy="302" rx="54" ry="6" fill="#2A0E08"/>
+            <g>
+              <circle class="ember" cx="160" cy="302" r="4" fill="#FF9B3D"/>
+              <circle class="ember" cx="176" cy="304" r="3" fill="#FFD27A"/>
+              <circle class="ember" cx="226" cy="303" r="3.6" fill="#FF8A2E"/>
+              <circle class="ember" cx="242" cy="301" r="3" fill="#FFC060"/>
+              <circle class="ember" cx="212" cy="305" r="2.4" fill="#FFE29A"/>
+            </g>
+            <path d="M128,294 Q200,310 272,294 L262,282 Q200,294 138,282 Z" fill="url(#g-clay)"/>
+            <path d="M140,284 C168,274 186,214 194,172 L206,172 C214,214 232,274 260,284 Q200,296 140,284 Z" fill="url(#g-glaze)"/>
+            <g fill="none" stroke-linecap="round">
+              <path d="M152,278 Q200,292 248,278" stroke="#E4A847" stroke-width="2.6"/>
+              <path d="M166,250 Q200,260 234,250" stroke="#F3E9D6" stroke-width="2.6" stroke-dasharray="0 8" opacity=".8"/>
+              <path d="M176,224 Q200,231 224,224" stroke="#E4A847" stroke-width="2"/>
+              <path d="M184,198 Q200,203 216,198" stroke="#F3E9D6" stroke-width="1.2" opacity=".7"/>
+              <path d="M160,278 C180,266 188,220 196,180" stroke="#FFFFFF" stroke-opacity=".12" stroke-width="4"/>
+            </g>
+            <ellipse cx="200" cy="172" rx="10" ry="3.5" fill="#0A3B33"/>
+            <circle cx="200" cy="164" r="6.5" fill="url(#g-glaze)"/>
+            <circle cx="200" cy="156" r="3" fill="#E4A847"/>
+            <g class="steam" fill="none" stroke="#F3E9D6" stroke-width="2" stroke-linecap="round" opacity=".3">
+              <path d="M192,144 C182,126 202,114 192,96"/>
+              <path d="M208,142 C218,124 198,112 210,92"/>
+              <path d="M200,140 C196,122 210,108 200,88"/>
+            </g>
+
+            <rect x="292" y="288" width="7" height="50" rx="3.5" fill="url(#g-brass)" transform="rotate(22 295 313)"/>
+            <path d="M266,330 H306 L300,362 H272 Z" fill="url(#g-brass)"/>
+            <ellipse cx="286" cy="330" rx="20" ry="4.5" fill="#F4D58E"/>
+            <ellipse cx="286" cy="330" rx="15" ry="2.6" fill="#5E3E1B"/>
+            <path d="M92,342 H136 C134,356 126,362 114,362 C102,362 94,356 92,342 Z" fill="#DCCFB4"/>
+            <path d="M97,342 C104,332 110,322 114,316 C118,322 124,332 131,342 Z" fill="#E2A62B"/>
+            <path d="M92,342 H136" stroke="#1D8F78" stroke-width="3"/>
+            <path d="M110,360 H142 C141,370 134,374 126,374 C118,374 111,370 110,360 Z" fill="#DCCFB4"/>
+            <path d="M113,360 C118,353 123,346 126,342 C129,346 134,353 139,360 Z" fill="#B5402A"/>
+            <path d="M110,360 H142" stroke="#E4A847" stroke-width="2"/>
+            <rect y="396" width="400" height="4" fill="#1B120E"/>
+          </g>
+          <circle cx="200" cy="200" r="195" fill="none" stroke="url(#g-brass)" stroke-width="3"/>
+          <circle cx="200" cy="200" r="186" fill="none" stroke="#E4A847" stroke-opacity=".4" stroke-width="1.2" stroke-dasharray="1 6" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="chef-text">
+        <p class="eyebrow"><svg class="ico" aria-hidden="true"><use href="#i-star8"/></svg><span data-i18n="chef_eyebrow">Le chef</span></p>
+        <h2 id="chef-title" data-i18n="chef_name">Youssef Alaoui</h2>
+        <p class="chef-role" data-i18n="chef_role">Chef de cuisine, petit-fils de la maison</p>
+        <blockquote class="chef-quote"><p data-i18n="chef_quote">«&nbsp;Un tajine ne se presse pas. Laissez-lui le temps, il vous racontera sa terre.&nbsp;»</p></blockquote>
+        <p class="chef-bio" data-i18n="chef_bio">Formé auprès des dadas de Fès, ces cuisinières qui gardent les recettes des grandes maisons, puis dans des cuisines étoilées à Lyon, Youssef est rentré à Marrakech en 2015. Sa conviction : la cuisine marocaine n’a pas besoin d’être réinventée. Elle demande surtout à être écoutée.</p>
+        <dl class="chef-facts">
+          <div><dt data-i18n="chef_f1_k">Menu dégustation</dt><dd data-i18n="chef_f1_v">7 temps · 650 DH</dd></div>
+          <div><dt data-i18n="chef_f2_k">Tanjia du vendredi</dt><dd data-i18n="chef_f2_v">8 h dans le four du hammam</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- MENU -->
+  <section class="section parapet" id="menu" aria-labelledby="menu-title">
+    <div class="wrap">
+      <div class="menu-top">
+        <div class="sec-head">
+          <p class="eyebrow"><svg class="ico" aria-hidden="true"><use href="#i-star8"/></svg><span data-i18n="menu_eyebrow">La carte</span></p>
+          <h2 id="menu-title" data-i18n="menu_title">Les recettes de la <em>maison</em></h2>
+          <p class="lede" data-i18n="menu_intro">Une carte courte qui suit le marché. Prix en dirhams, service compris.</p>
+        </div>
+        <div class="tabs" role="tablist" aria-labelledby="menu-title" id="menu-tabs">
+          <button type="button" class="tab" role="tab" id="tab-starters" data-tab="starters" aria-selected="true" aria-controls="menu-panel" data-i18n="tab_starters">Entrées</button>
+          <button type="button" class="tab" role="tab" id="tab-mains" data-tab="mains" aria-selected="false" aria-controls="menu-panel" tabindex="-1" data-i18n="tab_mains">Tajines &amp; Couscous</button>
+          <button type="button" class="tab" role="tab" id="tab-desserts" data-tab="desserts" aria-selected="false" aria-controls="menu-panel" tabindex="-1" data-i18n="tab_desserts">Desserts</button>
+          <button type="button" class="tab" role="tab" id="tab-teas" data-tab="teas" aria-selected="false" aria-controls="menu-panel" tabindex="-1" data-i18n="tab_teas">Thés</button>
+        </div>
+      </div>
+      <div id="menu-panel" role="tabpanel" aria-labelledby="tab-starters" tabindex="0"></div>
+      <div class="menu-foot">
+        <div class="tasting">
+          <div class="tasting-text">
+            <b data-i18n="tasting_k">Menu dégustation</b>
+            <span data-i18n="tasting_v">7 temps · 650 DH par personne · accord thés et jus 180 DH</span>
+          </div>
+          <a class="btn btn-ghost" href="#reserver" id="tasting-cta"><span data-i18n="tasting_cta">Réserver le menu dégustation</span><svg class="ico flip" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        </div>
+        <p class="menu-note" data-i18n="menu_note">Allergies ou régime particulier ? Dites-le-nous lors de la réservation.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- GALLERY -->
+  <section class="section" id="galerie" aria-labelledby="gallery-title">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow"><svg class="ico" aria-hidden="true"><use href="#i-star8"/></svg><span data-i18n="gallery_eyebrow">Galerie</span></p>
+        <h2 id="gallery-title" data-i18n="gallery_title">Une soirée au <em>riad</em></h2>
+        <p class="lede" data-i18n="gallery_intro">Touchez une image pour l’agrandir.</p>
+      </div>
+      <div class="gallery">
+        <!-- 1. Tajine -->
+        <button type="button" class="g-item" id="g-item-1" data-key="g1">
+          <svg viewBox="0 0 400 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+            <rect width="400" height="400" fill="#0C1724"/>
+            <g opacity=".2"><rect width="400" height="250" fill="url(#p-zellige)"/></g>
+            <rect width="400" height="250" fill="url(#g-fadev)"/>
+            <circle cx="70" cy="40" r="190" fill="url(#g-glow)" opacity=".4"/>
+            <path d="M70,-12 V-10" stroke="#9C7440"/>
+            <use href="#lantern" transform="translate(70 -10) scale(1.3)"/>
+            <rect y="250" width="400" height="150" fill="url(#g-wood)"/>
+            <path d="M0,250 H400" stroke="#7A5232" stroke-width="2"/>
+            <ellipse cx="200" cy="306" rx="176" ry="42" fill="url(#g-brass)"/>
+            <ellipse cx="200" cy="302" rx="160" ry="34" fill="#7E5A2E"/>
+            <ellipse cx="200" cy="302" rx="140" ry="28" fill="none" stroke="#F4D58E" stroke-opacity=".35" stroke-dasharray="2 5"/>
+            <ellipse cx="200" cy="298" rx="118" ry="18" fill="#000000" opacity=".35"/>
+            <path d="M84,282 Q200,316 316,282 L300,266 Q200,286 100,266 Z" fill="url(#g-clay)"/>
+            <path d="M100,266 Q200,286 300,266" fill="none" stroke="#E9A87A" stroke-width="2"/>
+            <path d="M100,268 C152,256 178,170 191,112 L209,112 C222,170 248,256 300,268 Q200,290 100,268 Z" fill="url(#g-glaze)"/>
+            <g fill="none" stroke-linecap="round">
+              <path d="M116,263 Q200,283 284,263" stroke="#E4A847" stroke-width="3"/>
+              <path d="M144,240 Q200,256 256,240" stroke="#F3E9D6" stroke-width="3" stroke-dasharray="0 9" opacity=".85"/>
+              <path d="M158,214 Q200,226 242,214" stroke="#E4A847" stroke-width="2.5"/>
+              <path d="M170,190 Q200,198 230,190" stroke="#F3E9D6" stroke-width="1.4" opacity=".7"/>
+              <path d="M178,162 Q200,168 222,162" stroke="#E4A847" stroke-width="2"/>
+              <path d="M186,138 Q200,142 214,138" stroke="#F3E9D6" stroke-width="2.4" stroke-dasharray="0 7" opacity=".8"/>
+              <path d="M118,260 C160,246 180,176 193,118" stroke="#FFFFFF" stroke-opacity=".12" stroke-width="5"/>
+            </g>
+            <ellipse cx="200" cy="112" rx="13" ry="4" fill="#0A3B33"/>
+            <circle cx="200" cy="101" r="9" fill="url(#g-glaze)"/>
+            <circle cx="200" cy="90" r="4" fill="#E4A847"/>
+            <g class="steam" fill="none" stroke="#F3E9D6" stroke-width="2.2" stroke-linecap="round" opacity=".3">
+              <path d="M192,78 C182,62 202,52 192,34"/>
+              <path d="M208,80 C220,62 198,50 212,30"/>
+              <path d="M200,74 C196,58 210,46 200,24"/>
+            </g>
+            <ellipse cx="54" cy="334" rx="48" ry="14" fill="#8C5A2E"/>
+            <ellipse cx="54" cy="328" rx="46" ry="12" fill="#C38B4F"/>
+            <path d="M24,326 h0 M40,322 h0 M58,324 h0 M74,328 h0 M48,331 h0 M30,332 h0 M66,320 h0" stroke="#F3DDB0" stroke-width="2.4" stroke-linecap="round"/>
+            <path d="M318,324 H382 C380,342 366,350 350,350 C334,350 320,342 318,324 Z" fill="#E1D4B8"/>
+            <ellipse cx="350" cy="324" rx="32" ry="7" fill="#B9A57F"/>
+            <g fill="#4F3A55"><ellipse cx="340" cy="320" rx="6" ry="4.5"/><ellipse cx="354" cy="318" rx="6" ry="4.5"/></g>
+            <g fill="#6B7A36"><ellipse cx="363" cy="322" rx="6" ry="4.5"/><ellipse cx="347" cy="324" rx="6" ry="4"/></g>
+            <rect width="400" height="400" fill="url(#g-vignette)"/>
+          </svg>
+          <span class="g-cap"><span class="g-t" data-i18n="g1_t">Tajine d’agneau aux pruneaux</span><span class="g-zoom" aria-hidden="true"><svg class="ico"><use href="#i-zoom"/></svg></span></span>
+          <span class="sr-only" data-i18n="g1_d">Mijoté quatre heures dans une terre cuite de Safi.</span>
+        </button>
+
+        <!-- 2. Lanterns -->
+        <button type="button" class="g-item" id="g-item-2" data-key="g2">
+          <svg viewBox="0 0 400 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+            <rect width="400" height="400" fill="#0A1020"/>
+            <rect width="400" height="400" fill="url(#p-spill)" mask="url(#m-spill)" opacity=".75"/>
+            <circle cx="96" cy="153" r="110" fill="url(#g-glow)" opacity=".6"/>
+            <circle cx="206" cy="127" r="140" fill="url(#g-glow)" opacity=".65"/>
+            <circle cx="318" cy="191" r="96" fill="url(#g-glow)" opacity=".55"/>
+            <circle cx="150" cy="282" r="74" fill="url(#g-glow)" opacity=".5"/>
+            <circle cx="284" cy="312" r="80" fill="url(#g-glow)" opacity=".5"/>
+            <g opacity=".4"><g transform="translate(0,356) scale(.4)"><rect width="1000" height="110" fill="url(#p-zellige)"/></g></g>
+            <rect y="354" width="400" height="2" fill="#C9A36A" opacity=".5"/>
+            <g stroke="#9C7440" stroke-width="1.5" stroke-dasharray="3 2">
+              <path d="M96,0 V82"/><path d="M206,0 V30"/><path d="M318,0 V128"/><path d="M150,0 V236"/><path d="M284,0 V262"/>
+            </g>
+            <use href="#lantern" transform="translate(96 82) scale(1.7)"/>
+            <use href="#lantern" transform="translate(206 30) scale(2.3)"/>
+            <use href="#lantern" transform="translate(318 128) scale(1.5)"/>
+            <use href="#lantern" transform="translate(150 236) scale(1.1)"/>
+            <use href="#lantern" transform="translate(284 262) scale(1.2)"/>
+            <rect width="400" height="400" fill="url(#g-vignette)"/>
+          </svg>
+          <span class="g-cap"><span class="g-t" data-i18n="g2_t">Les lanternes du patio</span><span class="g-zoom" aria-hidden="true"><svg class="ico"><use href="#i-zoom"/></svg></span></span>
+          <span class="sr-only" data-i18n="g2_d">Cuivre ciselé à la main par un artisan du souk Haddadine.</span>
+        </button>
+
+        <!-- 3. Mint tea -->
+        <button type="button" class="g-item" id="g-item-3" data-key="g3">
+          <svg viewBox="0 0 400 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+            <rect width="400" height="400" fill="#0B1222"/>
+            <path d="M96,400 V196 C96,130 144,92 200,84 C256,92 304,130 304,196 V400 Z" fill="#101A30" stroke="#B98B4E" stroke-opacity=".35" stroke-width="2"/>
+            <path d="M112,400 V200 C112,142 154,108 200,100 C246,108 288,142 288,200 V400 Z" fill="url(#p-grid)" opacity=".16"/>
+            <circle cx="200" cy="210" r="190" fill="url(#g-glow)" opacity=".24"/>
+            <ellipse cx="200" cy="354" rx="184" ry="44" fill="url(#g-silver)"/>
+            <ellipse cx="200" cy="350" rx="166" ry="36" fill="#7D8592"/>
+            <ellipse cx="200" cy="350" rx="146" ry="30" fill="none" stroke="#EEF1F5" stroke-opacity=".4" stroke-dasharray="1 5"/>
+            <ellipse cx="200" cy="350" rx="110" ry="22" fill="none" stroke="#EEF1F5" stroke-opacity=".25"/>
+            <g>
+              <path d="M100,300 L132,300 L129,346 L103,346 Z" fill="url(#g-tea)"/>
+              <ellipse cx="116" cy="300" rx="16" ry="2.5" fill="#F2D9A0" opacity=".8"/>
+              <path d="M99.3,288 L132.7,288 L132,298 L100,298 Z" fill="#1D8F78" opacity=".85"/>
+              <path d="M101,296 l4,-5 l4,5 l4,-5 l4,5 l4,-5 l4,5 l4,-5" fill="none" stroke="#E4A847" stroke-width="1.2"/>
+              <path d="M99,284 L133,284 L129,346 L103,346 Z" fill="#FFFFFF" fill-opacity=".05" stroke="#EAF2F0" stroke-opacity=".55" stroke-width="1.4"/>
+              <path d="M104,292 L106,340" stroke="#FFFFFF" stroke-opacity=".25" stroke-width="2" stroke-linecap="round"/>
+            </g>
+            <g>
+              <path d="M160,310 L192,310 L189,356 L163,356 Z" fill="url(#g-tea)"/>
+              <path d="M159.3,298 L192.7,298 L192,308 L160,308 Z" fill="#B5402A" opacity=".85"/>
+              <path d="M163,303 h0 M169,303 h0 M175,303 h0 M181,303 h0 M187,303 h0" stroke="#F2CB7E" stroke-width="2.2" stroke-linecap="round"/>
+              <path d="M159,294 L193,294 L189,356 L163,356 Z" fill="#FFFFFF" fill-opacity=".05" stroke="#EAF2F0" stroke-opacity=".55" stroke-width="1.4"/>
+              <path d="M164,302 L166,350" stroke="#FFFFFF" stroke-opacity=".25" stroke-width="2" stroke-linecap="round"/>
+            </g>
+            <g>
+              <path d="M220,302 L252,302 L249,348 L223,348 Z" fill="url(#g-tea)"/>
+              <path d="M219.3,290 L252.7,290 L252,300 L220,300 Z" fill="#1D8F78" opacity=".85"/>
+              <path d="M221,298 l4,-5 l4,5 l4,-5 l4,5 l4,-5 l4,5 l4,-5" fill="none" stroke="#E4A847" stroke-width="1.2"/>
+              <g fill="#3FA56C"><path d="M244,286 C246,276 254,272 262,274 C258,282 252,286 244,286 Z"/><path d="M240,284 C234,276 236,268 242,264 C246,272 246,278 240,284 Z" fill="#2F8F5B"/></g>
+              <path d="M219,286 L253,286 L249,348 L223,348 Z" fill="#FFFFFF" fill-opacity=".05" stroke="#EAF2F0" stroke-opacity=".55" stroke-width="1.4"/>
+            </g>
+            <g transform="translate(312 334)">
+              <path d="M0,0 C5,-9 16,-10 22,0 C16,10 5,9 0,0 Z" fill="#3FA56C" transform="rotate(-30)"/>
+              <path d="M0,0 C5,-9 16,-10 22,0 C16,10 5,9 0,0 Z" fill="#2F8F5B" transform="rotate(20)"/>
+              <path d="M0,0 C5,-9 16,-10 22,0 C16,10 5,9 0,0 Z" fill="#37995F" transform="rotate(200)"/>
+              <path d="M0,0 C5,-9 16,-10 22,0 C16,10 5,9 0,0 Z" fill="#2F8F5B" transform="rotate(150)"/>
+              <path d="M-26,8 L26,-6" stroke="#1F6B44" stroke-width="1.6"/>
+            </g>
+            <path d="M199,158 C188,170 150,220 118,298" fill="none" stroke="#D7972F" stroke-width="3.2" stroke-linecap="round"/>
+            <path d="M197,161 C186,173 150,222 119,295" fill="none" stroke="#F6CF7A" stroke-width="1" opacity=".7"/>
+            <g fill="#F2C46D"><circle cx="110" cy="296" r="1.5"/><circle cx="126" cy="294" r="1.4"/><circle cx="121" cy="290" r="1.1"/></g>
+            <g transform="rotate(-18 300 170)">
+              <path d="M262,184 C240,180 228,160 214,136 L208,126 L216,124 L224,136 C236,154 248,166 266,168 Z" fill="url(#g-silver)"/>
+              <path d="M340,150 C372,146 376,204 336,206" fill="none" stroke="#8E96A1" stroke-width="7" stroke-linecap="round"/>
+              <path d="M258,196 C246,168 254,130 300,126 C346,130 354,168 342,196 C338,210 322,218 300,218 C278,218 262,210 258,196 Z" fill="url(#g-silver)"/>
+              <path d="M276,218 H324 L330,232 H270 Z" fill="url(#g-silver)"/>
+              <path d="M280,126 H320 L314,112 H286 Z" fill="url(#g-silver)"/>
+              <path d="M286,112 C286,92 314,92 314,112 Z" fill="url(#g-silver)"/>
+              <path d="M300,94 C296,88 296,80 300,72 C304,80 304,88 300,94 Z" fill="#C9CFD8"/>
+              <circle cx="300" cy="96" r="3" fill="#E7EAEE"/>
+              <g fill="none" stroke="#5B626C" stroke-opacity=".55" stroke-width="1.2">
+                <path d="M262,170 Q300,184 338,170"/><path d="M266,150 Q300,162 334,150" stroke-dasharray="1 4"/><path d="M268,200 Q300,210 332,200"/>
+              </g>
+              <path d="M272,150 C270,170 274,190 284,204" fill="none" stroke="#FFFFFF" stroke-opacity=".45" stroke-width="4" stroke-linecap="round"/>
+            </g>
+            <rect width="400" height="400" fill="url(#g-vignette)"/>
+          </svg>
+          <span class="g-cap"><span class="g-t" data-i18n="g3_t">Le thé à la menthe</span><span class="g-zoom" aria-hidden="true"><svg class="ico"><use href="#i-zoom"/></svg></span></span>
+          <span class="sr-only" data-i18n="g3_d">Servi de haut, trois fois, comme le veut la tradition.</span>
+        </button>
+
+        <!-- 4. Patio from above -->
+        <button type="button" class="g-item" id="g-item-4" data-key="g4">
+          <svg viewBox="0 0 400 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+            <rect width="400" height="400" fill="#0E1528"/>
+            <g transform="scale(.7)"><rect width="572" height="572" fill="url(#p-zellige)"/></g>
+            <rect width="400" height="400" fill="#0B1120" opacity=".4"/>
+            <rect x="168" width="64" height="400" fill="url(#p-bejmat)"/>
+            <rect y="168" width="400" height="64" fill="url(#p-bejmat)"/>
+            <path d="M168,0 V400 M232,0 V400 M0,168 H400 M0,232 H400" stroke="#E8DCC2" stroke-opacity=".55" stroke-width="2"/>
+            <use href="#tree-top" transform="translate(84 84)"/>
+            <use href="#tree-top" transform="translate(316 84) rotate(90)"/>
+            <use href="#tree-top" transform="translate(84 316) rotate(-90)"/>
+            <use href="#tree-top" transform="translate(316 316) rotate(180)"/>
+            <circle cx="200" cy="200" r="150" fill="url(#g-glow)" opacity=".2"/>
+            <polygon points="272.06,229.85 229.85,272.06 170.15,272.06 127.94,229.85 127.94,170.15 170.15,127.94 229.85,127.94 272.06,170.15" fill="#E8DCC2" stroke="#B9A57F" stroke-width="2"/>
+            <polygon points="260.98,225.26 225.26,260.98 174.74,260.98 139.02,225.26 139.02,174.74 174.74,139.02 225.26,139.02 260.98,174.74" fill="url(#g-pool)"/>
+            <circle class="pulse" cx="200" cy="200" r="36" fill="none" stroke="#CFF3EA" stroke-opacity=".5"/>
+            <polygon points="224,200 216.97,207.03 216.97,216.97 207.03,216.97 200,224 192.97,216.97 183.03,216.97 183.03,207.03 176,200 183.03,192.97 183.03,183.03 192.97,183.03 200,176 207.03,183.03 216.97,183.03 216.97,192.97" fill="#E8DCC2"/>
+            <circle cx="200" cy="200" r="8" fill="url(#g-pool)"/>
+            <g fill="#E28A97">
+              <ellipse cx="236" cy="178" rx="4" ry="2.2" transform="rotate(30 236 178)"/>
+              <ellipse cx="160" cy="226" rx="4" ry="2.2" transform="rotate(-20 160 226)"/>
+              <ellipse cx="226" cy="240" rx="3.6" ry="2" transform="rotate(70 226 240)"/>
+              <ellipse cx="168" cy="166" rx="3.6" ry="2" transform="rotate(10 168 166)"/>
+              <ellipse cx="248" cy="214" rx="3.2" ry="1.8" transform="rotate(-40 248 214)" fill="#F2B3BC"/>
+              <ellipse cx="150" cy="196" rx="3.2" ry="1.8" transform="rotate(60 150 196)" fill="#F2B3BC"/>
+            </g>
+            <rect width="400" height="400" fill="url(#g-vignette)"/>
+          </svg>
+          <span class="g-cap"><span class="g-t" data-i18n="g4_t">Le patio vu du ciel</span><span class="g-zoom" aria-hidden="true"><svg class="ico"><use href="#i-zoom"/></svg></span></span>
+          <span class="sr-only" data-i18n="g4_d">Le bassin, les quatre orangers et le zellige d’origine.</span>
+        </button>
+
+        <!-- 5. Spices -->
+        <button type="button" class="g-item" id="g-item-5" data-key="g5">
+          <svg viewBox="0 0 400 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+            <rect width="400" height="400" fill="#120E16"/>
+            <rect y="236" width="400" height="164" fill="url(#g-wood)"/>
+            <path d="M0,236 H400" stroke="#7A5232" stroke-width="2"/>
+            <circle cx="200" cy="70" r="230" fill="url(#g-glow)" opacity=".26"/>
+            <use href="#spice" color="#B5402A" transform="translate(92 262) scale(.9)"/>
+            <use href="#spice" color="#E2A62B" transform="translate(200 256) scale(.95)"/>
+            <use href="#spice" color="#8F6A3A" transform="translate(308 262) scale(.9)"/>
+            <use href="#spice" color="#A3592C" transform="translate(138 340) scale(1.05)"/>
+            <g transform="translate(264 346)">
+              <ellipse cx="0" cy="4" rx="58" ry="16" fill="#000000" opacity=".3"/>
+              <ellipse cx="0" cy="0" rx="56" ry="15" fill="url(#g-brass)"/>
+              <ellipse cx="0" cy="-2" rx="46" ry="10" fill="#6E4A22"/>
+              <g fill="none" stroke-linecap="round" stroke-width="1.8">
+                <g stroke="#C8301C">
+                  <path d="M-34,-4 q6,-4 12,0"/><path d="M-20,-8 q5,3 11,-1"/><path d="M-6,-6 q6,-5 12,-1"/><path d="M8,-9 q5,4 10,0"/>
+                  <path d="M20,-4 q6,-4 12,1"/><path d="M-28,2 q6,-3 11,1"/><path d="M-12,0 q5,4 11,0"/><path d="M4,1 q6,-4 11,0"/>
+                  <path d="M18,3 q5,-3 10,1"/><path d="M-2,-12 q4,4 9,1"/><path d="M-16,-12 q6,-2 10,2"/>
+                </g>
+                <g stroke="#EA5A2C">
+                  <path d="M-24,-1 q4,-3 8,0"/><path d="M10,-3 q4,3 8,0"/><path d="M-4,4 q4,-3 8,0"/><path d="M26,-8 q3,3 7,0"/>
+                </g>
+              </g>
+            </g>
+            <rect width="400" height="400" fill="url(#g-vignette)"/>
+          </svg>
+          <span class="g-cap"><span class="g-t" data-i18n="g5_t">Épices du matin</span><span class="g-zoom" aria-hidden="true"><svg class="ico"><use href="#i-zoom"/></svg></span></span>
+          <span class="sr-only" data-i18n="g5_d">Ras el-hanout moulu chaque matin, safran de Taliouine.</span>
+        </button>
+
+        <!-- 6. Zellige -->
+        <button type="button" class="g-item" id="g-item-6" data-key="g6">
+          <svg viewBox="0 0 800 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+            <rect width="800" height="400" fill="#0F4A42"/>
+            <g transform="scale(1.2)"><rect width="667" height="334" fill="url(#p-zellige)"/></g>
+            <rect width="800" height="400" fill="url(#g-sheen)"/>
+            <rect width="800" height="400" fill="url(#g-vignette)"/>
+          </svg>
+          <span class="g-cap"><span class="g-t" data-i18n="g6_t">Zellige de Fès</span><span class="g-zoom" aria-hidden="true"><svg class="ico"><use href="#i-zoom"/></svg></span></span>
+          <span class="sr-only" data-i18n="g6_d">Huit mille tesselles posées à la main lors de la restauration.</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- REVIEWS -->
+  <section class="section parapet" id="avis" aria-labelledby="reviews-title">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow"><svg class="ico" aria-hidden="true"><use href="#i-star8"/></svg><span data-i18n="reviews_eyebrow">Avis de nos hôtes</span></p>
+        <h2 id="reviews-title" data-i18n="reviews_title">Ce qu’on en <em>dit</em></h2>
+      </div>
+      <div class="reviews-grid">
+        <article class="review">
+          <div class="review-top">
+            <span class="stars" role="img" aria-label="5 étoiles sur 5" data-i18n-aria="r_stars"><svg class="ico" aria-hidden="true"><use href="#i-star5"/></svg><svg class="ico" aria-hidden="true"><use href="#i-star5"/></svg><svg class="ico" aria-hidden="true"><use href="#i-star5"/></svg><svg class="ico" aria-hidden="true"><use href="#i-star5"/></svg><svg class="ico" aria-hidden="true"><use href="#i-star5"/></svg></span>
+            <span class="badge" data-i18n="r_badge">Exemple</span>
+          </div>
+          <blockquote data-i18n="r1_q">Le cadre est magique, mais c’est la pastilla qui m’a fait revenir. Service attentionné, thé servi dans les règles de l’art.</blockquote>
+          <div class="who"><span class="avatar" aria-hidden="true">S</span><span class="who-name"><b data-i18n="r1_n">Salma B.</b><span data-i18n="r1_c">Casablanca</span></span></div>
+        </article>
+        <article class="review">
+          <div class="review-top">
+            <span class="stars" role="img" aria-label="5 étoiles sur 5" data-i18n-aria="r_stars"><svg class="ico" aria-hidden="true"><use href="#i-star5"/></svg><svg class="ico" aria-hidden="true"><use href="#i-star5"/></svg><svg class="ico" aria-hidden="true"><use href="#i-star5"/></svg><svg class="ico" aria-hidden="true"><use href="#i-star5"/></svg><svg class="ico" aria-hidden="true"><use href="#i-star5"/></svg></span>
+            <span class="badge" data-i18n="r_badge">Exemple</span>
+          </div>
+          <blockquote data-i18n="r2_q">Réservé sur WhatsApp en deux minutes. La tanjia, c’est le meilleur plat de tout notre séjour au Maroc.</blockquote>
+          <div class="who"><span class="avatar" aria-hidden="true">J</span><span class="who-name"><b data-i18n="r2_n">James &amp; Clara</b><span data-i18n="r2_c">Londres</span></span></div>
+        </article>
+        <article class="review">
+          <div class="review-top">
+            <span class="stars" role="img" aria-label="5 étoiles sur 5" data-i18n-aria="r_stars"><svg class="ico" aria-hidden="true"><use href="#i-star5"/></svg><svg class="ico" aria-hidden="true"><use href="#i-star5"/></svg><svg class="ico" aria-hidden="true"><use href="#i-star5"/></svg><svg class="ico" aria-hidden="true"><use href="#i-star5"/></svg><svg class="ico" aria-hidden="true"><use href="#i-star5"/></svg></span>
+            <span class="badge" data-i18n="r_badge">Exemple</span>
+          </div>
+          <blockquote data-i18n="r3_q">Dîner d’anniversaire sur la terrasse, sous les étoiles. L’équipe avait prévu des bougies et une pastilla au lait. Inoubliable.</blockquote>
+          <div class="who"><span class="avatar" aria-hidden="true">K</span><span class="who-name"><b data-i18n="r3_n">Karim E.</b><span data-i18n="r3_c">Rabat</span></span></div>
+        </article>
+      </div>
+      <p class="reviews-note" data-i18n="reviews_note">Avis d’exemple, rédigés pour cette démonstration.</p>
+    </div>
+  </section>
+
+  <!-- BOOKING -->
+  <section class="section book" id="reserver" aria-labelledby="book-title">
+    <div class="wrap book-grid">
+      <div class="book-card">
+        <div class="sec-head">
+          <p class="eyebrow"><svg class="ico" aria-hidden="true"><use href="#i-star8"/></svg><span data-i18n="book_eyebrow">Réservation</span></p>
+          <h2 id="book-title" data-i18n="book_title">Réservez votre <em>table</em></h2>
+          <p class="lede" data-i18n="book_intro">Remplissez le formulaire, puis confirmez en un seul message WhatsApp. Nous répondons en moins de 30 minutes pendant les heures d’ouverture.</p>
+        </div>
+
+        <form id="res-form" novalidate>
+          <div class="form-grid">
+            <p class="form-alert span-2" id="res-alert" role="alert" hidden></p>
+            <div class="field span-2">
+              <label for="res-name" data-i18n="f_name">Nom complet</label>
+              <input class="input" id="res-name" name="name" type="text" autocomplete="name" placeholder="Ex. Salma Bennani" data-i18n-ph="ph_name" aria-describedby="res-name-err" maxlength="60">
+              <p class="field-err" id="res-name-err"></p>
+            </div>
+            <div class="field span-2">
+              <label for="res-phone" data-i18n="f_phone">Téléphone</label>
+              <input class="input" id="res-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 12 34 56 78" data-i18n-ph="ph_phone" aria-describedby="res-phone-err" maxlength="20" dir="ltr">
+              <p class="field-err" id="res-phone-err"></p>
+            </div>
+            <div class="field">
+              <label for="res-date" data-i18n="f_date">Date</label>
+              <input class="input" id="res-date" name="date" type="date" aria-describedby="res-date-err">
+              <p class="field-err" id="res-date-err"></p>
+            </div>
+            <div class="field">
+              <label for="res-time" data-i18n="f_time">Heure</label>
+              <select class="input" id="res-time" name="time" aria-describedby="res-time-err">
+                <option value="">Choisir un horaire</option>
+              </select>
+              <p class="field-err" id="res-time-err"></p>
+            </div>
+            <div class="field">
+              <label for="res-guests" data-i18n="f_guests">Personnes</label>
+              <div class="stepper" id="guests-stepper">
+                <button type="button" id="guests-minus" aria-label="Retirer une personne" data-i18n-aria="guests_minus"><svg class="ico" aria-hidden="true"><use href="#i-minus"/></svg></button>
+                <input id="res-guests" name="guests" type="number" inputmode="numeric" min="1" max="12" value="2" aria-describedby="res-guests-err">
+                <button type="button" id="guests-plus" aria-label="Ajouter une personne" data-i18n-aria="guests_plus"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></button>
+              </div>
+              <p class="field-err" id="res-guests-err"></p>
+            </div>
+            <fieldset class="field">
+              <legend data-i18n="f_seat">Emplacement souhaité</legend>
+              <div class="chips">
+                <span class="chip"><input type="radio" id="seat-patio" name="seat" value="patio" checked><label for="seat-patio" data-i18n="seat_patio">Patio, près du bassin</label></span>
+                <span class="chip"><input type="radio" id="seat-terrace" name="seat" value="terrace"><label for="seat-terrace" data-i18n="seat_terrace">Terrasse sur les toits</label></span>
+                <span class="chip"><input type="radio" id="seat-any" name="seat" value="any"><label for="seat-any" data-i18n="seat_any">Peu importe</label></span>
+              </div>
+            </fieldset>
+            <div class="field span-2">
+              <label for="res-notes" data-i18n="f_notes">Demande particulière (facultatif)</label>
+              <textarea class="input" id="res-notes" name="notes" rows="3" maxlength="300" placeholder="Allergie, anniversaire, chaise haute…" data-i18n-ph="ph_notes"></textarea>
+            </div>
+            <div class="form-submit span-2">
+              <button type="submit" class="btn btn-primary" id="res-submit"><span data-i18n="f_submit">Réserver ma table</span><svg class="ico flip" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+              <p class="form-hint" data-i18n="f_hint">Plus de 12 personnes ou une soirée privée ? Appelez le <span dir="ltr" class="nowrap">05 24 00 00 00</span>.</p>
+            </div>
+          </div>
+        </form>
+
+        <div class="conf" id="res-confirm" hidden>
+          <svg class="conf-seal" viewBox="0 0 64 64" aria-hidden="true">
+            <polygon points="62,32 52.5,41.5 53.2,53.2 41.5,52.5 32,62 22.5,52.5 10.8,53.2 11.5,41.5 2,32 11.5,22.5 10.8,10.8 22.5,11.5 32,2 41.5,11.5 53.2,10.8 52.5,22.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <path d="M22 33l7 7 13-15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <p class="eyebrow" data-i18n="conf_eyebrow">Demande prête</p>
+          <h3 id="conf-title" tabindex="-1">Merci.</h3>
+          <p data-i18n="conf_text">Votre table est presque réservée. Envoyez ce récapitulatif sur WhatsApp, nous confirmons en moins de 30 minutes.</p>
+          <dl class="conf-list" id="conf-list"></dl>
+          <div class="conf-actions">
+            <a class="btn btn-wa" id="conf-wa" href="https://wa.me/212600000000" target="_blank" rel="noopener"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg><span data-i18n="conf_wa">Confirmer sur WhatsApp</span></a>
+            <button type="button" class="btn btn-ghost" id="conf-edit"><svg class="ico flip" aria-hidden="true"><use href="#i-back"/></svg><span data-i18n="conf_edit">Modifier la demande</span></button>
+          </div>
+          <p class="conf-note" data-i18n="conf_note">Rien n’est envoyé tant que vous n’avez pas validé le message dans WhatsApp.</p>
+        </div>
+      </div>
+
+      <aside class="visit" aria-labelledby="visit-title">
+        <h2 id="visit-title" class="sr-only" data-i18n="visit_title">Nous trouver</h2>
+        <div class="map-card">
+          <svg class="map-svg" viewBox="0 0 400 240" role="img" aria-labelledby="map-t">
+            <title id="map-t" data-i18n="map_art">Plan simplifié de la médina, de Jemaa el-Fna à Maison Safran</title>
+            <rect width="400" height="240" fill="#0E1527"/>
+            <g opacity=".05"><rect width="400" height="240" fill="url(#p-zellige)"/></g>
+            <path d="M22,46 L118,18 L252,22 L368,48 L384,138 L352,214 L214,230 L62,216 L16,132 Z" fill="#121C33" stroke="#B98B4E" stroke-opacity=".55" stroke-width="2" stroke-dasharray="7 5"/>
+            <g fill="none" stroke="#26324F" stroke-linecap="round" stroke-linejoin="round">
+              <path stroke-width="4" d="M30,122 C84,112 116,132 168,128 S262,108 372,118"/>
+              <path stroke-width="4" d="M150,26 C160,74 150,116 160,160 S170,206 178,228"/>
+              <path stroke-width="3" d="M264,26 C252,66 272,104 252,142 S242,196 262,226"/>
+              <g stroke-width="2">
+                <path d="M58,70 L106,82 L128,62"/><path d="M86,166 L126,186 L118,212"/><path d="M206,58 L228,90 L212,108"/>
+                <path d="M298,78 L330,98 L320,138"/><path d="M286,168 L330,188 L352,178"/><path d="M198,176 L220,198 L204,220"/>
+                <path d="M66,196 L102,202"/><path d="M318,60 L350,72"/><path d="M104,138 L136,150"/><path d="M200,40 L196,70"/>
+                <path d="M330,150 L370,150"/><path d="M40,90 L80,96"/><path d="M180,90 L214,118 L238,104"/>
+              </g>
+            </g>
+            <path d="M118,136 L176,130 L190,158 L170,182 L126,176 L110,156 Z" fill="#E4A847" fill-opacity=".12" stroke="#E4A847" stroke-opacity=".7" stroke-width="1.2"/>
+            <text x="150" y="160" text-anchor="middle" class="map-t map-t-sq" data-i18n="map_square">Jemaa el-Fna</text>
+            <rect x="66" y="172" width="9" height="9" fill="#B98B4E"/><rect x="68.5" y="166" width="4" height="6" fill="#B98B4E"/>
+            <text x="71" y="198" text-anchor="middle" class="map-t" data-i18n="map_kout">Koutoubia</text>
+            <text x="300" y="60" text-anchor="middle" class="map-t" data-i18n="map_souks">Souks</text>
+            <path class="route" d="M176,134 C190,124 198,116 210,114 S228,108 236,100" fill="none" stroke="#2BA88E" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="2 6"/>
+            <g transform="translate(176 104)">
+              <rect x="-22" y="-11" width="44" height="18" rx="9" fill="#0E3B35" stroke="#2BA88E" stroke-opacity=".6"/>
+              <text x="0" y="2.5" text-anchor="middle" class="map-t map-t-walk" data-i18n="map_walk">4 min</text>
+            </g>
+            <circle class="pulse" cx="236" cy="90" r="14" fill="#E4A847" opacity=".28"/>
+            <path d="M236,104 C236,104 226,93 226,86 A10,10 0 1 1 246,86 C246,93 236,104 236,104 Z" fill="#E4A847"/>
+            <circle cx="236" cy="86" r="3.6" fill="#0B1120"/>
+            <text x="252" y="90" class="map-t map-t-us" data-i18n="map_us">Maison Safran</text>
+            <g transform="translate(366 34)">
+              <circle r="13" fill="none" stroke="#B98B4E" stroke-opacity=".5"/>
+              <path d="M0,-9 L4,3 L0,0 L-4,3 Z" fill="#E4A847"/>
+            </g>
+          </svg>
+          <div class="map-foot">
+            <p class="addr"><svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg><span data-i18n="addr">12 Derb Safran, Médina<br>Marrakech 40000</span></p>
+            <a class="btn btn-ghost btn-sm" id="maps-link" href="https://maps.google.com/?q=Jemaa+el-Fna,+Marrakech" target="_blank" rel="noopener"><span data-i18n="directions">Itinéraire</span><svg class="ico flip" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
+        </div>
+        <p class="access" data-i18n="access">À 4 minutes à pied de Jemaa el-Fna. Un membre de l’équipe peut vous attendre sur la place et vous guider jusqu’au riad.</p>
+        <div class="contact-rows">
+          <div class="crow">
+            <span class="fact-ico"><svg class="ico" aria-hidden="true"><use href="#i-phone"/></svg></span>
+            <div><span class="k" data-i18n="k_phone">Téléphone</span><a class="v" id="phone-link" href="tel:+212524000000"><span dir="ltr" class="nowrap">05 24 00 00 00</span></a></div>
+          </div>
+          <div class="crow">
+            <span class="fact-ico"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg></span>
+            <div><span class="k" data-i18n="k_wa">WhatsApp</span><a class="v wa-generic" id="wa-link" href="https://wa.me/212600000000" target="_blank" rel="noopener"><span dir="ltr" class="nowrap">+212 6 00 00 00 00</span></a></div>
+          </div>
+        </div>
+        <div class="hours">
+          <h3 data-i18n="hours_title">Horaires</h3>
+          <p class="hours-days" data-i18n="hours_days">Du mardi au dimanche</p>
+          <dl>
+            <div><dt data-i18n="h_lunch_k">Déjeuner</dt><dd data-i18n="h_lunch_v">12h30 – 15h00</dd></div>
+            <div><dt data-i18n="h_dinner_k">Dîner</dt><dd data-i18n="h_dinner_v">19h00 – 23h30</dd></div>
+            <div class="closed"><dt data-i18n="h_mon_k">Lundi</dt><dd data-i18n="h_mon_v">Fermé</dd></div>
+          </dl>
+        </div>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p class="foot-word" aria-hidden="true" dir="ltr">Maison <span>Safran</span></p>
+    <div class="foot-grid">
+      <div>
+        <p data-i18n="foot_tag">Cuisine marocaine d’auteur dans un riad de 1772.</p>
+      </div>
+      <div>
+        <h3 data-i18n="foot_visit">Adresse</h3>
+        <p data-i18n="addr">12 Derb Safran, Médina<br>Marrakech 40000</p>
+      </div>
+      <div>
+        <h3 data-i18n="foot_contact">Contact</h3>
+        <p><a href="tel:+212524000000"><span dir="ltr" class="nowrap">05 24 00 00 00</span></a><br><a class="wa-generic" href="https://wa.me/212600000000" target="_blank" rel="noopener">WhatsApp · <span dir="ltr" class="nowrap">+212 6 00 00 00 00</span></a></p>
+      </div>
+      <div>
+        <h3 data-i18n="foot_hours">Horaires</h3>
+        <p data-i18n="foot_hours_v">Du mardi au dimanche<br>12h30 – 15h00 · 19h00 – 23h30<br>Fermé le lundi</p>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <p data-i18n="foot_demo">Site de démonstration · Pack Pro. Maison Safran est un restaurant fictif : avis, prix et coordonnées sont donnés à titre d’exemple.</p>
+      <p>© <span id="year">2026</span> Maison Safran</p>
+    </div>
+  </div>
+</footer>
+
+<div class="mbar">
+  <a class="btn btn-primary" href="#reserver" id="mbar-book"><span data-i18n="mbar_book">Réserver une table</span></a>
+  <a class="btn btn-wa wa-generic" id="mbar-wa" href="https://wa.me/212600000000" target="_blank" rel="noopener" aria-label="Écrire sur WhatsApp" data-i18n-aria="mbar_wa"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg></a>
+</div>
+
+<dialog class="lb" id="lightbox" aria-labelledby="lb-title">
+  <div class="lb-inner">
+    <button type="button" class="icon-btn lb-close" id="lb-close" aria-label="Fermer" data-i18n-aria="lb_close"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button>
+    <div class="lb-art" id="lb-art"></div>
+    <div class="lb-bar">
+      <div class="lb-text">
+        <p class="lb-count" id="lb-count">1 / 6</p>
+        <h3 id="lb-title">Tajine</h3>
+        <p id="lb-desc"></p>
+      </div>
+      <div class="lb-nav">
+        <button type="button" class="icon-btn" id="lb-prev" aria-label="Image précédente" data-i18n-aria="lb_prev"><svg class="ico flip" aria-hidden="true"><use href="#i-back"/></svg></button>
+        <button type="button" class="icon-btn" id="lb-next" aria-label="Image suivante" data-i18n-aria="lb_next"><svg class="ico flip" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  'use strict';
+  var root = document.documentElement;
+  var $ = function (s, c) { return (c || document).querySelector(s); };
+  var $$ = function (s, c) { return Array.prototype.slice.call((c || document).querySelectorAll(s)); };
+  var LOCALES = { fr: 'fr-FR', en: 'en-GB', ar: 'ar-MA' };
+  var WA_NUMBER = '212600000000';
+  var LTR = function (s) { return '⁦' + s + '⁩'; };
+
+  /* ---------- Copy (French DOM text is harvested below) ---------- */
+  var I18N = {
+    fr: {
+      status_fallback: 'Ouvert du mardi au dimanche',
+      status_open: 'Ouvert maintenant · jusqu’à {t}',
+      status_closed: 'Fermé · ouvre {day} à {t}',
+      today: 'aujourd’hui', tomorrow: 'demain',
+      cur: 'DH', tag_sig: 'Signature', tag_veg: 'Végétarien', tag_share: 'Pour 2',
+      opt_choose: 'Choisir un horaire', opt_lunch: 'Déjeuner', opt_dinner: 'Dîner',
+      err_name: 'Indiquez votre nom (2 caractères minimum).',
+      err_phone: 'Numéro invalide. Exemple : 06 12 34 56 78 ou +33 6 12 34 56 78.',
+      err_date_req: 'Choisissez une date.',
+      err_date_past: 'Cette date est déjà passée.',
+      err_date_mon: 'Nous sommes fermés le lundi. Choisissez un autre jour.',
+      err_date_far: 'Les réservations sont ouvertes jusqu’à 90 jours à l’avance.',
+      err_time: 'Choisissez un horaire.',
+      err_time_past: 'Ce créneau est passé ou trop proche. Choisissez un horaire plus tard.',
+      err_guests: 'Entre 1 et 12 personnes.',
+      alert: 'Vérifiez les champs signalés.',
+      conf_title: 'Merci, {name}.',
+      sum_name: 'Nom', sum_phone: 'Téléphone', sum_date: 'Date', sum_time: 'Heure', sum_guests: 'Personnes', sum_seat: 'Emplacement', sum_notes: 'Demande', sum_ref: 'Réf.',
+      wa_hello: 'Bonjour Maison Safran, je souhaite réserver une table.',
+      lb_count: '{i} / {n}',
+      tasting_note: 'Menu dégustation'
+    },
+    en: {
+      skip: 'Skip to content',
+      demo_tag: 'Demo site · Pack Pro',
+      demo_more: 'Three languages, interactive menu, gallery and WhatsApp booking',
+      nav_story: 'Our story', nav_chef: 'The chef', nav_menu: 'Menu', nav_gallery: 'Gallery', nav_reviews: 'Reviews', nav_book: 'Book',
+      menu_toggle: 'Navigation menu', lang_label: 'Language',
+      hero_eyebrow: '18th-century riad · Marrakech Medina',
+      hero_title: 'A <em>saffron</em> night in the heart of the medina',
+      hero_lead: 'Signature Moroccan cuisine, served by lantern light around the fountain of a 1772 riad. Just twelve tables, family recipes and produce from the morning souk.',
+      hero_cta1: 'Book a table', hero_cta2: 'See the menu',
+      hero_art: 'The Maison Safran courtyard at nightfall, lit by lanterns',
+      hero_card_k: 'Chef’s signature', hero_card_v: 'Pigeon pastilla', hero_card_p: '140 DH',
+      fact1: 'Rooftop terrace facing the Koutoubia', fact2: 'Andalusian music on Thursday nights', fact3: '4 minutes’ walk from Jemaa el-Fna',
+      story_eyebrow: 'Our story',
+      story_title: 'The <em>saffron</em> merchant’s house',
+      story_p1: 'In 1772, a saffron merchant from Taliouine built this riad a few alleys away from Jemaa el-Fna. He stored his harvests in the cool ground-floor rooms and received his buyers around the fountain.',
+      story_p2: 'Two and a half centuries later, the Alaoui family restored the house room by room with the medina’s zellige and woodwork masters. Guests are still welcomed the old way: slowly, generously, under the orange trees.',
+      story_art: 'A saffron crocus framed by a Moroccan arch',
+      stat1_l: 'the year the riad was built', stat2_l: 'tables, never one more', stat3_l: 'generations of recipes',
+      chef_eyebrow: 'The chef', chef_name: 'Youssef Alaoui', chef_role: 'Head chef, grandson of the house',
+      chef_quote: '“A tajine cannot be rushed. Give it time and it will tell you where it comes from.”',
+      chef_bio: 'Youssef trained with the dadas of Fez, the women cooks who keep the recipes of the great houses, then in Michelin-starred kitchens in Lyon. He came home to Marrakech in 2015, convinced that Moroccan cuisine does not need reinventing. It needs to be listened to.',
+      chef_art: 'The house kitchen: a tajine on a clay brazier beneath copper pots',
+      chef_f1_k: 'Tasting menu', chef_f1_v: '7 courses · 650 DH',
+      chef_f2_k: 'Friday tanjia', chef_f2_v: '8 hours in the hammam furnace',
+      menu_eyebrow: 'The menu', menu_title: 'Recipes of the <em>house</em>',
+      menu_intro: 'A short menu that follows the market. Prices in dirhams, service included.',
+      tab_starters: 'Starters', tab_mains: 'Tajines &amp; Couscous', tab_desserts: 'Desserts', tab_teas: 'Teas',
+      tasting_k: 'Tasting menu', tasting_v: '7 courses · 650 DH per person · tea and juice pairing 180 DH', tasting_cta: 'Book the tasting menu',
+      menu_note: 'Allergies or dietary needs? Tell us when you book.',
+      gallery_eyebrow: 'Gallery', gallery_title: 'An evening at the <em>riad</em>', gallery_intro: 'Tap any image to enlarge it.',
+      g1_t: 'Lamb tajine with prunes', g1_d: 'Simmered for four hours in Safi clay.',
+      g2_t: 'The courtyard lanterns', g2_d: 'Copper pierced by hand in the Haddadine souk.',
+      g3_t: 'Mint tea', g3_d: 'Poured from high, three times, as tradition asks.',
+      g4_t: 'The courtyard from above', g4_d: 'The fountain, the four orange trees and the original zellige.',
+      g5_t: 'Morning spices', g5_d: 'Ras el hanout ground every morning, saffron from Taliouine.',
+      g6_t: 'Fez zellige', g6_d: 'Eight thousand tiles set by hand during the restoration.',
+      lb_close: 'Close', lb_prev: 'Previous image', lb_next: 'Next image',
+      reviews_eyebrow: 'Guest reviews', reviews_title: 'What our guests <em>say</em>',
+      reviews_note: 'Sample reviews written for this demo.',
+      r_badge: 'Example', r_stars: '5 out of 5 stars',
+      r1_q: 'The setting is magical, but the pastilla is what brought me back. Attentive service, and the tea poured exactly as it should be.', r1_n: 'Salma B.', r1_c: 'Casablanca',
+      r2_q: 'We booked on WhatsApp in two minutes. The tanjia was the best thing we ate on our whole trip to Morocco.', r2_n: 'James &amp; Clara', r2_c: 'London',
+      r3_q: 'A birthday dinner on the rooftop under the stars. The team had candles and a milk pastilla ready. Unforgettable.', r3_n: 'Karim E.', r3_c: 'Rabat',
+      book_eyebrow: 'Reservations', book_title: 'Book your <em>table</em>',
+      book_intro: 'Fill in the form, then confirm with a single WhatsApp message. We reply within 30 minutes during opening hours.',
+      f_name: 'Full name', ph_name: 'e.g. Salma Bennani', f_phone: 'Phone', ph_phone: '06 12 34 56 78',
+      f_date: 'Date', f_time: 'Time', f_guests: 'Guests', guests_minus: 'One guest fewer', guests_plus: 'One more guest',
+      f_seat: 'Seating preference', seat_patio: 'Courtyard, by the fountain', seat_terrace: 'Rooftop terrace', seat_any: 'No preference',
+      f_notes: 'Special request (optional)', ph_notes: 'Allergy, birthday, high chair…',
+      f_submit: 'Reserve my table',
+      f_hint: 'More than 12 guests or a private event? Call <span dir="ltr" class="nowrap">05 24 00 00 00</span>.',
+      conf_eyebrow: 'Request ready',
+      conf_text: 'Your table is almost booked. Send this summary on WhatsApp and we will confirm within 30 minutes.',
+      conf_wa: 'Confirm on WhatsApp', conf_edit: 'Edit request',
+      conf_note: 'Nothing is sent until you send the message in WhatsApp.',
+      visit_title: 'Find us', addr: '12 Derb Safran, Medina<br>Marrakech 40000', directions: 'Directions',
+      access: '4 minutes’ walk from Jemaa el-Fna. A member of our team can meet you on the square and walk you to the riad.',
+      k_phone: 'Phone', k_wa: 'WhatsApp',
+      hours_title: 'Opening hours', hours_days: 'Tuesday to Sunday',
+      h_lunch_k: 'Lunch', h_lunch_v: '12:30 – 3:00 pm', h_dinner_k: 'Dinner', h_dinner_v: '7:00 – 11:30 pm', h_mon_k: 'Monday', h_mon_v: 'Closed',
+      map_square: 'Jemaa el-Fna', map_kout: 'Koutoubia', map_souks: 'Souks', map_us: 'Maison Safran', map_walk: '4 min',
+      map_art: 'Simplified map of the medina, from Jemaa el-Fna to Maison Safran',
+      foot_tag: 'Signature Moroccan cuisine in a 1772 riad.', foot_visit: 'Address', foot_contact: 'Contact', foot_hours: 'Hours',
+      foot_hours_v: 'Tuesday to Sunday<br>12:30 – 3:00 pm · 7:00 – 11:30 pm<br>Closed on Mondays',
+      foot_demo: 'Demo website · Pack Pro. Maison Safran is a fictional restaurant; reviews, prices and contact details are examples.',
+      mbar_book: 'Book a table', mbar_wa: 'Message us on WhatsApp',
+      status_fallback: 'Open Tuesday to Sunday',
+      status_open: 'Open now · until {t}', status_closed: 'Closed · opens {day} at {t}', today: 'today', tomorrow: 'tomorrow',
+      cur: 'DH', tag_sig: 'Signature', tag_veg: 'Vegetarian', tag_share: 'For two',
+      opt_choose: 'Choose a time', opt_lunch: 'Lunch', opt_dinner: 'Dinner',
+      err_name: 'Please enter your name (at least 2 characters).',
+      err_phone: 'Invalid number. Example: 06 12 34 56 78 or +33 6 12 34 56 78.',
+      err_date_req: 'Choose a date.', err_date_past: 'This date has already passed.',
+      err_date_mon: 'We are closed on Mondays. Please choose another day.',
+      err_date_far: 'Bookings open up to 90 days ahead.',
+      err_time: 'Choose a time.', err_time_past: 'This time has passed or is too close. Choose a later slot.',
+      err_guests: 'Between 1 and 12 guests.', alert: 'Please check the highlighted fields.',
+      conf_title: 'Thank you, {name}.',
+      sum_name: 'Name', sum_phone: 'Phone', sum_date: 'Date', sum_time: 'Time', sum_guests: 'Guests', sum_seat: 'Seating', sum_notes: 'Request', sum_ref: 'Ref.',
+      wa_hello: 'Hello Maison Safran, I would like to book a table.',
+      lb_count: '{i} / {n}', tasting_note: 'Tasting menu'
+    },
+    ar: {
+      skip: 'انتقل إلى المحتوى',
+      demo_tag: 'موقع تجريبي · Pack Pro',
+      demo_more: 'ثلاث لغات، قائمة تفاعلية، معرض صور وحجز عبر واتساب',
+      nav_story: 'قصتنا', nav_chef: 'الشاف', nav_menu: 'القائمة', nav_gallery: 'المعرض', nav_reviews: 'الآراء', nav_book: 'احجز',
+      menu_toggle: 'قائمة التصفح', lang_label: 'اللغة',
+      hero_eyebrow: 'رياض من القرن الثامن عشر · المدينة العتيقة، مراكش',
+      hero_title: 'ليلة من <em>الزعفران</em> في قلب المدينة العتيقة',
+      hero_lead: 'مطبخ مغربي أصيل بلمسة الشاف، يُقدَّم على ضوء الفوانيس حول نافورة رياض شُيّد سنة 1772. اثنتا عشرة طاولة فقط، ووصفات عائلية، ومنتجات سوق الصباح.',
+      hero_cta1: 'احجز طاولة', hero_cta2: 'اكتشف القائمة',
+      hero_art: 'صحن دار الزعفران عند حلول الليل، تضيئه الفوانيس',
+      hero_card_k: 'طبق الشاف المميّز', hero_card_v: 'بسطيلة الحمام', hero_card_p: '140 درهم',
+      fact1: 'سطح مطلّ على صومعة الكتبية', fact2: 'موسيقى أندلسية مساء كل خميس', fact3: 'على بعد 4 دقائق مشيًا من ساحة جامع الفنا',
+      story_eyebrow: 'قصتنا', story_title: 'دار تاجر <em>الزعفران</em>',
+      story_p1: 'سنة 1772، شيّد تاجرُ زعفرانٍ قادمٌ من تالوين هذا الرياض على بعد أزقّة قليلة من ساحة جامع الفنا. كان يخزّن محاصيله في غرف الطابق الأرضي الباردة، ويستقبل زبائنه حول النافورة.',
+      story_p2: 'بعد قرنين ونصف، رمّمت عائلة العلوي الدار غرفةً غرفة، بأيدي معلّمي الزليج والخشب في المدينة العتيقة. واليوم نستقبل ضيوفنا كما كانوا يُستقبَلون قديمًا: على مهل، وبكرم، تحت أشجار البرتقال.',
+      story_art: 'زهرة الزعفران داخل قوس مغربي',
+      stat1_l: 'سنة بناء الرياض', stat2_l: 'طاولة فقط، لا أكثر', stat3_l: 'أجيال من الوصفات',
+      chef_eyebrow: 'الشاف', chef_name: 'يوسف العلوي', chef_role: 'شاف المطبخ وحفيد الدار',
+      chef_quote: '«الطاجين لا يُستعجَل. امنحه الوقت، وسيحكي لك عن أرضه.»',
+      chef_bio: 'تعلّم يوسف على أيدي «دادات» فاس، حافظات وصفات البيوت العريقة، ثم في مطابخ حائزة على نجوم ميشلان في ليون، قبل أن يعود إلى مراكش سنة 2015. قناعته أن المطبخ المغربي لا يحتاج إلى من يعيد ابتكاره، بل إلى من يُصغي إليه.',
+      chef_art: 'مطبخ الدار: طاجين فوق المجمر وقدور نحاسية',
+      chef_f1_k: 'قائمة التذوّق', chef_f1_v: '7 أطباق · 650 درهم',
+      chef_f2_k: 'طنجية الجمعة', chef_f2_v: 'ثماني ساعات في فرناتشي الحمّام',
+      menu_eyebrow: 'قائمة الطعام', menu_title: 'وصفات <em>الدار</em>',
+      menu_intro: 'قائمة قصيرة تتبع ما يجود به السوق. الأسعار بالدرهم، والخدمة مشمولة.',
+      tab_starters: 'المقبّلات', tab_mains: 'الطواجن والكسكس', tab_desserts: 'الحلويات', tab_teas: 'الشاي',
+      tasting_k: 'قائمة التذوّق', tasting_v: '7 أطباق · 650 درهم للشخص · مرافقة الشاي والعصائر 180 درهم', tasting_cta: 'احجز قائمة التذوّق',
+      menu_note: 'حساسية أو نظام غذائي خاص؟ أخبرونا عند الحجز.',
+      gallery_eyebrow: 'المعرض', gallery_title: 'أمسية في <em>الرياض</em>', gallery_intro: 'المس أي صورة لتكبيرها.',
+      g1_t: 'طاجين اللحم بالبرقوق', g1_d: 'يُطهى على نار هادئة أربع ساعات في فخّار آسفي.',
+      g2_t: 'فوانيس الصحن', g2_d: 'نحاس مخرَّم يدويًا على يد صانع من سوق الحدادين.',
+      g3_t: 'أتاي بالنعناع', g3_d: 'يُصَبّ من علُوّ، ثلاث مرات، كما تقتضي العادة.',
+      g4_t: 'الصحن من الأعلى', g4_d: 'النافورة، وأشجار البرتقال الأربع، والزليج الأصلي.',
+      g5_t: 'توابل الصباح', g5_d: 'رأس الحانوت يُطحن كل صباح، وزعفران تالوين.',
+      g6_t: 'زليج فاسي', g6_d: 'ثمانية آلاف قطعة وُضعت باليد أثناء الترميم.',
+      lb_close: 'إغلاق', lb_prev: 'الصورة السابقة', lb_next: 'الصورة التالية',
+      reviews_eyebrow: 'آراء ضيوفنا', reviews_title: 'ماذا يقول <em>ضيوفنا</em>',
+      reviews_note: 'آراء توضيحية كُتبت لهذا العرض التجريبي.',
+      r_badge: 'مثال', r_stars: '5 نجوم من 5',
+      r1_q: 'المكان ساحر، لكن البسطيلة هي ما أعادني. خدمة راقية، وأتاي يُقدَّم كما ينبغي.', r1_n: 'سلمى ب.', r1_c: 'الدار البيضاء',
+      r2_q: 'حجزنا عبر واتساب في دقيقتين. كانت الطنجية أطيب ما أكلناه طوال رحلتنا في المغرب.', r2_n: 'جيمس وكلارا', r2_c: 'لندن',
+      r3_q: 'عشاء عيد ميلاد على السطح تحت النجوم. جهّز الفريق الشموع وبسطيلة بالحليب. أمسية لا تُنسى.', r3_n: 'كريم إ.', r3_c: 'الرباط',
+      book_eyebrow: 'الحجز', book_title: 'احجز <em>طاولتك</em>',
+      book_intro: 'املأ الاستمارة، ثم أكّد الحجز برسالة واتساب واحدة. نردّ خلال 30 دقيقة في أوقات العمل.',
+      f_name: 'الاسم الكامل', ph_name: 'مثال: سلمى بناني', f_phone: 'الهاتف', ph_phone: '06 12 34 56 78',
+      f_date: 'التاريخ', f_time: 'الساعة', f_guests: 'عدد الأشخاص', guests_minus: 'إنقاص شخص', guests_plus: 'إضافة شخص',
+      f_seat: 'المكان المفضّل', seat_patio: 'الصحن، قرب النافورة', seat_terrace: 'السطح', seat_any: 'لا يهم',
+      f_notes: 'طلب خاص (اختياري)', ph_notes: 'حساسية، عيد ميلاد، كرسي للأطفال…',
+      f_submit: 'احجز طاولتي',
+      f_hint: 'أكثر من 12 شخصًا أو حفل خاص؟ اتصلوا بنا على <span dir="ltr" class="nowrap">05 24 00 00 00</span>.',
+      conf_eyebrow: 'الطلب جاهز',
+      conf_text: 'طاولتك شبه محجوزة. أرسل هذا الملخّص عبر واتساب، وسنؤكّد الحجز خلال 30 دقيقة.',
+      conf_wa: 'التأكيد عبر واتساب', conf_edit: 'تعديل الطلب',
+      conf_note: 'لا يُرسَل أي شيء قبل أن تبعث الرسالة من واتساب.',
+      visit_title: 'عنواننا', addr: '12 درب الزعفران، المدينة العتيقة<br>مراكش 40000', directions: 'الاتجاهات',
+      access: 'على بعد 4 دقائق مشيًا من ساحة جامع الفنا. يمكن لأحد أفراد فريقنا أن يستقبلكم في الساحة ويرافقكم إلى الرياض.',
+      k_phone: 'الهاتف', k_wa: 'واتساب',
+      hours_title: 'أوقات العمل', hours_days: 'من الثلاثاء إلى الأحد',
+      h_lunch_k: 'الغداء', h_lunch_v: '12:30 – 15:00', h_dinner_k: 'العشاء', h_dinner_v: '19:00 – 23:30', h_mon_k: 'الاثنين', h_mon_v: 'مغلق',
+      map_square: 'جامع الفنا', map_kout: 'الكتبية', map_souks: 'الأسواق', map_us: 'دار الزعفران', map_walk: '4 دقائق',
+      map_art: 'خريطة مبسّطة للمدينة العتيقة، من ساحة جامع الفنا إلى دار الزعفران',
+      foot_tag: 'مطبخ مغربي أصيل في رياض من سنة 1772.', foot_visit: 'العنوان', foot_contact: 'الاتصال', foot_hours: 'أوقات العمل',
+      foot_hours_v: 'من الثلاثاء إلى الأحد<br>12:30 – 15:00 · 19:00 – 23:30<br>مغلق يوم الاثنين',
+      foot_demo: 'موقع تجريبي · Pack Pro. «دار الزعفران» مطعم خيالي، والآراء والأسعار ومعلومات الاتصال مجرّد أمثلة.',
+      mbar_book: 'احجز طاولة', mbar_wa: 'راسلنا عبر واتساب',
+      status_fallback: 'مفتوح من الثلاثاء إلى الأحد',
+      status_open: 'مفتوح الآن · حتى {t}', status_closed: 'مغلق · نفتح {day} على الساعة {t}', today: 'اليوم', tomorrow: 'غدًا',
+      cur: 'درهم', tag_sig: 'توقيع الشاف', tag_veg: 'نباتي', tag_share: 'لشخصين',
+      opt_choose: 'اختر الوقت', opt_lunch: 'الغداء', opt_dinner: 'العشاء',
+      err_name: 'أدخل اسمك (حرفان على الأقل).',
+      err_phone: 'رقم غير صالح. مثال: ' + LTR('06 12 34 56 78') + ' أو ' + LTR('+33 6 12 34 56 78') + '.',
+      err_date_req: 'اختر تاريخًا.', err_date_past: 'هذا التاريخ قد مضى.',
+      err_date_mon: 'نغلق يوم الاثنين. اختر يومًا آخر.',
+      err_date_far: 'الحجز متاح حتى 90 يومًا مسبقًا.',
+      err_time: 'اختر وقتًا.', err_time_past: 'هذا الوقت قد مضى أو اقترب كثيرًا. اختر وقتًا لاحقًا.',
+      err_guests: 'من 1 إلى 12 شخصًا.', alert: 'يرجى مراجعة الحقول المشار إليها.',
+      conf_title: 'شكرًا، {name}.',
+      sum_name: 'الاسم', sum_phone: 'الهاتف', sum_date: 'التاريخ', sum_time: 'الساعة', sum_guests: 'عدد الأشخاص', sum_seat: 'المكان', sum_notes: 'طلب خاص', sum_ref: 'المرجع',
+      wa_hello: 'السلام عليكم، أودّ حجز طاولة في دار الزعفران.',
+      lb_count: '{i} / {n}', tasting_note: 'قائمة التذوّق'
+    }
+  };
+
+  /* name, description in [fr, en, ar] */
+  var MENU = {
+    starters: [
+      { n: ['Pastilla au pigeon', 'Pigeon pastilla', 'بسطيلة الحمام'], d: ['Feuilles de warqa croustillantes, amandes torréfiées, cannelle et sucre glace.', 'Crisp warqa pastry, toasted almonds, cinnamon and icing sugar.', 'أوراق الورقة المقرمشة، لوز محمّص، قرفة وسكر ناعم.'], p: 140, tags: ['sig'] },
+      { n: ['Zaalouk, taktouka & carottes au cumin', 'Zaalouk, taktouka & cumin carrots', 'زعلوك وتكتوكة وجزر بالكمون'], d: ['Le trio de salades cuites de la maison, servi tiède avec le pain du four de quartier.', 'The house trio of cooked salads, served warm with bread from the neighbourhood oven.', 'ثلاثي السلطات المطهوة على طريقة الدار، يُقدَّم دافئًا مع خبز فرّان الحومة.'], p: 95, tags: ['veg'] },
+      { n: ['Briouates au fromage frais', 'Fresh cheese briouates', 'بريوات بالجبن الطري'], d: ['Triangles croustillants, fromage de chèvre de l’Atlas, menthe et miel de thym.', 'Crisp triangles with Atlas goat’s cheese, mint and thyme honey.', 'مثلثات مقرمشة بجبن الماعز من الأطلس، والنعناع، وعسل الزعتر.'], p: 85, tags: ['veg'] },
+      { n: ['Harira de la maison', 'House harira', 'حريرة الدار'], d: ['Tomates, lentilles et pois chiches, servie avec dattes et chebakia.', 'Tomato, lentil and chickpea soup, served with dates and chebakia.', 'شوربة بالطماطم والعدس والحمص، تُقدَّم مع التمر والشباكية.'], p: 70, tags: [] },
+      { n: ['Pastilla aux fruits de mer', 'Seafood pastilla', 'بسطيلة الحوت'], d: ['Crevettes, calamars et vermicelles de riz relevés à la chermoula.', 'Prawns, squid and rice vermicelli lifted with chermoula.', 'قمرون وكلامار وشعرية الأرز بنكهة الشرمولة.'], p: 160, tags: [] }
+    ],
+    mains: [
+      { n: ['Tanjia marrakchie', 'Tanjia marrakchia', 'طنجية مراكشية'], d: ['Agneau au smen, cumin et citron confit, cuit huit heures dans les cendres du hammam voisin.', 'Lamb with smen, cumin and preserved lemon, slow-cooked for eight hours in the ashes of the neighbouring hammam.', 'لحم الغنم بالسمن والكمون والحامض المصيّر، يُطهى ثماني ساعات في رماد فرناتشي الحمّام المجاور.'], p: 240, tags: ['sig'] },
+      { n: ['Tajine d’agneau aux pruneaux', 'Lamb tajine with prunes', 'طاجين اللحم بالبرقوق'], d: ['Épaule confite, pruneaux, amandes grillées, sésame et eau de fleur d’oranger.', 'Slow-cooked shoulder, prunes, toasted almonds, sesame and orange blossom water.', 'كتف الغنم مطهوّ على مهل، برقوق، لوز محمّص، سمسم وماء الزهر.'], p: 220, tags: [] },
+      { n: ['Tajine de poulet beldi', 'Free-range chicken tajine', 'طاجين الدجاج البلدي'], d: ['Poulet fermier, citron confit et olives violettes.', 'Free-range chicken, preserved lemon and purple olives.', 'دجاج بلدي بالحامض المصيّر والزيتون البنفسجي.'], p: 180, tags: [] },
+      { n: ['Tajine de poisson à la chermoula', 'Fish tajine with chermoula', 'طاجين السمك بالشرمولة'], d: ['Pêche du jour d’Essaouira, pommes de terre, poivrons et olives.', 'Catch of the day from Essaouira, potatoes, peppers and olives.', 'صيد اليوم من الصويرة، بطاطس، فلفل وزيتون.'], p: 230, tags: [] },
+      { n: ['Couscous royal', 'Royal couscous', 'كسكس ملكي'], d: ['Semoule roulée à la main, agneau, poulet, merguez maison et sept légumes.', 'Hand-rolled semolina, lamb, chicken, house merguez and seven vegetables.', 'كسكس مفتول باليد، لحم الغنم، دجاج، مرقاز الدار وسبع خضر.'], p: 220, tags: [] },
+      { n: ['Couscous aux sept légumes & tfaya', 'Seven-vegetable couscous & tfaya', 'كسكس بسبع خضر والتفاية'], d: ['Légumes du marché, pois chiches et tfaya d’oignons caramélisés aux raisins secs.', 'Market vegetables, chickpeas and tfaya of caramelised onions and raisins.', 'خضر السوق، حمص، وتفاية البصل المكرمل بالزبيب.'], p: 190, tags: ['veg'] },
+      { n: ['Méchoui d’épaule d’agneau', 'Slow-roasted lamb méchoui', 'مشوي كتف الغنم'], d: ['Rôti douze heures, servi avec sel au cumin et pain du four.', 'Roasted for twelve hours, served with cumin salt and oven bread.', 'مشويّ اثنتي عشرة ساعة، يُقدَّم مع ملح الكمون وخبز الفرّان.'], p: 480, tags: ['share'] }
+    ],
+    desserts: [
+      { n: ['Glace au safran de Taliouine', 'Taliouine saffron ice cream', 'مثلجات بزعفران تالوين'], d: ['Crème glacée au safran, miel de thym et pistaches.', 'Saffron ice cream, thyme honey and pistachios.', 'مثلجات بالزعفران، عسل الزعتر والفستق.'], p: 80, tags: ['sig'] },
+      { n: ['Pastilla au lait', 'Milk pastilla', 'بسطيلة بالحليب'], d: ['Feuilles croustillantes, crème à la fleur d’oranger, amandes effilées.', 'Crisp pastry leaves, orange blossom cream, flaked almonds.', 'أوراق مقرمشة، كريمة بماء الزهر، لوز مشرّح.'], p: 75, tags: [] },
+      { n: ['Cornes de gazelle & ghriba', 'Gazelle horns & ghriba', 'كعب الغزال والغريبة'], d: ['Pâte d’amande parfumée et biscuits aux amandes du jour.', 'Scented almond paste pastries and the day’s almond cookies.', 'عجينة لوز معطّرة وغريبة اليوم باللوز.'], p: 70, tags: [] },
+      { n: ['Sellou', 'Sellou', 'سلّو'], d: ['Farine grillée, amandes, sésame et anis, servi avec un thé.', 'Toasted flour, almonds, sesame and anise, served with tea.', 'دقيق محمّص، لوز، سمسم وحبة حلاوة، يُقدَّم مع الشاي.'], p: 60, tags: [] },
+      { n: ['Oranges à la cannelle', 'Cinnamon oranges', 'برتقال بالقرفة'], d: ['Oranges de Berkane, cannelle et eau de rose.', 'Berkane oranges, cinnamon and rose water.', 'برتقال بركان، قرفة وماء الورد.'], p: 55, tags: ['veg'] }
+    ],
+    teas: [
+      { n: ['Thé à la menthe', 'Mint tea', 'أتاي بالنعناع'], d: ['Thé vert gunpowder et menthe nanah, servi de haut dans la théière en argent.', 'Gunpowder green tea and nanah mint, poured from high from the silver teapot.', 'شاي أخضر ونعناع، يُصبّ من علوّ من البرّاد الفضّي.'], p: 45, tags: ['share'] },
+      { n: ['Thé safrané au miel', 'Saffron tea with honey', 'شاي بالزعفران والعسل'], d: ['Thé vert infusé au safran de Taliouine, miel de jujubier.', 'Green tea infused with Taliouine saffron, jujube honey.', 'شاي أخضر منقوع بزعفران تالوين وعسل السدر.'], p: 60, tags: ['sig'] },
+      { n: ['Thé à la chiba', 'Chiba tea', 'أتاي بالشيبة'], d: ['Absinthe de l’Atlas, verveine et sauge, le thé des soirs d’hiver.', 'Atlas wormwood, verbena and sage, the tea of winter evenings.', 'شيبة الأطلس، لويزة وسالمية، رفيق ليالي الشتاء.'], p: 50, tags: [] },
+      { n: ['Infusion verveine & fleur d’oranger', 'Verbena & orange blossom infusion', 'منقوع اللويزة وماء الزهر'], d: ['Sans théine, servie avec des dattes.', 'Caffeine-free, served with dates.', 'بدون كافيين، يُقدَّم مع التمر.'], p: 40, tags: [] },
+      { n: ['Café aux épices', 'Spiced coffee', 'قهوة بالتوابل'], d: ['Arabica, cannelle, cardamome et gingembre.', 'Arabica, cinnamon, cardamom and ginger.', 'أرابيكا، قرفة، هيل وزنجبيل.'], p: 40, tags: [] }
+    ]
+  };
+
+  var lang = 'fr';
+  var tab = 'starters';
+  var booking = null;
+  var tried = false;
+  var errs = {};
+
+  function t(k) {
+    var d = I18N[lang];
+    if (d && d[k] != null) return d[k];
+    return I18N.fr[k] != null ? I18N.fr[k] : '';
+  }
+  function fill(s, v) { return String(s).replace(/\{(\w+)\}/g, function (m, k) { return v[k] != null ? v[k] : m; }); }
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  /* Harvest French strings from the markup so the page reads fine before and without JS */
+  $$('[data-i18n]').forEach(function (el) { var k = el.getAttribute('data-i18n'); if (I18N.fr[k] == null) I18N.fr[k] = el.innerHTML.trim(); });
+  $$('[data-i18n-ph]').forEach(function (el) { var k = el.getAttribute('data-i18n-ph'); if (I18N.fr[k] == null) I18N.fr[k] = el.getAttribute('placeholder') || ''; });
+  $$('[data-i18n-aria]').forEach(function (el) { var k = el.getAttribute('data-i18n-aria'); if (I18N.fr[k] == null) I18N.fr[k] = el.getAttribute('aria-label') || ''; });
+
+  function fmtTime(h, m) {
+    if (lang === 'fr') return h + 'h' + pad(m);
+    if (lang === 'en') return (((h + 11) % 12) + 1) + ':' + pad(m) + (h < 12 ? ' am' : ' pm');
+    return pad(h) + ':' + pad(m);
+  }
+  function guestsFmt(n) {
+    if (lang === 'fr') return n + (n > 1 ? ' personnes' : ' personne');
+    if (lang === 'en') return n + (n > 1 ? ' guests' : ' guest');
+    if (n === 1) return 'شخص واحد';
+    if (n === 2) return 'شخصان';
+    if (n <= 10) return n + ' أشخاص';
+    return n + ' شخصًا';
+  }
+  function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+  /* ---------- Menu ---------- */
+  var ICON = function (id) { return '<svg class="ico" aria-hidden="true"><use href="#' + id + '"/></svg>'; };
+  function renderMenu(animate) {
+    var panel = $('#menu-panel');
+    var i = { fr: 0, en: 1, ar: 2 }[lang];
+    var html = '<ul class="dishes">' + MENU[tab].map(function (d) {
+      var tags = d.tags.map(function (tg) {
+        if (tg === 'sig') return '<span class="tag tag-sig">' + ICON('i-star8') + t('tag_sig') + '</span>';
+        if (tg === 'veg') return '<span class="tag tag-veg">' + ICON('i-leaf') + t('tag_veg') + '</span>';
+        return '<span class="tag tag-share">' + ICON('i-people') + t('tag_share') + '</span>';
+      }).join('');
+      return '<li class="dish"><div class="dish-top"><h3 class="dish-name">' + d.n[i] + '</h3><span class="dish-dots" aria-hidden="true"></span>' +
+        '<span class="dish-price">' + d.p + '<span class="cur">' + t('cur') + '</span></span></div>' +
+        '<p class="dish-desc">' + d.d[i] + '</p>' + (tags ? '<div class="tags">' + tags + '</div>' : '') + '</li>';
+    }).join('') + '</ul>';
+    panel.innerHTML = html;
+    panel.setAttribute('aria-labelledby', 'tab-' + tab);
+    if (animate) { panel.classList.remove('panel-in'); void panel.offsetWidth; panel.classList.add('panel-in'); }
+  }
+  var tabs = $$('.tab');
+  function selectTab(name, focus) {
+    tab = name;
+    tabs.forEach(function (b) {
+      var on = b.getAttribute('data-tab') === name;
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+      if (on && focus) b.focus();
+    });
+    renderMenu(true);
+  }
+  tabs.forEach(function (b, idx) {
+    b.addEventListener('click', function () { selectTab(b.getAttribute('data-tab'), false); });
+    b.addEventListener('keydown', function (e) {
+      var rtl = root.dir === 'rtl';
+      var next = null;
+      if (e.key === 'ArrowRight') next = idx + (rtl ? -1 : 1);
+      if (e.key === 'ArrowLeft') next = idx + (rtl ? 1 : -1);
+      if (e.key === 'Home') next = 0;
+      if (e.key === 'End') next = tabs.length - 1;
+      if (next === null) return;
+      e.preventDefault();
+      next = (next + tabs.length) % tabs.length;
+      selectTab(tabs[next].getAttribute('data-tab'), true);
+    });
+  });
+
+  /* ---------- Opening status (Marrakech time) ---------- */
+  var SERVICES = [[750, 900], [1140, 1410]];
+  function moroccoNow() {
+    try {
+      var parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Casablanca', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date());
+      var get = function (ty) { var p = parts.filter(function (x) { return x.type === ty; })[0]; return p ? p.value : ''; };
+      var days = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+      var day = days[get('weekday')];
+      if (day == null) throw new Error('tz');
+      return { day: day, min: (parseInt(get('hour'), 10) % 24) * 60 + parseInt(get('minute'), 10) };
+    } catch (e) {
+      var d = new Date();
+      return { day: d.getDay(), min: d.getHours() * 60 + d.getMinutes() };
+    }
+  }
+  function weekdayName(offset) {
+    var d = new Date(Date.now() + offset * 864e5);
+    try { return new Intl.DateTimeFormat(LOCALES[lang], { weekday: 'long', timeZone: 'Africa/Casablanca' }).format(d); }
+    catch (e) { return new Intl.DateTimeFormat(LOCALES[lang], { weekday: 'long' }).format(d); }
+  }
+  function renderStatus() {
+    var el = $('#status'), txt = $('#status-text');
+    if (!el || !txt) return;
+    var now = moroccoNow();
+    var until = null;
+    if (now.day !== 1) SERVICES.forEach(function (s) { if (now.min >= s[0] && now.min < s[1]) until = s[1]; });
+    if (until !== null) {
+      el.classList.add('is-open');
+      txt.textContent = fill(t('status_open'), { t: fmtTime(Math.floor(until / 60), until % 60) });
+      return;
+    }
+    el.classList.remove('is-open');
+    for (var k = 0; k < 8; k++) {
+      var d = (now.day + k) % 7;
+      if (d === 1) continue;
+      for (var s = 0; s < SERVICES.length; s++) {
+        var start = SERVICES[s][0];
+        if (k === 0 && start <= now.min) continue;
+        var when = k === 0 ? t('today') : (k === 1 ? t('tomorrow') : weekdayName(k));
+        txt.textContent = fill(t('status_closed'), { day: when, t: fmtTime(Math.floor(start / 60), start % 60) });
+        return;
+      }
+    }
+  }
+
+  /* ---------- Reservation form ---------- */
+  var SLOTS = { lunch: [[12, 30], [13, 0], [13, 30], [14, 0]], dinner: [[19, 0], [19, 30], [20, 0], [20, 30], [21, 0], [21, 30], [22, 0]] };
+  var form = $('#res-form'), conf = $('#res-confirm');
+  var fName = $('#res-name'), fPhone = $('#res-phone'), fDate = $('#res-date'), fTime = $('#res-time'), fGuests = $('#res-guests'), fNotes = $('#res-notes');
+
+  function renderTimes() {
+    var cur = fTime.value;
+    var html = '<option value="">' + t('opt_choose') + '</option>';
+    ['lunch', 'dinner'].forEach(function (g) {
+      html += '<optgroup label="' + t('opt_' + g) + '">' + SLOTS[g].map(function (s) {
+        return '<option value="' + pad(s[0]) + ':' + pad(s[1]) + '">' + fmtTime(s[0], s[1]) + '</option>';
+      }).join('') + '</optgroup>';
+    });
+    fTime.innerHTML = html;
+    fTime.value = cur;
+  }
+  function today0() { var d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+  function iso(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  (function () {
+    var a = today0(), b = today0();
+    b.setDate(b.getDate() + 90);
+    fDate.min = iso(a); fDate.max = iso(b);
+  })();
+  function parseDate(v) { var p = v.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+
+  function setErr(id, key) {
+    errs[id] = key || null;
+    var input = $('#' + id), box = $('#' + id + '-err');
+    if (key) { input.setAttribute('aria-invalid', 'true'); box.textContent = t(key); }
+    else { input.removeAttribute('aria-invalid'); box.textContent = ''; }
+    if (id === 'res-guests') $('#guests-stepper').classList.toggle('invalid', !!key);
+  }
+  function refreshErrors() {
+    Object.keys(errs).forEach(function (id) { setErr(id, errs[id]); });
+    var alertBox = $('#res-alert');
+    if (!alertBox.hidden) alertBox.textContent = t('alert');
+  }
+  function validate() {
+    var ok = true;
+    var name = fName.value.trim();
+    setErr('res-name', name.length >= 2 ? null : 'err_name');
+    if (name.length < 2) ok = false;
+
+    var digits = fPhone.value.replace(/[\s.\-()\/]/g, '');
+    var phoneOk = /^0[5-7]\d{8}$/.test(digits) || /^(\+|00)\d{8,15}$/.test(digits);
+    setErr('res-phone', phoneOk ? null : 'err_phone');
+    if (!phoneOk) ok = false;
+
+    var dErr = null, dateObj = null;
+    if (!fDate.value) dErr = 'err_date_req';
+    else {
+      dateObj = parseDate(fDate.value);
+      var t0 = today0();
+      if (isNaN(dateObj)) dErr = 'err_date_req';
+      else if (dateObj < t0) dErr = 'err_date_past';
+      else if (dateObj.getDay() === 1) dErr = 'err_date_mon';
+      else if ((dateObj - t0) / 864e5 > 90) dErr = 'err_date_far';
+    }
+    setErr('res-date', dErr);
+    if (dErr) ok = false;
+
+    var tErr = null;
+    if (!fTime.value) tErr = 'err_time';
+    else if (dateObj && !dErr && iso(dateObj) === iso(new Date())) {
+      var hm = fTime.value.split(':').map(Number), n = new Date();
+      if (hm[0] * 60 + hm[1] <= n.getHours() * 60 + n.getMinutes() + 30) tErr = 'err_time_past';
+    }
+    setErr('res-time', tErr);
+    if (tErr) ok = false;
+
+    var g = Number(fGuests.value);
+    var gOk = Number.isInteger(g) && g >= 1 && g <= 12;
+    setErr('res-guests', gOk ? null : 'err_guests');
+    if (!gOk) ok = false;
+    return ok;
+  }
+
+  function seatValue() { var r = $('input[name="seat"]:checked'); return r ? r.value : 'any'; }
+  var SEAT_KEY = { patio: 'seat_patio', terrace: 'seat_terrace', any: 'seat_any' };
+
+  function renderConfirmation() {
+    if (!booking) return;
+    var b = booking;
+    $('#conf-title').textContent = fill(t('conf_title'), { name: b.name.split(/\s+/)[0] });
+    var dateStr = cap(new Intl.DateTimeFormat(LOCALES[lang], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(parseDate(b.date)));
+    var hm = b.time.split(':').map(Number);
+    var timeStr = fmtTime(hm[0], hm[1]);
+    var rows = [
+      ['sum_date', dateStr], ['sum_time', timeStr], ['sum_guests', guestsFmt(b.guests)],
+      ['sum_seat', t(SEAT_KEY[b.seat])], ['sum_phone', b.phone, true]
+    ];
+    if (b.notes) rows.push(['sum_notes', b.notes]);
+    rows.push(['sum_ref', b.ref, true]);
+    var list = $('#conf-list');
+    list.textContent = '';
+    rows.forEach(function (r) {
+      var div = document.createElement('div');
+      var dt = document.createElement('dt'); dt.textContent = t(r[0]);
+      var dd = document.createElement('dd');
+      if (r[2]) { var s = document.createElement('span'); s.dir = 'ltr'; s.textContent = r[1]; dd.appendChild(s); }
+      else dd.textContent = r[1];
+      div.appendChild(dt); div.appendChild(dd); list.appendChild(div);
+    });
+    var sep = lang === 'fr' ? ' : ' : ': ';
+    var lines = [t('wa_hello'), '',
+      t('sum_name') + sep + b.name,
+      t('sum_phone') + sep + b.phone,
+      t('sum_date') + sep + dateStr,
+      t('sum_time') + sep + timeStr,
+      t('sum_guests') + sep + guestsFmt(b.guests),
+      t('sum_seat') + sep + t(SEAT_KEY[b.seat])];
+    if (b.notes) lines.push(t('sum_notes') + sep + b.notes);
+    lines.push(t('sum_ref') + sep + b.ref);
+    $('#conf-wa').href = 'https://wa.me/' + WA_NUMBER + '?text=' + encodeURIComponent(lines.join('\n'));
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    tried = true;
+    var alertBox = $('#res-alert');
+    if (!validate()) {
+      alertBox.hidden = false;
+      alertBox.textContent = t('alert');
+      var first = $('[aria-invalid="true"]', form);
+      if (first) first.focus();
+      return;
+    }
+    alertBox.hidden = true;
+    var d = parseDate(fDate.value);
+    booking = {
+      name: fName.value.trim().replace(/\s+/g, ' '),
+      phone: fPhone.value.trim().replace(/\s+/g, ' '),
+      date: fDate.value, time: fTime.value,
+      guests: Number(fGuests.value), seat: seatValue(),
+      notes: fNotes.value.trim(),
+      ref: 'MS-' + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + (100 + Math.floor(Math.random() * 900))
+    };
+    renderConfirmation();
+    form.hidden = true;
+    conf.hidden = false;
+    $('#conf-title').focus({ preventScroll: true });
+    $('.book-card').scrollIntoView({ block: 'start' });
+  });
+  form.addEventListener('input', function () { if (tried) validate(); });
+  form.addEventListener('change', function () { if (tried) validate(); });
+  $('#conf-edit').addEventListener('click', function () {
+    conf.hidden = true;
+    form.hidden = false;
+    booking = null;
+    fName.focus();
+  });
+  function stepGuests(delta) {
+    var v = Number(fGuests.value) || 0;
+    fGuests.value = Math.min(12, Math.max(1, v + delta));
+    if (tried) validate();
+  }
+  $('#guests-minus').addEventListener('click', function () { stepGuests(-1); });
+  $('#guests-plus').addEventListener('click', function () { stepGuests(1); });
+  $('#tasting-cta').addEventListener('click', function () {
+    if (!fNotes.value.trim()) fNotes.value = t('tasting_note');
+  });
+
+  function updateWaLinks() {
+    var href = 'https://wa.me/' + WA_NUMBER + '?text=' + encodeURIComponent(t('wa_hello'));
+    $$('.wa-generic').forEach(function (a) { a.href = href; });
+  }
+
+  /* ---------- Gallery lightbox ---------- */
+  var items = $$('.g-item');
+  var dlg = $('#lightbox');
+  var li = 0, lastFocus = null;
+  function renderLightbox() {
+    var it = items[li], key = it.getAttribute('data-key');
+    var art = $('#lb-art');
+    art.textContent = '';
+    var svg = it.querySelector('svg').cloneNode(true);
+    svg.removeAttribute('aria-hidden');
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', t(key + '_t'));
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    art.appendChild(svg);
+    var vb = svg.viewBox && svg.viewBox.baseVal;
+    art.style.setProperty('--ar', vb && vb.width ? (vb.width / vb.height).toFixed(3) : '1');
+    $('#lb-title').textContent = t(key + '_t');
+    $('#lb-desc').textContent = t(key + '_d');
+    $('#lb-count').textContent = fill(t('lb_count'), { i: li + 1, n: items.length });
+  }
+  function openLb(i) {
+    li = i; lastFocus = document.activeElement;
+    renderLightbox();
+    if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+  }
+  function closeLb() { if (typeof dlg.close === 'function') dlg.close(); else { dlg.removeAttribute('open'); onClose(); } }
+  function onClose() { if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+  function stepLb(n) { li = (li + n + items.length) % items.length; renderLightbox(); }
+  items.forEach(function (it, i) { it.addEventListener('click', function () { openLb(i); }); });
+  $('#lb-close').addEventListener('click', closeLb);
+  $('#lb-prev').addEventListener('click', function () { stepLb(-1); });
+  $('#lb-next').addEventListener('click', function () { stepLb(1); });
+  dlg.addEventListener('close', onClose);
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) closeLb(); });
+  dlg.addEventListener('keydown', function (e) {
+    var rtl = root.dir === 'rtl';
+    if (e.key === 'ArrowRight') { e.preventDefault(); stepLb(rtl ? -1 : 1); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); stepLb(rtl ? 1 : -1); }
+  });
+  (function () {
+    var art = $('#lb-art'), sx = null;
+    art.addEventListener('pointerdown', function (e) { sx = e.clientX; });
+    art.addEventListener('pointerup', function (e) {
+      if (sx === null) return;
+      var dx = e.clientX - sx; sx = null;
+      if (Math.abs(dx) < 40) return;
+      var fwd = dx < 0 ? 1 : -1;
+      stepLb(root.dir === 'rtl' ? -fwd : fwd);
+    });
+  })();
+
+  /* ---------- Header and mobile nav ---------- */
+  var navBtn = $('#nav-toggle'), nav = $('#site-nav');
+  function setNav(open) { navBtn.setAttribute('aria-expanded', String(open)); nav.classList.toggle('is-open', open); }
+  navBtn.addEventListener('click', function () { setNav(navBtn.getAttribute('aria-expanded') !== 'true'); });
+  $$('a', nav).forEach(function (a) { a.addEventListener('click', function () { setNav(false); }); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && nav.classList.contains('is-open')) { setNav(false); navBtn.focus(); } });
+  var hdr = $('.site-header');
+  function onScroll() { hdr.classList.toggle('is-scrolled', window.scrollY > 8); }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  /* ---------- Language ---------- */
+  function applyLang(next, persist) {
+    lang = I18N[next] ? next : 'fr';
+    root.lang = lang;
+    root.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    $$('[data-i18n]').forEach(function (el) { var v = t(el.getAttribute('data-i18n')); if (v !== '') el.innerHTML = v; });
+    $$('[data-i18n-ph]').forEach(function (el) { el.setAttribute('placeholder', t(el.getAttribute('data-i18n-ph'))); });
+    $$('[data-i18n-aria]').forEach(function (el) { el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria'))); });
+    $$('.lang button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === lang)); });
+    renderMenu(false);
+    renderTimes();
+    renderStatus();
+    updateWaLinks();
+    refreshErrors();
+    renderConfirmation();
+    if (dlg.open) renderLightbox();
+    if (persist) { try { localStorage.setItem('maison-safran-lang', lang); } catch (e) { /* storage unavailable */ } }
+  }
+  $$('.lang button').forEach(function (b) {
+    b.addEventListener('click', function () { applyLang(b.getAttribute('data-lang'), true); });
+  });
+
+  var saved = null;
+  try { saved = localStorage.getItem('maison-safran-lang'); } catch (e) { saved = null; }
+  applyLang(saved && I18N[saved] ? saved : 'fr', false);
+  $('#year').textContent = String(new Date().getFullYear());
+  setInterval(renderStatus, 60000);
+})();
+</script>
+
+</body>
+</html>
