@@ -23,7 +23,7 @@ export function MentoratPage(ctx) {
       ${me.role !== 'etudiant' ? html`<label class="switch"><input id="mentor-dispo" type="checkbox" checked=${!!me.mentor_dispo} onChange=${e => act(() => store.update('profiles', me.id, { mentor_dispo: e.target.checked }))}/> Disponible pour du mentorat</label>` : null}
     </div>
     ${tab === 'mentors' ? html`
-      <div class="filter-row"><select id="m-fil" value=${fil} onChange=${e => setFil(e.target.value)} aria-label="Filière"><option value="">Toutes filières</option>${FILIERES.map(f => html`<option>${f}</option>`)}</select></div>
+      <div class="filter-row"><select id="m-fil" value=${fil} onChange=${e => setFil(e.target.value)} aria-label="Filière"><option value="">Toutes filières</option>${FILIERES.map(f => html`<option value=${f}>${f}</option>`)}</select></div>
       <div class="cards">${mentors.length ? mentors.map(p => html`<div class="mcard" key=${p.id}>
         <${Person} p=${p} score=${scores.get(p.id)} onOpen=${openProfile} size=${44}/>
         <p class="small"><${Icon} name="briefcase" size=${14}/> ${p.poste ? `${p.poste}${p.entreprise ? ' · ' + p.entreprise : ''}` : ''}${p.ville ? ` · ${p.ville}` : ''}</p>
@@ -131,7 +131,7 @@ function AskQuestion({ ctx, onClose, onDone }) {
   const [f, setF] = useState({ categorie: CATEGORIES_Q[0], titre: '', body: '' });
   return html`<${Modal} title="Poser une question" onClose=${onClose}>
     <form class="form" onSubmit=${e => { e.preventDefault(); act(async () => { const q = await store.insert('questions', { author_id: me.id, categorie: f.categorie, titre: f.titre.trim(), body: f.body.trim() }); onDone(q.id); }); }}>
-      <${Field} label="Catégorie"><select id="aq-cat" value=${f.categorie} onChange=${e => setF({ ...f, categorie: e.target.value })}>${CATEGORIES_Q.map(c => html`<option>${c}</option>`)}</select><//>
+      <${Field} label="Catégorie"><select id="aq-cat" value=${f.categorie} onChange=${e => setF({ ...f, categorie: e.target.value })}>${CATEGORIES_Q.map(c => html`<option value=${c}>${c}</option>`)}</select><//>
       <${Field} label="Question"><input id="aq-titre" required value=${f.titre} onInput=${e => setF({ ...f, titre: e.target.value })} maxlength="160" placeholder="Ex. Comment obtenir un visa pour un stage au Canada ?"/><//>
       <${Field} label="Détails (facultatif)"><textarea id="aq-body" rows="4" value=${f.body} onInput=${e => setF({ ...f, body: e.target.value })} maxlength="3000"></textarea><//>
       <div class="row-end"><button type="button" class="btn ghost" onClick=${onClose}>Annuler</button><button class="btn primary" disabled=${f.titre.trim().length < 5}>Publier</button></div>
@@ -181,7 +181,7 @@ function Talents({ ctx }) {
   const talents = data.profiles.filter(p => p.role === 'etudiant' && p.vitrine !== false && [3, 4, 5].includes(niveauOf(p, saison)) && !['trouve', 'validation'].includes(statutOf(data, p, saison).key) && (!fil || p.filiere === fil));
   return html`<div class="sub-page">
     <p class="muted small">Étudiants encore en recherche qui ont choisi d’être visibles. Lauréats : si un profil correspond à un besoin dans votre entreprise, écrivez-lui.</p>
-    <div class="filter-row"><select id="v-fil" value=${fil} onChange=${e => setFil(e.target.value)} aria-label="Filière"><option value="">Toutes filières</option>${FILIERES.map(f => html`<option>${f}</option>`)}</select></div>
+    <div class="filter-row"><select id="v-fil" value=${fil} onChange=${e => setFil(e.target.value)} aria-label="Filière"><option value="">Toutes filières</option>${FILIERES.map(f => html`<option value=${f}>${f}</option>`)}</select></div>
     <div class="cards">${talents.map(p => html`<div class="mcard" key=${p.id}><${Person} p=${p} onOpen=${openProfile} size=${40}/>
       <p class="small">Cherche : <strong>${{ 3: 'stage de 3A', 4: 'stage de 4A', 5: 'PFE ou stage à l’étranger' }[niveauOf(p, saison)]}</strong></p>
       ${(p.competences || []).length ? html`<p>${p.competences.slice(0, 5).map(c => html`<span class="mini">${c}</span>`)}</p>` : null}
@@ -193,13 +193,14 @@ function Talents({ ctx }) {
 function Annuaire({ ctx }) {
   const { data, scores, openProfile, me, saison } = ctx;
   const [q, setQ] = useState(''); const [role, setRole] = useState('');
-  const myN = me.role === 'etudiant' ? niveauOf(me, saison) : null; // un étudiant voit les lauréats et sa propre promo const [fil, setFil] = useState('');
+  const myN = me.role === 'etudiant' ? niveauOf(me, saison) : null; // un étudiant voit les lauréats et sa propre promo
+  const [fil, setFil] = useState('');
   const dir = data.profiles.filter(p => p.role !== 'admin' && (myN === null || p.role !== 'etudiant' || niveauOf(p, saison) === myN) && (!role || p.role === role) && (!fil || p.filiere === fil) && (!q || `${p.full_name} ${p.entreprise || ''} ${p.ville || ''} ${p.pays || ''} ${p.poste || ''} ${(p.competences || []).join(' ')}`.toLowerCase().includes(q.toLowerCase())))
     .sort((a, b) => a.full_name.localeCompare(b.full_name));
   return html`<div class="sub-page">
     <div class="filter-row"><label class="search"><${Icon} name="search" size=${16}/><input id="d-q" placeholder="Nom, entreprise, ville, compétence…" value=${q} onInput=${e => setQ(e.target.value)}/></label>
       <select id="d-role" value=${role} onChange=${e => setRole(e.target.value)} aria-label="Rôle"><option value="">Tous</option><option value="laureat">Lauréats</option><option value="etudiant">${myN ? 'Ma promo' : 'Étudiants'}</option></select>
-      <select id="d-fil" value=${fil} onChange=${e => setFil(e.target.value)} aria-label="Filière"><option value="">Toutes filières</option>${FILIERES.map(f => html`<option>${f}</option>`)}</select></div>
+      <select id="d-fil" value=${fil} onChange=${e => setFil(e.target.value)} aria-label="Filière"><option value="">Toutes filières</option>${FILIERES.map(f => html`<option value=${f}>${f}</option>`)}</select></div>
     <ul class="dir">${dir.slice(0, 120).map(p => html`<li key=${p.id}><${Person} p=${p} score=${scores.get(p.id)} onOpen=${openProfile}/><span class="muted small">${[p.poste, p.ville, p.pays !== 'Maroc' ? p.pays : ''].filter(Boolean).join(' · ')}</span></li>`)}</ul>
   </div>`;
 }
@@ -252,7 +253,7 @@ export function ProfileForm({ ctx, initial, onDone, onboarding }) {
       <${Field} label="Nom complet"><input id="pf-name" required value=${f.full_name} onInput=${e => set('full_name', e.target.value)} maxlength="80"/><//>
       <${Field} label=${isStudent ? 'Promo (année de diplôme prévue)' : 'Promo (année de diplôme)'} hint=${isStudent ? 'Ex. en 5A cette année : ' + (new Date().getMonth() >= 8 ? new Date().getFullYear() + 1 : new Date().getFullYear()) + '. Ton niveau se met à jour tout seul chaque année.' : ''}><input id="pf-promo" type="number" min="1990" max="2040" required value=${f.promo} onInput=${e => set('promo', e.target.value)}/><//>
     </div>
-    <${Field} label="Filière"><select id="pf-fil" value=${f.filiere} onChange=${e => set('filiere', e.target.value)}>${FILIERES.map(x => html`<option>${x}</option>`)}</select><//>
+    <${Field} label="Filière"><select id="pf-fil" value=${f.filiere} onChange=${e => set('filiere', e.target.value)}>${FILIERES.map(x => html`<option value=${x}>${x}</option>`)}</select><//>
     ${!isStudent ? html`<div class="grid2"><${Field} label="Entreprise"><input id="pf-ent" value=${f.entreprise || ''} onInput=${e => set('entreprise', e.target.value)}/><//><${Field} label="Poste"><input id="pf-poste" value=${f.poste || ''} onInput=${e => set('poste', e.target.value)}/><//></div>` : null}
     <div class="grid2"><${Field} label="Ville"><input id="pf-ville" value=${f.ville || ''} onInput=${e => set('ville', e.target.value)}/><//><${Field} label="Pays"><input id="pf-pays" value=${f.pays || ''} onInput=${e => set('pays', e.target.value)}/><//></div>
     <${Field} label="Bio courte"><textarea id="pf-bio" rows="3" maxlength="600" value=${f.bio || ''} onInput=${e => set('bio', e.target.value)} placeholder=${isStudent ? 'Ce que tu cherches, tes projets…' : 'Ton parcours, comment tu peux aider…'}></textarea><//>

@@ -1,4 +1,5 @@
 // Point d'entrée : coque de l'application, connexion, accueil, notifications.
+import { getLang, setLang } from './i18n.js';
 import { html, render, useState, useEffect, useMemo } from './vendor/preact-htm.js';
 import { createStore } from './store.js';
 import { Icon, Modal, Field, Empty, Person, Avatar, Bar, Toaster, toast, Confirm, LevelChip, BrandLogo, CompanyLogo, useLocal } from './ui.js';
@@ -45,8 +46,9 @@ function App({ store }) {
   const saison = seasonOf();
   const scores = useMemo(() => computeScores(data), [data.offers, data.applications, data.comments, data.placements, data.mentorships, data.answers, data.questions, data.votes]);
 
-  if (store.mode === 'live' && !store.session) return html`<${AuthScreen} store=${store}/>`;
-  if (store.mode === 'live' && !me) return html`<${Onboarding} store=${store}/>`;
+  const relang = () => setTick(t => t + 1);
+  if (store.mode === 'live' && !store.session) return html`<${AuthScreen} store=${store} relang=${relang}/>`;
+  if (store.mode === 'live' && !me) return html`<${Onboarding} store=${store} relang=${relang}/>`;
 
   const act = async fn => { try { await fn(); } catch (e) { toast(e.message || String(e), 'err'); } };
   const ctx = {
@@ -76,6 +78,7 @@ function App({ store }) {
         <a class="brand mobile-only" href="#accueil" onClick=${e => { e.preventDefault(); go('accueil'); }}><${BrandLogo} size=${34}/><strong>Réseau ENSAM</strong></a>
         <span class="spacer"></span>
         ${store.mode === 'demo' ? html`<${PersonaSwitch} store=${store} go=${go}/>` : null}
+        <${LangToggle} onChange=${relang}/>
         <div class="pop-wrap"><button class="icon-btn" aria-label=${`Notifications (${todo} à traiter)`} aria-expanded=${pop === 'bell'} onClick=${() => setPop(pop === 'bell' ? null : 'bell')}><${Icon} name="bell"/>${todo ? html`<span class="badge-n">${todo}</span>` : null}</button>
           ${pop === 'bell' ? html`<div class="bell-pop" role="menu"><h3>Notifications</h3>${notifs.length ? notifs.slice(0, 14).map(n => html`<button class=${'notif' + (n.action ? ' act' : '')} onClick=${() => openNotif(n)}><span class=${'n-ico ' + (n.tone || '')}><${Icon} name=${n.icon} size=${16}/></span><span>${n.text}<span class="muted small">${timeAgo(n.at)}</span></span></button>`) : html`<p class="muted small">Rien de nouveau.</p>`}</div>` : null}
         </div>
@@ -108,6 +111,13 @@ function App({ store }) {
     ${confirmBox ? html`<${Confirm} text=${confirmBox.text} onYes=${confirmBox.onYes} onClose=${() => setConfirmBox(null)} yes=${confirmBox.yes || 'Supprimer'}/>` : null}
     <${Toaster}/>
   </div>`;
+}
+
+// Bouton français / arabe, en haut à côté des notifications
+export function LangToggle({ onChange }) {
+  const ar = getLang() === 'ar';
+  return html`<button class="lang-btn" onClick=${() => { setLang(ar ? 'fr' : 'ar'); onChange?.(); }} aria-label=${ar ? 'Passer en français' : 'التبديل إلى العربية'} lang=${ar ? 'fr' : 'ar'}>
+    <${Icon} name="globe" size=${16}/><span>${ar ? 'FR' : 'ع'}</span><span class="lang-long">${ar ? 'Français' : 'العربية'}</span></button>`;
 }
 
 function QuickAsk({ ctx, mentor, onClose }) {
@@ -292,7 +302,7 @@ function MyProfile({ ctx }) {
 // ---------------------------------------------------------------------------
 // Connexion et inscription (mode réel)
 // ---------------------------------------------------------------------------
-function AuthScreen({ store }) {
+function AuthScreen({ store, relang }) {
   const recovery = /type=recovery/.test(location.hash);
   const [mode, setMode] = useState(recovery ? 'nouveau' : 'connexion');
   const [email, setEmail] = useState(''); const [pw, setPw] = useState('');
@@ -306,6 +316,7 @@ function AuthScreen({ store }) {
     else run(async () => { await store.setPassword(pw); setMsg({ t: 'Mot de passe changé.' }); });
   };
   return html`<div class="auth">
+    <div class="auth-lang"><${LangToggle} onChange=${relang}/></div>
     <div class="auth-side">
       <${BrandLogo} size=${72}/>
       <h1>Réseau ENSAM Meknès</h1>
@@ -331,10 +342,10 @@ function AuthScreen({ store }) {
   </div>`;
 }
 
-function Onboarding({ store }) {
+function Onboarding({ store, relang }) {
   const act = async fn => { try { await fn(); } catch (e) { toast(e.message, 'err'); } };
   const ctx = { store, act };
-  return html`<div class="auth"><div class="auth-card wide">
+  return html`<div class="auth"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><div class="auth-card wide">
     <div class="row"><${BrandLogo} size=${44}/><div><p class="eyebrow">Dernière étape</p><h2>Présente-toi à la communauté</h2></div></div>
     <p class="muted">Ces informations permettent de te proposer les bonnes offres et de suivre ta promo.</p>
     <${ProfileForm} ctx=${ctx} onboarding/>

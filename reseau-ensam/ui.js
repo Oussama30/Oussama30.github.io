@@ -14,7 +14,7 @@ export function Avatar({ p, size = 36 }) {
 
 export function Icon({ name, size = 18 }) {
   const P = ICONS[name] || '';
-  return html`<svg class="ico" width=${size} height=${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" dangerouslySetInnerHTML=${{ __html: P }}></svg>`;
+  return html`<svg class=${`ico ico-${name}`} width=${size} height=${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" dangerouslySetInnerHTML=${{ __html: P }}></svg>`;
 }
 
 const ICONS = {
@@ -122,7 +122,7 @@ export function Bar({ value, pace, label }) {
   const v = Math.max(0, Math.min(1, value || 0));
   return html`<div class="bar" role="img" aria-label=${label || `${Math.round(v * 100)} %`}>
     <span class="bar-fill" style=${`width:${v * 100}%`}></span>
-    ${pace !== undefined ? html`<span class="bar-pace" style=${`left:${Math.max(0, Math.min(1, pace)) * 100}%`} title="Rythme attendu à cette date"></span>` : null}
+    ${pace !== undefined ? html`<span class="bar-pace" style=${`inset-inline-start:${Math.max(0, Math.min(1, pace)) * 100}%`} title="Rythme attendu à cette date"></span>` : null}
   </div>`;
 }
 

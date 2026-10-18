@@ -57,7 +57,7 @@ export function OffersPage(ctx) {
       ${[['tous', 'Tout'], ...myTypes.map(k => [k, TYPES[k].label])].map(([k, l]) => html`<button class=${'chip t-' + k + (type === k ? ' on' : '')} onClick=${() => setType(k)}>${k !== 'tous' ? html`<${Icon} name=${TYPE_ICON[k]} size=${15}/>` : null}${l}</button>`)}
     </div>` : null}
     ${more ? html`<div class="filter-row">
-      <select id="f-fil" value=${filiere} onChange=${e => setFiliere(e.target.value)} aria-label="Filière"><option value="">Toutes filières</option>${FILIERES.map(f => html`<option>${f}</option>`)}</select>
+      <select id="f-fil" value=${filiere} onChange=${e => setFiliere(e.target.value)} aria-label="Filière"><option value="">Toutes filières</option>${FILIERES.map(f => html`<option value=${f}>${f}</option>`)}</select>
       <select id="f-lieu" value=${lieu} onChange=${e => setLieu(e.target.value)} aria-label="Lieu"><option value="">Maroc et étranger</option><option value="maroc">Maroc</option><option value="etranger">Étranger</option></select>
     </div>` : null}
     <div class="offer-grid">
