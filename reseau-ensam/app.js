@@ -1,7 +1,7 @@
 // Point d'entrée : coque de l'application, connexion, accueil, notifications.
 import { html, render, useState, useEffect, useMemo } from './vendor/preact-htm.js';
 import { createStore } from './store.js';
-import { Icon, Modal, Field, Empty, Person, Avatar, Bar, Toaster, toast, Confirm, LevelChip, BrandLogo, CompanyLogo } from './ui.js';
+import { Icon, Modal, Field, Empty, Person, Avatar, Bar, Toaster, toast, Confirm, LevelChip, BrandLogo, CompanyLogo, useLocal } from './ui.js';
 import { seasonOf, seasonLabel, niveauOf, NIVEAUX, OBJECTIFS, statutOf, seasonStats, computeScores, timeAgo, pct } from './logic.js';
 import { OffersPage, OfferCard, OfferDetail, OfferComposer, matchesMe, APP_STATUS } from './offers.js';
 import { ParcoursPage, EspacePage, ConfirmRecruit, Journey, journeyStep } from './me.js';
@@ -15,7 +15,7 @@ function navFor(me) {
   const items = [['accueil', 'Accueil', 'home'], ['offres', 'Offres', 'feed']];
   if (me.role === 'etudiant') items.push(['parcours', 'Mon parcours', 'route']);
   else if (me.role === 'laureat') items.push(['espace', 'Mon espace', 'star']);
-  items.push(['reseau', 'Réseau', 'network'], ['suivi', 'Suivi', 'chart']);
+  items.push(['reseau', 'Réseau', 'network'], ['suivi', me.role === 'etudiant' ? 'Ma promo' : 'Suivi', 'chart']);
   if (me.role === 'admin') items.push(['admin', 'Admin', 'shield']);
   return items;
 }
@@ -83,6 +83,7 @@ function App({ store }) {
           ${pop === 'me' ? html`<div class="menu-pop right" role="menu">
             <div class="menu-who"><strong>${me.full_name}</strong><span class="muted small">${me.role === 'etudiant' ? 'Étudiant(e)' : me.role === 'laureat' ? 'Lauréat(e)' : 'Administration'}</span></div>
             <button onClick=${() => go('profil')}><${Icon} name="user" size=${16}/> Mon profil</button>
+            <button onClick=${() => { try { localStorage.removeItem('guide-off-' + me.id); } catch { /* */ } go('accueil'); }}><${Icon} name="route" size=${16}/> Comment ça marche ?</button>
             ${me.role === 'admin' ? html`<button onClick=${() => go('admin')}><${Icon} name="shield" size=${16}/> Administration</button>` : null}
             ${store.mode === 'live' ? html`<button onClick=${() => store.signOut()}><${Icon} name="logout" size=${16}/> Se déconnecter</button>` : html`<button onClick=${() => { store.reset(); setPop(null); toast('Démo réinitialisée.'); }}><${Icon} name="spark" size=${16}/> Réinitialiser la démo</button>`}
           </div>` : null}
@@ -100,7 +101,7 @@ function App({ store }) {
         ${page === 'profil' ? html`<${MyProfile} ctx=${ctx}/>` : null}
       </main>
     </div>
-    <nav class="bottom-nav">${nav.map(([k, l, i]) => html`<a href=${'#' + k} class=${page === k ? 'on' : ''} onClick=${e => { e.preventDefault(); go(k); }}><span class="bn-ico"><${Icon} name=${i}/>${dotFor(k) ? html`<span class="dotn"></span>` : null}</span><span>${{ 'Mon parcours': 'Parcours', 'Mon espace': 'Espace' }[l] || l}</span></a>`)}</nav>
+    <nav class="bottom-nav">${nav.map(([k, l, i]) => html`<a href=${'#' + k} class=${page === k ? 'on' : ''} onClick=${e => { e.preventDefault(); go(k); }}><span class="bn-ico"><${Icon} name=${i}/>${dotFor(k) ? html`<span class="dotn"></span>` : null}</span><span>${{ 'Mon parcours': 'Parcours', 'Mon espace': 'Espace', 'Ma promo': 'Promo' }[l] || l}</span></a>`)}</nav>
     ${offerId ? html`<${OfferDetail} ctx=${ctx} id=${offerId} key=${offerId} onClose=${() => setOfferId(null)}/>` : null}
     ${profile ? html`<${ProfileModal} ctx=${ctx} p=${profile} onClose=${() => setProfile(null)} onAskMentor=${p => { setProfile(null); setAskMentor(p); }}/>` : null}
     ${askMentor ? html`<${QuickAsk} ctx=${ctx} mentor=${askMentor} onClose=${() => setAskMentor(null)}/>` : null}
@@ -124,7 +125,7 @@ function QuickAsk({ ctx, mentor, onClose }) {
 function PersonaSwitch({ store, go }) {
   const ps = store.personas();
   return html`<label class="persona"><span class="small muted">Voir en tant que</span>
-    <select id="persona" value=${store.me?.id} onChange=${e => { store.switchTo(e.target.value); go('accueil'); }}>${ps.map(p => html`<option value=${p.id}>${p._persona} · ${p.full_name.split(' ')[0]}</option>`)}</select></label>`;
+    <select id="persona" value=${store.me?.id} onChange=${e => { store.switchTo(e.target.value); go('accueil'); }}>${ps.map(p => html`<option value=${p.id}>${p._persona}</option>`)}</select></label>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -192,7 +193,7 @@ function Home(ctx) {
     ? [['feed', 'Offres pour moi', `${data.offers.filter(o => o.status === 'ouverte' && matchesMe(o, me, saison)).length} ouvertes`, () => go('offres')],
       ['mentor', 'Trouver un mentor', 'Un lauréat, un appel', () => go('reseau/mentorat')],
       ['qa', 'Poser une question', 'Les anciens répondent', () => go('reseau/entraide')],
-      ['chart', 'Suivi de ma promo', `${NIVEAUX[n]?.short || ''} cette saison`, () => go('suivi')]]
+      ['chart', 'Ma promo', `${NIVEAUX[n]?.short || ''} cette saison`, () => go('suivi')]]
     : me.role === 'laureat'
       ? [['plus', 'Publier une offre', '+10 points', () => setCompose(true)],
         ['inbox', 'Mes candidatures', `${data.applications.filter(a => a.status === 'postule' && data.offers.some(o => o.id === a.offer_id && o.author_id === me.id)).length} à voir`, () => go('espace')],
@@ -206,11 +207,13 @@ function Home(ctx) {
       <h1>Bonjour ${first}</h1>
     </header>
 
+    <${Guide} ctx=${ctx} setCompose=${setCompose}/>
+
     ${isStudent && stu.pl?.status === 'en_attente' ? html`<${ConfirmRecruit} ctx=${ctx} pl=${stu.pl} helper=${helper}/>` : null}
 
     ${isStudent && obj ? html`<button class=${'objective compact clickable st-' + stu.key} onClick=${() => go('parcours')}>
       <div class="objective-top"><span class="obj-ico"><${Icon} name="route" size=${22}/></span>
-        <div class="objective-main"><p class="eyebrow">Mon objectif · avant le ${obj.deadline(saison).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</p><h2>${obj.titre}</h2></div>
+        <div class="objective-main"><p class="eyebrow">Mon objectif de l’année</p><h2>${obj.titre}</h2></div>
         <span class=${'state-pill s-' + stu.key}>${stu.label}</span></div>
       <${Journey} step=${journeyStep(stu, myApps)}/>
     </button>` : null}
@@ -228,9 +231,9 @@ function Home(ctx) {
       </div>
       <aside class="home-side">
         <button class="panel pulse clickable" onClick=${() => go('suivi')}>
-          <div class="section-head"><h2>L’école en ce moment</h2><${Icon} name="arrow" size=${16}/></div>
-          ${st.rows.map(r => html`<div class="pulse-row"><span class="niv-badge">${NIVEAUX[r.n].short}</span><div class="pulse-bar"><div class="row small"><span>${r.objectif.court}</span><span class="spacer"></span><span class="mono">${pct(r.rate)}</span></div><${Bar} value=${r.rate} pace=${r.elapsed}/></div></div>`)}
-          <p class="small muted">${st.viaTotal} réussites vérifiées grâce aux lauréats cette saison.</p>
+          <div class="section-head"><h2>${isStudent ? 'Ma promo' : 'L’école en ce moment'}</h2><${Icon} name="arrow" size=${16}/></div>
+          ${st.rows.filter(r => !isStudent || r.n === n).map(r => html`<div class="pulse-row"><span class="niv-badge">${NIVEAUX[r.n].short}</span><div class="pulse-bar"><div class="row small"><span>${r.objectif.court}</span><span class="spacer"></span><span class="mono">${isStudent ? `${r.found}/${r.total}` : pct(r.rate)}</span></div><${Bar} value=${r.rate} pace=${isStudent ? undefined : r.elapsed}/></div></div>`)}
+          <p class="small muted">${isStudent ? 'Tes camarades qui ont déjà trouvé. Chacun avance à son rythme.' : `${st.viaTotal} réussites vérifiées grâce aux lauréats cette saison.`}</p>
         </button>
         ${star && star.pts ? html`<div class="panel star">
           <p class="eyebrow"><${Icon} name="trophy" size=${14}/> Lauréat du mois</p>
@@ -244,6 +247,37 @@ function Home(ctx) {
     </div>
     ${compose ? html`<${OfferComposer} ctx=${ctx} onClose=${() => setCompose(false)}/>` : null}
   </section>`;
+}
+
+// Premiers pas : un guide court par rôle, dont les étapes se cochent toutes seules.
+function Guide({ ctx, setCompose }) {
+  const { data, me, saison, go } = ctx;
+  const [off, setOff] = useLocal('guide-off-' + me.id, false);
+  if (off || me.role === 'admin') return null;
+  const n = niveauOf(me, saison);
+  const myApps = data.applications.filter(a => a.student_id === me.id);
+  const myOffers = data.offers.filter(o => o.author_id === me.id);
+  const steps = me.role === 'etudiant' ? [
+    ['user', 'Complète ton profil', 'Ajoute le lien de ton CV : il sera joint à chaque candidature.', !!me.cv_url, () => go('profil'), 'Mon profil'],
+    ['feed', 'Postule à une offre', `Tu ne vois que les offres de ${NIVEAUX[n]?.short || 'ton année'}. Un message de deux phrases suffit.`, myApps.some(a => a.offer_id), () => go('offres'), 'Voir les offres'],
+    ['people', 'Le lauréat te répond', 'Il fait avancer ta candidature : entretien, puis « Recruté(e) ». Tu suis tout dans Mon parcours.', myApps.some(a => a.offer_id && a.status !== 'postule'), () => go('parcours'), 'Mon parcours'],
+    ['heart', 'Confirme et dis merci', 'Quand il te marque recruté(e), tu confirmes en un clic et tu lui laisses un mot.', data.placements.some(p => p.student_id === me.id && p.status === 'confirme' && p.merci), null, ''],
+  ] : [
+    ['user', 'Complète ton profil', 'Entreprise, poste, sujets sur lesquels tu peux aider : les étudiants te trouvent plus facilement.', !!(me.entreprise && me.poste), () => go('profil'), 'Mon profil'],
+    ['plus', 'Publie une offre', 'Une minute suffit. Seuls les étudiants de l’année concernée la voient.', myOffers.length > 0, () => setCompose(true), 'Publier'],
+    ['inbox', 'Réponds aux candidats', 'Les candidatures arrivent dans Mon espace, avec message et CV.', data.applications.some(a => myOffers.some(o => o.id === a.offer_id) && a.status !== 'postule'), () => go('espace'), 'Mon espace'],
+    ['check', 'Marque « Recruté(e) »', 'L’étudiant confirme, et tu reçois ses remerciements et 50 points.', data.placements.some(p => p.laureat_id === me.id && p.status === 'confirme'), null, ''],
+  ];
+  const done = steps.filter(x => x[3]).length;
+  if (done === steps.length) return null;
+  return html`<div class="guide">
+    <div class="guide-head"><div><p class="eyebrow">Comment ça marche</p><h2>${me.role === 'etudiant' ? 'Trouver ton stage avec les lauréats, en 4 étapes' : 'Aider les étudiants, en 4 étapes'}</h2></div>
+      <span class="muted small">${done}/${steps.length}</span><button class="icon-btn small" aria-label="Masquer le guide" onClick=${() => setOff(true)}><${Icon} name="x" size=${16}/></button></div>
+    <ol class="guide-steps">${steps.map(([ic, t, d, ok, fn, cta], i) => html`<li class=${ok ? 'ok' : ''}>
+      <span class="g-ico"><${Icon} name=${ok ? 'check' : ic} size=${20}/></span>
+      <strong>${i + 1}. ${t}</strong><span class="small muted">${d}</span>
+      ${!ok && fn ? html`<button class="btn tiny" onClick=${fn}>${cta}</button>` : null}</li>`)}</ol>
+  </div>`;
 }
 
 function MyProfile({ ctx }) {

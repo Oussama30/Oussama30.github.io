@@ -28,7 +28,6 @@ export function ParcoursPage(ctx) {
   const [addApp, setAddApp] = useState(false);
   const apps = data.applications.filter(a => a.student_id === me.id).sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at));
   const history = data.placements.filter(p => p.student_id === me.id && p.saison !== saison && p.status !== 'refuse').sort((a, b) => b.saison - a.saison);
-  const left = obj ? Math.ceil((obj.deadline(saison) - new Date()) / 864e5) : null;
   const helper = pl?.laureat_id ? store.byId('profiles', pl.laureat_id) : null;
   const step = journeyStep(st, apps);
 
@@ -43,7 +42,7 @@ export function ParcoursPage(ctx) {
         <div class="objective-main">
           <p class="eyebrow">Mon objectif cette saison</p>
           <h2>${obj ? obj.titre : 'Pas d’objectif de placement cette année'}</h2>
-          ${obj ? html`<p class="muted small">Avant le ${obj.deadline(saison).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}${left > 0 ? ` · encore ${left} jours` : ''}</p>` : html`<p class="muted small">En cycle préparatoire, profite de l’Entraide et du mentorat pour préparer ton premier stage.</p>`}
+          ${obj ? html`<p class="muted small">Les lauréats sont là pour t’aider. Avance à ton rythme.</p>` : html`<p class="muted small">En cycle préparatoire, profite de l’Entraide et du mentorat pour préparer ton premier stage.</p>`}
         </div>
         <span class=${'state-pill s-' + st.key}>${st.label}</span>
       </div>

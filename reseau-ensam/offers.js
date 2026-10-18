@@ -1,7 +1,7 @@
 // Offres : liste compacte, fiche détaillée, candidature, gestion des candidats par le lauréat.
 import { html, useState, useMemo } from './vendor/preact-htm.js';
 import { Icon, Modal, Field, Empty, Person, Avatar, CompanyLogo, TYPE_ICON, toast } from './ui.js';
-import { TYPES, FILIERES, NIVEAUX, niveauOf, timeAgo, daysUntil, placementOf, fmtDate } from './logic.js';
+import { TYPES, FILIERES, NIVEAUX, OBJECTIFS, niveauOf, timeAgo, daysUntil, placementOf, fmtDate } from './logic.js';
 
 const ANNEES_OPTS = [[3, '3A'], [4, '4A'], [5, '5A'], [6, 'Jeunes diplômés']];
 export const APP_STATUS = { postule: 'Envoyée', entretien: 'Entretien', retenu: 'Retenu(e)', refuse: 'Pas retenu(e)' };
@@ -14,6 +14,8 @@ export function matchesMe(o, me, saison) {
 export function OffersPage(ctx) {
   const { data, me, saison, openOffer } = ctx;
   const isStudent = me.role === 'etudiant';
+  const niveau = niveauOf(me, saison);
+  const myTypes = isStudent ? (OBJECTIFS[niveau]?.types || []) : Object.keys(TYPES);
   const [vue, setVue] = useState(isStudent ? 'pour-moi' : 'toutes');
   const [type, setType] = useState('tous');
   const [q, setQ] = useState('');
@@ -28,6 +30,7 @@ export function OffersPage(ctx) {
       if (vue === 'miennes') { if (o.author_id !== me.id) return false; }
       else if (o.status !== 'ouverte' && vue !== 'sauvees') return false;
       if (vue === 'pour-moi' && !matchesMe(o, me, saison)) return false;
+      if (isStudent && !(o.annees || []).includes(niveau)) return false; // un étudiant ne voit que les offres de son année
       if (vue === 'sauvees' && !data.reactions.some(r => r.offer_id === o.id && r.user_id === me.id && r.kind === 'save')) return false;
       if (type !== 'tous' && o.type !== type) return false;
       if (filiere && !(o.filieres || []).includes(filiere)) return false;
@@ -38,11 +41,11 @@ export function OffersPage(ctx) {
     }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   }, [data, q, type, filiere, lieu, vue]);
 
-  const vues = isStudent ? [['pour-moi', 'Pour moi'], ['toutes', 'Toutes'], ['sauvees', 'Sauvegardées']] : [['toutes', 'Toutes les offres'], ['miennes', 'Mes offres']];
+  const vues = isStudent ? [['pour-moi', 'Ma filière'], ['toutes', `Toute la ${NIVEAUX[niveau]?.short || 'promo'}`], ['sauvees', 'Sauvegardées']] : [['toutes', 'Toutes les offres'], ['miennes', 'Mes offres']];
 
   return html`<section class="page">
     <header class="page-head">
-      <div><p class="eyebrow">Partagées par les lauréats</p><h1>Offres</h1></div>
+      <div><p class="eyebrow">${isStudent ? `Pour ${NIVEAUX[niveau]?.label?.toLowerCase() || 'toi'} · partagées par les lauréats` : 'Partagées par les lauréats'}</p><h1>Offres</h1></div>
       ${!isStudent ? html`<button class="btn primary" onClick=${() => setCompose(true)}><${Icon} name="plus"/> Publier une offre</button>` : null}
     </header>
     <div class="toolbar">
@@ -50,15 +53,15 @@ export function OffersPage(ctx) {
       <label class="search"><${Icon} name="search" size=${16}/><input id="f-q" placeholder="Entreprise, ville…" value=${q} onInput=${e => setQ(e.target.value)}/></label>
       <button class=${'btn ghost small' + (more || filiere || lieu ? ' on' : '')} onClick=${() => setMore(!more)} aria-expanded=${more}>Filtres${filiere || lieu ? ` (${[filiere, lieu].filter(Boolean).length})` : ''}</button>
     </div>
-    <div class="chips" role="group" aria-label="Type d’offre">
-      ${[['tous', 'Tout'], ...Object.entries(TYPES).map(([k, v]) => [k, v.label])].map(([k, l]) => html`<button class=${'chip t-' + k + (type === k ? ' on' : '')} onClick=${() => setType(k)}>${k !== 'tous' ? html`<${Icon} name=${TYPE_ICON[k]} size=${15}/>` : null}${l}</button>`)}
-    </div>
+    ${myTypes.length > 1 ? html`<div class="chips" role="group" aria-label="Type d’offre">
+      ${[['tous', 'Tout'], ...myTypes.map(k => [k, TYPES[k].label])].map(([k, l]) => html`<button class=${'chip t-' + k + (type === k ? ' on' : '')} onClick=${() => setType(k)}>${k !== 'tous' ? html`<${Icon} name=${TYPE_ICON[k]} size=${15}/>` : null}${l}</button>`)}
+    </div>` : null}
     ${more ? html`<div class="filter-row">
       <select id="f-fil" value=${filiere} onChange=${e => setFiliere(e.target.value)} aria-label="Filière"><option value="">Toutes filières</option>${FILIERES.map(f => html`<option>${f}</option>`)}</select>
       <select id="f-lieu" value=${lieu} onChange=${e => setLieu(e.target.value)} aria-label="Lieu"><option value="">Maroc et étranger</option><option value="maroc">Maroc</option><option value="etranger">Étranger</option></select>
     </div>` : null}
     <div class="offer-grid">
-      ${list.length ? list.map(o => html`<${OfferCard} key=${o.id} o=${o} ctx=${ctx} onOpen=${() => openOffer(o.id)}/>`) : html`<${Empty} icon="feed" title=${vue === 'pour-moi' ? 'Aucune offre ouverte pour ton niveau et ta filière' : 'Aucune offre ici'}>${vue === 'pour-moi' ? 'Regarde « Toutes », ou reviens demain : les lauréats publient chaque semaine.' : 'Change les filtres.'}<//>`}
+      ${list.length ? list.map(o => html`<${OfferCard} key=${o.id} o=${o} ctx=${ctx} onOpen=${() => openOffer(o.id)}/>`) : html`<${Empty} icon="feed" title=${vue === 'pour-moi' ? 'Aucune offre ouverte pour ton niveau et ta filière' : 'Aucune offre ici'}>${vue === 'pour-moi' ? 'Regarde l’onglet de toute ta promo, ou reviens bientôt : les lauréats publient régulièrement.' : 'Change les filtres.'}<//>`}
     </div>
     ${compose ? html`<${OfferComposer} ctx=${ctx} onClose=${() => setCompose(false)}/>` : null}
   </section>`;

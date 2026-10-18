@@ -145,11 +145,12 @@ const RESEAU_TABS = [['entraide', 'Entraide', 'qa'], ['mentorat', 'Mentorat', 'm
 
 export function ReseauPage(ctx) {
   const { data, me, sub, go } = ctx;
-  const tab = RESEAU_TABS.some(([k]) => k === sub) ? sub : 'entraide';
+  const tabs = RESEAU_TABS.filter(([k]) => me.role !== 'etudiant' || !['classement', 'talents'].includes(k));
+  const tab = tabs.some(([k]) => k === sub) ? sub : 'entraide';
   const pendingM = data.mentorships.filter(m => m.mentor_id === me.id && m.status === 'demande').length;
   return html`<section class="page">
     <header class="page-head"><div><p class="eyebrow">${data.profiles.filter(p => p.role === 'laureat').length} lauréats · ${data.profiles.filter(p => p.role === 'etudiant').length} étudiants</p><h1>Réseau</h1></div></header>
-    <div class="icon-tabs" role="tablist">${RESEAU_TABS.map(([k, l, i]) => html`<button role="tab" aria-selected=${tab === k} class=${tab === k ? 'on' : ''} onClick=${() => go('reseau/' + k)}><${Icon} name=${i} size=${20}/><span>${l}</span>${k === 'mentorat' && pendingM ? html`<span class="dotn"></span>` : null}</button>`)}</div>
+    <div class="icon-tabs" role="tablist" style=${`--n:${tabs.length}`}>${tabs.map(([k, l, i]) => html`<button role="tab" aria-selected=${tab === k} class=${tab === k ? 'on' : ''} onClick=${() => go('reseau/' + k)}><${Icon} name=${i} size=${20}/><span>${l}</span>${k === 'mentorat' && pendingM ? html`<span class="dotn"></span>` : null}</button>`)}</div>
     ${tab === 'entraide' ? html`<${EntraidePage} ...${ctx}/>` : null}
     ${tab === 'mentorat' ? html`<${MentoratPage} ...${ctx}/>` : null}
     ${tab === 'annuaire' ? html`<${Annuaire} ctx=${ctx}/>` : null}
@@ -190,13 +191,14 @@ function Talents({ ctx }) {
 }
 
 function Annuaire({ ctx }) {
-  const { data, scores, openProfile } = ctx;
-  const [q, setQ] = useState(''); const [role, setRole] = useState(''); const [fil, setFil] = useState('');
-  const dir = data.profiles.filter(p => p.role !== 'admin' && (!role || p.role === role) && (!fil || p.filiere === fil) && (!q || `${p.full_name} ${p.entreprise || ''} ${p.ville || ''} ${p.pays || ''} ${p.poste || ''} ${(p.competences || []).join(' ')}`.toLowerCase().includes(q.toLowerCase())))
+  const { data, scores, openProfile, me, saison } = ctx;
+  const [q, setQ] = useState(''); const [role, setRole] = useState('');
+  const myN = me.role === 'etudiant' ? niveauOf(me, saison) : null; // un étudiant voit les lauréats et sa propre promo const [fil, setFil] = useState('');
+  const dir = data.profiles.filter(p => p.role !== 'admin' && (myN === null || p.role !== 'etudiant' || niveauOf(p, saison) === myN) && (!role || p.role === role) && (!fil || p.filiere === fil) && (!q || `${p.full_name} ${p.entreprise || ''} ${p.ville || ''} ${p.pays || ''} ${p.poste || ''} ${(p.competences || []).join(' ')}`.toLowerCase().includes(q.toLowerCase())))
     .sort((a, b) => a.full_name.localeCompare(b.full_name));
   return html`<div class="sub-page">
     <div class="filter-row"><label class="search"><${Icon} name="search" size=${16}/><input id="d-q" placeholder="Nom, entreprise, ville, compétence…" value=${q} onInput=${e => setQ(e.target.value)}/></label>
-      <select id="d-role" value=${role} onChange=${e => setRole(e.target.value)} aria-label="Rôle"><option value="">Tous</option><option value="laureat">Lauréats</option><option value="etudiant">Étudiants</option></select>
+      <select id="d-role" value=${role} onChange=${e => setRole(e.target.value)} aria-label="Rôle"><option value="">Tous</option><option value="laureat">Lauréats</option><option value="etudiant">${myN ? 'Ma promo' : 'Étudiants'}</option></select>
       <select id="d-fil" value=${fil} onChange=${e => setFil(e.target.value)} aria-label="Filière"><option value="">Toutes filières</option>${FILIERES.map(f => html`<option>${f}</option>`)}</select></div>
     <ul class="dir">${dir.slice(0, 120).map(p => html`<li key=${p.id}><${Person} p=${p} score=${scores.get(p.id)} onOpen=${openProfile}/><span class="muted small">${[p.poste, p.ville, p.pays !== 'Maroc' ? p.pays : ''].filter(Boolean).join(' · ')}</span></li>`)}</ul>
   </div>`;

@@ -1,9 +1,11 @@
 // Tableau de bord de suivi : qui a trouvé quoi, par niveau, filière et saison.
 import { html, useState, useMemo } from './vendor/preact-htm.js';
 import { Icon, Bar, Person, Tabs } from './ui.js';
-import { seasonStats, monthlyActivity, seasonLabel, NIVEAUX, pct, OBJECTIFS, statutOf, FOUND } from './logic.js';
+import { seasonStats, monthlyActivity, seasonLabel, NIVEAUX, pct, OBJECTIFS, statutOf, FOUND, niveauOf } from './logic.js';
+import { CompanyLogo } from './ui.js';
 
 export function DashboardPage(ctx) {
+  if (ctx.me.role === 'etudiant') return html`<${PromoPage} ctx=${ctx}/>`;
   const { data, saison: cur, me, openProfile } = ctx;
   const seasons = useMemo(() => [...new Set([cur, ...data.placements.map(p => p.saison)])].sort((a, b) => b - a), [data, cur]);
   const [saison, setSaison] = useState(cur);
@@ -111,4 +113,31 @@ function ExportBox({ data, saison, rows }) {
     <p class="muted small">Liste complète de la saison (une ligne par étudiant), à ouvrir dans Excel.</p>
     ${href ? html`<a class="btn" href=${href} download=${`suivi-placement-${seasonLabel(saison)}.csv`}><${Icon} name="download"/> Télécharger le fichier CSV</a>` : html`<button class="btn" onClick=${build}>Préparer l’export ${seasonLabel(saison)}</button>`}
   </div>`;
+}
+
+// Vue étudiant : seulement sa propre promo, sans échéances ni alertes, pour encourager plutôt que stresser.
+function PromoPage({ ctx }) {
+  const { data, saison, me } = ctx;
+  const n = niveauOf(me, saison);
+  const st = useMemo(() => seasonStats(data, saison), [data, saison]);
+  const row = st.rows.find(r => r.n === n);
+  if (!row) return html`<section class="page"><header class="page-head"><div><p class="eyebrow">Saison ${seasonLabel(saison)}</p><h1>Ma promo</h1></div></header>
+    <div class="panel"><p>Le suivi commence en 3e année. En attendant, profite de l’Entraide et du mentorat pour découvrir les métiers des lauréats.</p></div></section>`;
+  const companies = new Map();
+  for (const pl of row.foundList) companies.set(pl.entreprise, (companies.get(pl.entreprise) || 0) + 1);
+  const comp = [...companies.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const mine = row.byFiliere.find(f => f.filiere === me.filiere);
+  return html`<section class="page">
+    <header class="page-head"><div><p class="eyebrow">Saison ${seasonLabel(saison)} · ${NIVEAUX[n].label}</p><h1>Ma promo</h1></div></header>
+    <div class="promo-hero">
+      <span class="obj-ico"><${Icon} name="people" size=${26}/></span>
+      <div><p class="big mono">${row.found}<small> / ${row.total}</small></p>
+        <p>camarades de ${NIVEAUX[n].short} ont déjà trouvé leur ${row.objectif.court.toLowerCase()}${row.via ? html`, dont <b>${row.via}</b> grâce aux lauréats du réseau` : ''}.</p>
+        <${Bar} value=${row.rate} label=${`${pct(row.rate)} de la promo`}/></div>
+    </div>
+    ${mine ? html`<div class="panel"><div class="section-head"><h2>${me.filiere}</h2><span class="mono">${mine.found}/${mine.total}</span></div><${Bar} value=${mine.total ? mine.found / mine.total : 0}/>
+      <p class="small muted">Chacun avance à son rythme. Les lauréats publient des offres toute l’année.</p></div>` : null}
+    ${comp.length ? html`<div class="panel"><div class="section-head"><h2>Où va ta promo</h2></div>
+      <ul class="company-cloud">${comp.map(([c, k]) => html`<li><${CompanyLogo} name=${c} size=${34}/><span>${c}</span><span class="count">${k}</span></li>`)}</ul></div>` : null}
+  </section>`;
 }

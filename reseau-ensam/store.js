@@ -18,7 +18,7 @@ class Base {
 // ---------------------------------------------------------------------------
 // Démo : données d'exemple, gardées dans le navigateur du visiteur
 // ---------------------------------------------------------------------------
-const DEMO_KEY = 'ensam-demo-v4';
+const DEMO_KEY = 'ensam-demo-v5';
 class DemoStore extends Base {
   constructor() { super(); this.mode = 'demo'; }
   async init() {
@@ -30,7 +30,7 @@ class DemoStore extends Base {
     this.ready = true;
   }
   persist() { safeSet(DEMO_KEY, JSON.stringify({ data: this.data, meId: this.me?.id })); }
-  personas() { return this.data.profiles.filter(p => p._persona); }
+  personas() { const o = { etudiant: 0, laureat: 1, admin: 2 }; return this.data.profiles.filter(p => p._persona).sort((a, b) => o[a.role] - o[b.role]); }
   switchTo(id) { this.me = this.byId('profiles', id); this.persist(); this.emit(); }
   reset() { this.data = buildSeed(); this.me = this.personas()[0]; this.persist(); this.emit(); }
   async insert(table, row) {

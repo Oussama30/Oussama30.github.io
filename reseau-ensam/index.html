@@ -149,7 +149,7 @@ textarea { resize: vertical; }
 .chip.on.t-stage, .chip.on.t-pfe, .chip.on.t-etranger, .chip.on.t-emploi { background: var(--c); border-color: var(--c); color: var(--surface); }
 .tag.done { background: var(--surface-2); color: var(--muted); }
 .tag.coopt { background: var(--good-soft); color: var(--good); }
-.tag.urgent { background: var(--bad-soft); color: var(--bad); }
+.tag.urgent { background: var(--brass-soft); color: var(--brass); }
 .state-pill { display: inline-flex; align-items: center; gap: .3rem; font-size: .78rem; font-weight: 600; padding: .2rem .6rem; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }
 .state-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .s-trouve, .m-terminee { background: var(--good-soft); color: var(--good); }
@@ -490,7 +490,7 @@ button.app-row:hover { border-color: var(--ink-2); }
 
 /* Réseau */
 .sub-page { display: flex; flex-direction: column; gap: .9rem; }
-.icon-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; }
+.icon-tabs { display: grid; grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)); gap: .5rem; }
 .icon-tabs button { position: relative; display: flex; flex-direction: column; align-items: center; gap: .3rem; padding: .7rem .3rem; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-weight: 600; font-size: .86rem; cursor: pointer; }
 .icon-tabs button:hover { border-color: var(--ink-2); }
 .icon-tabs button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
@@ -523,11 +523,29 @@ button.panel:hover, button.impact-strip:hover, button.objective:hover { border-c
 .auth-points .sc-ico { width: 34px; height: 34px; border-radius: 10px; }
 .auth-points .sc-ico .ico { color: var(--accent); }
 
+/* Guide de bienvenue et vue promo (étudiants) */
+.guide { display: flex; flex-direction: column; gap: .9rem; padding: 1.1rem 1.2rem; border-radius: 14px; background: linear-gradient(135deg, var(--accent-soft), var(--surface) 70%); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); }
+.guide-head { display: flex; align-items: flex-start; gap: .6rem; }
+.guide-head > div { flex: 1; }
+.guide-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; }
+.guide-steps li { display: flex; flex-direction: column; align-items: flex-start; gap: .35rem; padding: .8rem; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+.guide-steps li.ok { opacity: .65; }
+.guide-steps li .btn { margin-top: auto; }
+.g-ico { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); }
+.guide-steps li.ok .g-ico { background: var(--good); color: #fff; }
+.promo-hero { display: flex; gap: 1rem; align-items: flex-start; padding: 1.2rem; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.promo-hero > div { flex: 1; display: flex; flex-direction: column; gap: .5rem; }
+.promo-hero .big small { font-size: 1.1rem; color: var(--muted); }
+.company-cloud { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .5rem; }
+.company-cloud li { display: flex; align-items: center; gap: .6rem; }
+.company-cloud li span:nth-child(2) { flex: 1; }
+
 @media (max-width: 1000px) {
   .kpis, .niv-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .home-grid, .impact-hero { grid-template-columns: minmax(0, 1fr); }
   .kanban { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .guide-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
@@ -558,6 +576,10 @@ button.panel:hover, button.impact-strip:hover, button.objective:hover { border-c
   .icon-tabs { gap: .3rem; }
   .icon-tabs button { padding: .55rem .1rem; font-size: .72rem; border-radius: 10px; }
   .offer-grid, .offer-grid.one { grid-template-columns: minmax(0, 1fr); }
+  .guide-steps { grid-template-columns: minmax(0, 1fr); }
+  .guide-steps li { display: grid; grid-template-columns: 38px minmax(0, 1fr); column-gap: .7rem; }
+  .guide-steps li .g-ico { grid-row: span 3; }
+  .guide-steps li .btn { justify-self: start; }
   .type-pick { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .journey li { font-size: .72rem; }
   .j-dot { width: 32px; height: 32px; } .journey li::before { top: 15px; }
