@@ -51,6 +51,13 @@ const ICONS = {
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  wrench: '<path d="M14.5 6.5a4 4 0 0 0 5 5L12 19a2.1 2.1 0 0 1-3-3l7.5-7.5"/><path d="M14.5 6.5 17 4l3 3-2.5 2.5"/>',
+  cap: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5M22 9v6"/>',
+  inbox: '<path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5 5h14l2 8v6H3v-6z"/>',
+  more: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
+  network: '<circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M10.8 7.2 6.3 15.8M13.2 7.2l4.5 8.6M7.5 18h9"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
 };
 
 export function Modal({ title, onClose, children, wide }) {
@@ -132,3 +139,24 @@ export function useLocal(key, init) {
   const set = x => { setV(x); try { localStorage.setItem(key, JSON.stringify(x)); } catch { /* pas de stockage */ } };
   return [v, set];
 }
+
+// Logo de la plateforme : un engrenage (Arts et Métiers) qui porte le monogramme EM
+export function BrandLogo({ size = 38 }) {
+  const teeth = Array.from({ length: 10 }, (_, i) => {
+    const a = (i / 10) * Math.PI * 2;
+    return `<rect x="22.5" y="1.5" width="5" height="8" rx="1.4" transform="rotate(${(a * 180) / Math.PI} 25 25)"/>`;
+  }).join('');
+  return html`<svg class="brand-logo" width=${size} height=${size} viewBox="0 0 50 50" aria-hidden="true" dangerouslySetInnerHTML=${{ __html: `
+    <g fill="var(--accent)">${teeth}<circle cx="25" cy="25" r="18"/></g>
+    <circle cx="25" cy="25" r="14.5" fill="none" stroke="var(--accent-ink)" stroke-opacity=".35" stroke-width="1"/>
+    <text x="25" y="29.6" text-anchor="middle" font-family="Bricolage Grotesque, system-ui, sans-serif" font-weight="750" font-size="13" fill="var(--accent-ink)">EM</text>` }}></svg>`;
+}
+
+// « Logo » d'entreprise : monogramme coloré, stable pour un même nom
+export function CompanyLogo({ name = '', size = 44 }) {
+  const words = name.replace(/\(.*?\)/g, '').split(/[\s\-–&]+/).filter(w => w && !/^(de|du|la|le|des|group|groupe|maroc|morocco|corporation|operations)$/i.test(w));
+  const ini = (words.length >= 2 ? words[0][0] + words[1][0] : (words[0] || name).slice(0, 2)).toUpperCase();
+  return html`<span class="clogo" style=${`--h:${hueOf(name)};width:${size}px;height:${size}px;font-size:${Math.round(size * 0.36)}px`} aria-hidden="true">${ini}</span>`;
+}
+
+export const TYPE_ICON = { stage: 'wrench', pfe: 'cap', etranger: 'globe', emploi: 'briefcase' };

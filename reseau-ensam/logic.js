@@ -57,7 +57,7 @@ export function placementOf(data, uid, saison) {
 export function statutOf(data, p, saison) {
   const pl = placementOf(data, p.id, saison);
   if (pl && FOUND.has(pl.status)) return { key: 'trouve', label: 'Trouvé', pl };
-  if (pl && pl.status === 'en_attente') return { key: 'validation', label: 'En validation', pl };
+  if (pl && pl.status === 'en_attente') return { key: 'validation', label: 'À confirmer', pl };
   const apps = data.applications.filter(a => a.student_id === p.id);
   if (apps.some(a => a.status === 'entretien')) return { key: 'entretiens', label: 'Entretiens en cours' };
   if (apps.length) return { key: 'candidatures', label: 'Candidatures envoyées' };
@@ -119,9 +119,9 @@ function tally(arr) {
 // ---------------------------------------------------------------------------
 export const BAREME = [
   ['Offre publiée', 10],
-  ['« Ça m’aide » reçu sur une offre', 2],
+  ['Candidature reçue sur une offre', 2],
   ['Commentaire utile', 1],
-  ['Étudiant recruté grâce à ton offre (confirmé)', 50],
+  ['Étudiant recruté (confirmé par l’étudiant)', 50],
   ['Bonus stage ou emploi à l’étranger', 25],
   ['Mentorat accepté', 10],
   ['Mentorat terminé', 20],
@@ -129,7 +129,7 @@ export const BAREME = [
   ['Réponse dans l’Entraide', 5],
   ['Meilleure réponse choisie', 15],
   ['Vote reçu sur une réponse', 2],
-  ['Réussite déclarée (étudiant)', 10],
+  ['Réussite enregistrée (étudiant)', 10],
 ];
 
 export const NIVEAUX_IMPACT = [
@@ -150,17 +150,17 @@ export function levelOf(points) {
 // Retourne une Map id -> { points, events[], stats } ; `since` limite aux événements récents.
 export function computeScores(data, since = null) {
   const S = new Map();
-  const get = id => { if (!S.has(id)) S.set(id, { points: 0, events: [], offres: 0, recrutes: 0, etranger: 0, mentorats: 0, mercis: 0, reponses: 0, meilleures: 0, utiles: 0 }); return S.get(id); };
+  const get = id => { if (!S.has(id)) S.set(id, { points: 0, events: [], offres: 0, recrutes: 0, etranger: 0, mentorats: 0, mercis: 0, reponses: 0, meilleures: 0, candidatures: 0 }); return S.get(id); };
   const add = (id, pts, label, at) => {
     if (!id) return; if (since && new Date(at) < since) return;
     const s = get(id); s.points += pts; s.events.push({ pts, label, at });
   };
   const offerAuthor = new Map(data.offers.map(o => [o.id, o.author_id]));
   for (const o of data.offers) { add(o.author_id, 10, `Offre publiée : ${o.titre}`, o.created_at); get(o.author_id).offres++; }
-  for (const r of data.reactions) if (r.kind === 'utile') { const a = offerAuthor.get(r.offer_id); if (a && a !== r.user_id) { add(a, 2, '« Ça m’aide » sur ton offre', r.created_at); get(a).utiles++; } }
+  for (const ap of data.applications) if (ap.offer_id) { const a = offerAuthor.get(ap.offer_id); if (a && a !== ap.student_id) { add(a, 2, 'Candidature reçue', ap.created_at); get(a).candidatures++; } }
   for (const c of data.comments) add(c.author_id, 1, 'Commentaire', c.created_at);
   for (const p of data.placements) {
-    if (FOUND.has(p.status)) add(p.student_id, 10, 'Réussite déclarée', p.created_at);
+    if (FOUND.has(p.status)) add(p.student_id, 10, 'Réussite enregistrée', p.created_at);
     if (p.status === 'confirme' && p.laureat_id) {
       const at = p.confirmed_at || p.created_at;
       add(p.laureat_id, 50, `Étudiant recruté chez ${p.entreprise}`, at); get(p.laureat_id).recrutes++;

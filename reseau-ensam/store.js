@@ -18,7 +18,7 @@ class Base {
 // ---------------------------------------------------------------------------
 // Démo : données d'exemple, gardées dans le navigateur du visiteur
 // ---------------------------------------------------------------------------
-const DEMO_KEY = 'ensam-demo-v3';
+const DEMO_KEY = 'ensam-demo-v4';
 class DemoStore extends Base {
   constructor() { super(); this.mode = 'demo'; }
   async init() {
@@ -36,10 +36,11 @@ class DemoStore extends Base {
   async insert(table, row) {
     const r = { id: uuid(), created_at: new Date().toISOString(), ...row };
     if (table === 'placements') applyPlacementRules(this, r, null);
+    if (table === 'applications') applyApplicationRules(this, r, null);
     if (table === 'mentorships') { r.status = 'demande'; }
     if (table === 'reactions' && this.data.reactions.some(x => x.offer_id === r.offer_id && x.user_id === r.user_id && x.kind === r.kind)) return r;
     if (table === 'votes' && this.data.votes.some(x => x.answer_id === r.answer_id && x.user_id === r.user_id)) return r;
-    if (table === 'placements' && this.data.placements.some(x => x.student_id === r.student_id && x.saison === r.saison)) throw new Error('Tu as déjà déclaré une réussite pour cette saison. Modifie-la plutôt.');
+    if (table === 'placements' && this.data.placements.some(x => x.student_id === r.student_id && x.saison === r.saison && x.status !== 'refuse')) throw new Error('Une réussite est déjà enregistrée pour cet étudiant cette saison.');
     this.data[table] = [r, ...this.data[table]];
     if (table === 'profiles' && r.id === this.me?.id) this.me = r;
     this.persist(); this.emit();
@@ -49,6 +50,7 @@ class DemoStore extends Base {
     const old = this.byId(table, id); if (!old) return null;
     const r = { ...old, ...patch };
     if (table === 'placements') applyPlacementRules(this, r, old);
+    if (table === 'applications') applyApplicationRules(this, r, old);
     this.data[table] = this.data[table].map(x => x.id === id ? r : x);
     if (table === 'profiles' && id === this.me?.id) this.me = r;
     this.persist(); this.emit();
@@ -61,15 +63,38 @@ class DemoStore extends Base {
   async signOut() {}
 }
 
-// Mêmes règles que le serveur, pour que la démo se comporte comme la vraie plateforme
+// Mêmes règles que le serveur (supabase/schema.sql), pour que la démo se comporte comme la vraie plateforme.
+// Un recrutement via une offre est déclaré par le lauréat auteur, puis confirmé par l'étudiant.
 function applyPlacementRules(store, r, old) {
-  const isAdmin = store.me?.role === 'admin';
+  const me = store.me; const isAdmin = me?.role === 'admin';
   if (!old) {
-    if (r.offer_id) { r.laureat_id = store.byId('offers', r.offer_id)?.author_id || null; r.source = 'plateforme'; }
-    if (!isAdmin) r.status = r.laureat_id && r.laureat_id !== r.student_id ? 'en_attente' : 'declare';
+    if (isAdmin) { if (r.status === 'confirme') r.confirmed_at = new Date().toISOString(); return; }
+    if (r.student_id === me?.id) { Object.assign(r, { source: 'autre', status: 'declare', offer_id: null, laureat_id: null }); return; }
+    if (me?.role !== 'laureat') throw new Error('Seul un lauréat peut déclarer un recrutement.');
+    if (r.offer_id && store.byId('offers', r.offer_id)?.author_id !== me.id) throw new Error('Seul l’auteur de l’offre peut déclarer ce recrutement.');
+    Object.assign(r, { laureat_id: me.id, source: 'plateforme', status: 'en_attente', confirmed_at: null });
     return;
   }
-  if (r.status !== old.status && r.status === 'confirme') r.confirmed_at = new Date().toISOString();
+  if (isAdmin) { if (r.status === 'confirme' && old.status !== 'confirme') r.confirmed_at = new Date().toISOString(); return; }
+  if (old.student_id === me?.id) {
+    if (r.status !== old.status && !(old.status === 'en_attente' && ['confirme', 'refuse'].includes(r.status))) r.status = old.status;
+    if (r.status === 'confirme' && old.status !== 'confirme') r.confirmed_at = new Date().toISOString();
+    if (old.source !== 'autre') for (const k of ['entreprise', 'ville', 'pays', 'type', 'offer_id', 'laureat_id', 'saison', 'niveau']) r[k] = old[k];
+    return;
+  }
+  throw new Error('Seul l’étudiant concerné peut confirmer ce recrutement.');
+}
+
+function applyApplicationRules(store, r, old) {
+  const me = store.me; if (me?.role === 'admin') return;
+  if (!old) {
+    if (r.offer_id) { const o = store.byId('offers', r.offer_id); if (o) { r.entreprise = o.entreprise; r.titre = o.titre; } r.status = 'postule'; }
+    if (r.offer_id && store.data.applications.some(a => a.offer_id === r.offer_id && a.student_id === r.student_id)) throw new Error('Tu as déjà postulé à cette offre.');
+    return;
+  }
+  const author = old.offer_id ? store.byId('offers', old.offer_id)?.author_id : null;
+  if (author && author === me?.id) { for (const k of Object.keys(r)) if (!['status', 'updated_at'].includes(k)) r[k] = old[k]; return; }
+  if (old.student_id === me?.id && old.offer_id && r.status !== old.status) r.status = old.status;
 }
 
 // ---------------------------------------------------------------------------
@@ -171,7 +196,8 @@ function frError(e) {
   if (m.includes('already registered')) return 'Un compte existe déjà avec cet email. Connecte-toi.';
   if (m.includes('password should be')) return 'Le mot de passe doit contenir au moins 6 caractères.';
   if (m.includes('email not confirmed')) return "Confirme d'abord ton email (regarde ta boîte de réception).";
-  if (m.includes('duplicate key') && m.includes('placements')) return 'Tu as déjà déclaré une réussite pour cette saison. Modifie-la plutôt.';
+  if (m.includes('duplicate key') && m.includes('placements')) return 'Une réussite est déjà enregistrée pour cet étudiant cette saison.';
+  if (m.includes('duplicate key') && m.includes('applications')) return 'Tu as déjà postulé à cette offre.';
   if (m.includes('row-level security')) return "Action non autorisée pour ton compte.";
   if (m.includes('rate limit')) return 'Trop de tentatives. Réessaie dans quelques minutes.';
   return e?.message || 'Erreur inconnue.';

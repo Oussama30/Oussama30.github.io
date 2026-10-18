@@ -26,8 +26,8 @@ export function DashboardPage(ctx) {
 
     <div class="kpis">
       <div class="kpi"><span class="kpi-label">Ont trouvé</span><span class="kpi-val mono">${totalFound}<small>/${totalPop}</small></span><span class="small muted">${pct(totalPop ? totalFound / totalPop : 0)} des inscrits 3A, 4A, 5A et jeunes diplômés</span></div>
-      <div class="kpi"><span class="kpi-label">Grâce à la plateforme</span><span class="kpi-val mono">${st.viaTotal}</span><span class="small muted">${pct(st.totalFound ? st.viaTotal / st.totalFound : 0)} des réussites, vérifiées par un lauréat</span></div>
-      <div class="kpi"><span class="kpi-label">En validation</span><span class="kpi-val mono">${pendingAll}</span><span class="small muted">en attente de confirmation du lauréat</span></div>
+      <div class="kpi"><span class="kpi-label">Grâce à la plateforme</span><span class="kpi-val mono">${st.viaTotal}</span><span class="small muted">${pct(st.totalFound ? st.viaTotal / st.totalFound : 0)} des réussites, vérifiées des deux côtés</span></div>
+      <div class="kpi"><span class="kpi-label">À confirmer</span><span class="kpi-val mono">${pendingAll}</span><span class="small muted">recrutés, attendent la confirmation de l’étudiant</span></div>
       <div class="kpi"><span class="kpi-label">Offres ouvertes</span><span class="kpi-val mono">${openOffers}</span><span class="small muted">publiées par ${new Set(data.offers.filter(o => o.status === 'ouverte').map(o => o.author_id)).size} lauréats</span></div>
     </div>
 
@@ -38,7 +38,7 @@ export function DashboardPage(ctx) {
       return html`<button class=${'niv-card' + (niv === r.n ? ' on' : '')} onClick=${() => setNiv(r.n)} aria-pressed=${niv === r.n}>
         <div class="niv-top"><span class="niv-badge">${NIVEAUX[r.n].short}</span><span class=${'status s-' + tone}><span class="sdot"></span>${toneTxt}</span></div>
         <strong class="niv-obj">${r.objectif.titre}</strong>
-        <div class="niv-num"><span class="mono big">${pct(r.rate)}</span><span class="muted small">${r.found} sur ${r.total}${r.pending ? ` · ${r.pending} en validation` : ''}</span></div>
+        <div class="niv-num"><span class="mono big">${pct(r.rate)}</span><span class="muted small">${r.found} sur ${r.total}${r.pending ? ` · ${r.pending} à confirmer` : ''}</span></div>
         <${Bar} value=${r.rate} pace=${r.daysLeft >= 0 ? pace : undefined} label=${`${pct(r.rate)} ont trouvé`}/>
         <span class="small muted">${r.daysLeft >= 0 ? `Échéance ${r.end.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} · J-${r.daysLeft}` : `Échéance passée (${r.end.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })})`} · ${r.via} via la plateforme</span>
       </button>`;
@@ -102,7 +102,7 @@ function ExportBox({ data, saison, rows }) {
       const n = r.n; const lvl = (5 - (p.promo - (saison + 1)));
       const pn = lvl <= 5 ? lvl : p.promo === saison ? 6 : 7; if (pn !== n) continue;
       const pl = data.placements.find(x => x.student_id === p.id && x.saison === saison && x.status !== 'refuse');
-      lines.push([p.full_name, NIVEAUX[n].short, p.filiere, p.promo, pl ? (FOUND.has(pl.status) ? 'Trouvé' : 'En validation') : 'En recherche', pl?.entreprise || '', pl?.ville || '', pl?.pays || '', pl ? (pl.source === 'plateforme' ? 'Plateforme' : 'Autre') : '', pl?.status === 'confirme' ? 'Oui' : '']);
+      lines.push([p.full_name, NIVEAUX[n].short, p.filiere, p.promo, pl ? (FOUND.has(pl.status) ? 'Trouvé' : 'À confirmer') : 'En recherche', pl?.entreprise || '', pl?.ville || '', pl?.pays || '', pl ? (pl.source === 'plateforme' ? 'Plateforme' : 'Autre') : '', pl?.status === 'confirme' ? 'Oui' : '']);
     }
     const csv = '﻿' + lines.map(l => l.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
     setHref(URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })));

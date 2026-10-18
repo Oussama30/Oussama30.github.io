@@ -1,104 +1,121 @@
 // Point d'entrée : coque de l'application, connexion, accueil, notifications.
 import { html, render, useState, useEffect, useMemo } from './vendor/preact-htm.js';
 import { createStore } from './store.js';
-import { Icon, Modal, Field, Empty, Person, Avatar, Bar, Toaster, toast, Confirm, LevelChip } from './ui.js';
-import { seasonOf, seasonLabel, niveauOf, NIVEAUX, OBJECTIFS, statutOf, seasonStats, computeScores, timeAgo, pct, TYPES, levelOf } from './logic.js';
-import { OffersPage, OfferCard } from './offers.js';
-import { ParcoursPage, ImpactPage, DeclareModal } from './me.js';
+import { Icon, Modal, Field, Empty, Person, Avatar, Bar, Toaster, toast, Confirm, LevelChip, BrandLogo, CompanyLogo } from './ui.js';
+import { seasonOf, seasonLabel, niveauOf, NIVEAUX, OBJECTIFS, statutOf, seasonStats, computeScores, timeAgo, pct } from './logic.js';
+import { OffersPage, OfferCard, OfferDetail, OfferComposer, matchesMe, APP_STATUS } from './offers.js';
+import { ParcoursPage, EspacePage, ConfirmRecruit, Journey, journeyStep } from './me.js';
 import { DashboardPage } from './dashboard.js';
-import { MentoratPage, EntraidePage, CommunautePage, ProfileModal, ProfileForm, AdminPage } from './community.js';
+import { ReseauPage, ProfileModal, ProfileForm, AdminPage } from './community.js';
 
-const ROUTES = ['accueil', 'offres', 'parcours', 'impact', 'mentorat', 'entraide', 'tableau', 'communaute', 'profil', 'admin'];
+const ROUTES = ['accueil', 'offres', 'parcours', 'espace', 'reseau', 'suivi', 'profil', 'admin'];
+const ALIASES = { impact: 'espace', tableau: 'suivi', communaute: 'reseau', mentorat: 'reseau/mentorat', entraide: 'reseau/entraide' };
 
 function navFor(me) {
   const items = [['accueil', 'Accueil', 'home'], ['offres', 'Offres', 'feed']];
   if (me.role === 'etudiant') items.push(['parcours', 'Mon parcours', 'route']);
-  else items.push(['impact', 'Mon impact', 'star']);
-  items.push(['mentorat', 'Mentorat', 'mentor'], ['entraide', 'Entraide', 'qa'], ['tableau', 'Tableau de bord', 'chart'], ['communaute', 'Communauté', 'people']);
-  if (me.role === 'admin') items.push(['admin', 'Administration', 'shield']);
+  else if (me.role === 'laureat') items.push(['espace', 'Mon espace', 'star']);
+  items.push(['reseau', 'Réseau', 'network'], ['suivi', 'Suivi', 'chart']);
+  if (me.role === 'admin') items.push(['admin', 'Admin', 'shield']);
   return items;
 }
 
-function readRoute() { const h = (location.hash || '').slice(1); return ROUTES.includes(h) ? h : 'accueil'; }
+function readRoute() {
+  let h = decodeURIComponent((location.hash || '').slice(1));
+  h = ALIASES[h] || h;
+  const [base, sub] = h.split('/');
+  return ROUTES.includes(base) ? { base, sub: sub || '' } : { base: 'accueil', sub: '' };
+}
 
 function App({ store }) {
   const [, setTick] = useState(0);
   const [route, setRoute] = useState(readRoute);
   const [profile, setProfile] = useState(null);
+  const [offerId, setOfferId] = useState(null);
   const [askMentor, setAskMentor] = useState(null);
   const [confirmBox, setConfirmBox] = useState(null);
-  const [bell, setBell] = useState(false);
+  const [pop, setPop] = useState(null); // 'bell' | 'me'
   useEffect(() => store.on(() => setTick(t => t + 1)), []);
   useEffect(() => { const f = () => setRoute(readRoute()); addEventListener('hashchange', f); return () => removeEventListener('hashchange', f); }, []);
-  const go = r => { try { history.replaceState(null, '', '#' + r); } catch { /* cadre */ } setRoute(r); setBell(false); window.scrollTo?.(0, 0); };
+  useEffect(() => { if (!pop) return; const f = e => { if (!e.target.closest('.pop-wrap')) setPop(null); }; document.addEventListener('click', f); return () => document.removeEventListener('click', f); }, [pop]);
+  const go = r => { try { history.replaceState(null, '', '#' + r); } catch { /* cadre */ } const [base, sub] = r.split('/'); setRoute({ base, sub: sub || '' }); setPop(null); window.scrollTo?.(0, 0); };
 
   const data = store.data;
   const me = store.me;
   const saison = seasonOf();
-  const scores = useMemo(() => computeScores(data), [data.offers, data.reactions, data.comments, data.placements, data.mentorships, data.answers, data.questions, data.votes]);
+  const scores = useMemo(() => computeScores(data), [data.offers, data.applications, data.comments, data.placements, data.mentorships, data.answers, data.questions, data.votes]);
 
   if (store.mode === 'live' && !store.session) return html`<${AuthScreen} store=${store}/>`;
   if (store.mode === 'live' && !me) return html`<${Onboarding} store=${store}/>`;
 
   const act = async fn => { try { await fn(); } catch (e) { toast(e.message || String(e), 'err'); } };
-  const ctx = { store, data, me, saison, scores, go, act, openProfile: p => p && setProfile(p), confirm: (text, onYes) => setConfirmBox({ text, onYes }) };
+  const ctx = {
+    store, data, me, saison, scores, go, act, sub: route.sub,
+    openProfile: p => p && setProfile(p),
+    openOffer: id => { setOfferId(id); setPop(null); },
+    confirm: (text, onYes, yes) => setConfirmBox({ text, onYes, yes }),
+  };
   const notifs = buildNotifs(ctx);
-  const unseen = notifs.filter(n => n.action).length;
+  const todo = notifs.filter(n => n.action).length;
   const nav = navFor(me);
-  const page = route === 'parcours' && me.role !== 'etudiant' ? 'impact' : route === 'impact' && me.role === 'etudiant' ? 'parcours' : route === 'admin' && me.role !== 'admin' ? 'accueil' : route;
+  let page = route.base;
+  if (page === 'parcours' && me.role !== 'etudiant') page = me.role === 'laureat' ? 'espace' : 'accueil';
+  if (page === 'espace' && me.role !== 'laureat') page = me.role === 'etudiant' ? 'parcours' : 'accueil';
+  if (page === 'admin' && me.role !== 'admin') page = 'accueil';
+  const openNotif = n => { setPop(null); if (n.offer) ctx.openOffer(n.offer); else go(n.to); };
+  const dotFor = k => (k === 'parcours' || k === 'espace') && notifs.some(n => n.action && n.mine);
 
   return html`<div class="shell">
     <aside class="side">
-      <div class="brand"><span class="brand-mark" aria-hidden="true">EM</span><span class="brand-txt"><strong>Réseau ENSAM</strong><span>Meknès · Lauréats & étudiants</span></span></div>
-      <nav class="side-nav">${nav.map(([k, l, i]) => html`<a href=${'#' + k} class=${page === k ? 'on' : ''} onClick=${e => { e.preventDefault(); go(k); }}><${Icon} name=${i}/> ${l}${k === 'impact' && notifs.some(n => n.kind === 'confirm') ? html`<span class="dotn"></span>` : null}</a>`)}</nav>
+      <a class="brand" href="#accueil" onClick=${e => { e.preventDefault(); go('accueil'); }}><${BrandLogo} size=${40}/><span class="brand-txt"><strong>Réseau ENSAM</strong><span>Meknès · Lauréats & étudiants</span></span></a>
+      <nav class="side-nav">${nav.map(([k, l, i]) => html`<a href=${'#' + k} class=${page === k ? 'on' : ''} onClick=${e => { e.preventDefault(); go(k); }}><span class="nav-ico"><${Icon} name=${i}/></span> ${l}${dotFor(k) ? html`<span class="dotn"></span>` : null}</a>`)}</nav>
       <div class="side-foot"><span class="mono small muted">Saison ${seasonLabel(saison)}</span></div>
     </aside>
     <div class="main">
       <header class="top">
-        <div class="brand mobile-only"><span class="brand-mark" aria-hidden="true">EM</span><strong>Réseau ENSAM</strong></div>
+        <a class="brand mobile-only" href="#accueil" onClick=${e => { e.preventDefault(); go('accueil'); }}><${BrandLogo} size=${34}/><strong>Réseau ENSAM</strong></a>
         <span class="spacer"></span>
         ${store.mode === 'demo' ? html`<${PersonaSwitch} store=${store} go=${go}/>` : null}
-        <div class="bell-wrap"><button class="icon-btn" aria-label=${`Notifications (${unseen})`} aria-expanded=${bell} onClick=${() => setBell(!bell)}><${Icon} name="bell"/>${unseen ? html`<span class="badge-n">${unseen}</span>` : null}</button>
-          ${bell ? html`<div class="bell-pop" role="menu"><h3>Notifications</h3>${notifs.length ? notifs.slice(0, 12).map(n => html`<button class=${'notif' + (n.action ? ' act' : '')} onClick=${() => { go(n.to); }}><${Icon} name=${n.icon} size=${16}/><span>${n.text}<span class="muted small">${timeAgo(n.at)}</span></span></button>`) : html`<p class="muted small">Rien de nouveau.</p>`}</div>` : null}
+        <div class="pop-wrap"><button class="icon-btn" aria-label=${`Notifications (${todo} à traiter)`} aria-expanded=${pop === 'bell'} onClick=${() => setPop(pop === 'bell' ? null : 'bell')}><${Icon} name="bell"/>${todo ? html`<span class="badge-n">${todo}</span>` : null}</button>
+          ${pop === 'bell' ? html`<div class="bell-pop" role="menu"><h3>Notifications</h3>${notifs.length ? notifs.slice(0, 14).map(n => html`<button class=${'notif' + (n.action ? ' act' : '')} onClick=${() => openNotif(n)}><span class=${'n-ico ' + (n.tone || '')}><${Icon} name=${n.icon} size=${16}/></span><span>${n.text}<span class="muted small">${timeAgo(n.at)}</span></span></button>`) : html`<p class="muted small">Rien de nouveau.</p>`}</div>` : null}
         </div>
-        <button class="me-btn" onClick=${() => go('profil')} aria-label="Mon profil"><${Avatar} p=${me} size=${32}/></button>
+        <div class="pop-wrap"><button class="me-btn" onClick=${() => setPop(pop === 'me' ? null : 'me')} aria-label="Mon compte" aria-expanded=${pop === 'me'}><${Avatar} p=${me} size=${34}/></button>
+          ${pop === 'me' ? html`<div class="menu-pop right" role="menu">
+            <div class="menu-who"><strong>${me.full_name}</strong><span class="muted small">${me.role === 'etudiant' ? 'Étudiant(e)' : me.role === 'laureat' ? 'Lauréat(e)' : 'Administration'}</span></div>
+            <button onClick=${() => go('profil')}><${Icon} name="user" size=${16}/> Mon profil</button>
+            ${me.role === 'admin' ? html`<button onClick=${() => go('admin')}><${Icon} name="shield" size=${16}/> Administration</button>` : null}
+            ${store.mode === 'live' ? html`<button onClick=${() => store.signOut()}><${Icon} name="logout" size=${16}/> Se déconnecter</button>` : html`<button onClick=${() => { store.reset(); setPop(null); toast('Démo réinitialisée.'); }}><${Icon} name="spark" size=${16}/> Réinitialiser la démo</button>`}
+          </div>` : null}
+        </div>
       </header>
-      ${store.mode === 'demo' ? html`<div class="demo-band">Démonstration avec des données fictives. Change de rôle en haut à droite pour tester chaque espace. Les changements restent dans ce navigateur.</div>` : null}
+      ${store.mode === 'demo' ? html`<div class="demo-band"><${Icon} name="spark" size=${15}/><span>Démo avec des données fictives. Essaie le circuit : <b>Salma</b> postule, <b>Youssef</b> (lauréat) la marque « Recruté(e) », puis Salma confirme. Change de rôle en haut.</span></div>` : null}
       <main class="content">
-        ${page === 'accueil' ? html`<${Home} ...${ctx} notifs=${notifs}/>` : null}
+        ${page === 'accueil' ? html`<${Home} ...${ctx} notifs=${notifs} openNotif=${openNotif}/>` : null}
         ${page === 'offres' ? html`<${OffersPage} ...${ctx}/>` : null}
         ${page === 'parcours' ? html`<${ParcoursPage} ...${ctx}/>` : null}
-        ${page === 'impact' ? html`<${ImpactPage} ...${ctx}/>` : null}
-        ${page === 'mentorat' ? html`<${MentoratPage} ...${ctx}/>` : null}
-        ${page === 'entraide' ? html`<${EntraidePage} ...${ctx}/>` : null}
-        ${page === 'tableau' ? html`<${DashboardPage} ...${ctx}/>` : null}
-        ${page === 'communaute' ? html`<${CommunautePage} ...${ctx}/>` : null}
+        ${page === 'espace' ? html`<${EspacePage} ...${ctx}/>` : null}
+        ${page === 'reseau' ? html`<${ReseauPage} ...${ctx}/>` : null}
+        ${page === 'suivi' ? html`<${DashboardPage} ...${ctx}/>` : null}
         ${page === 'admin' ? html`<${AdminPage} ...${ctx}/>` : null}
         ${page === 'profil' ? html`<${MyProfile} ctx=${ctx}/>` : null}
       </main>
     </div>
-    <nav class="bottom-nav">${nav.filter(([k]) => ['accueil', 'offres', 'parcours', 'impact', 'tableau', 'communaute'].includes(k)).map(([k, l, i]) => html`<a href=${'#' + k} class=${page === k ? 'on' : ''} onClick=${e => { e.preventDefault(); go(k); }}><${Icon} name=${i}/><span>${{ 'Tableau de bord': 'Suivi', 'Mon parcours': 'Parcours', 'Mon impact': 'Impact' }[l] || l}</span></a>`)}
-      <${MoreMenu} nav=${nav} go=${go} page=${page}/></nav>
-    ${profile ? html`<${ProfileModal} ctx=${ctx} p=${profile} onClose=${() => setProfile(null)} onAskMentor=${p => { setProfile(null); setAskMentor(p); go('mentorat'); }}/>` : null}
+    <nav class="bottom-nav">${nav.map(([k, l, i]) => html`<a href=${'#' + k} class=${page === k ? 'on' : ''} onClick=${e => { e.preventDefault(); go(k); }}><span class="bn-ico"><${Icon} name=${i}/>${dotFor(k) ? html`<span class="dotn"></span>` : null}</span><span>${{ 'Mon parcours': 'Parcours', 'Mon espace': 'Espace' }[l] || l}</span></a>`)}</nav>
+    ${offerId ? html`<${OfferDetail} ctx=${ctx} id=${offerId} key=${offerId} onClose=${() => setOfferId(null)}/>` : null}
+    ${profile ? html`<${ProfileModal} ctx=${ctx} p=${profile} onClose=${() => setProfile(null)} onAskMentor=${p => { setProfile(null); setAskMentor(p); }}/>` : null}
     ${askMentor ? html`<${QuickAsk} ctx=${ctx} mentor=${askMentor} onClose=${() => setAskMentor(null)}/>` : null}
-    ${confirmBox ? html`<${Confirm} text=${confirmBox.text} onYes=${confirmBox.onYes} onClose=${() => setConfirmBox(null)} yes="Supprimer"/>` : null}
+    ${confirmBox ? html`<${Confirm} text=${confirmBox.text} onYes=${confirmBox.onYes} onClose=${() => setConfirmBox(null)} yes=${confirmBox.yes || 'Supprimer'}/>` : null}
     <${Toaster}/>
   </div>`;
 }
 
-function MoreMenu({ nav, go, page }) {
-  const [open, setOpen] = useState(false);
-  const rest = nav.filter(([k]) => !['accueil', 'offres', 'parcours', 'impact', 'tableau', 'communaute'].includes(k));
-  return html`<div class="more"><button class=${rest.some(([k]) => k === page) ? 'on' : ''} onClick=${() => setOpen(!open)} aria-expanded=${open}><${Icon} name="menu"/><span>Plus</span></button>
-    ${open ? html`<div class="more-pop">${rest.map(([k, l, i]) => html`<button onClick=${() => { setOpen(false); go(k); }}><${Icon} name=${i}/> ${l}</button>`)}<button onClick=${() => { setOpen(false); go('profil'); }}><${Icon} name="user"/> Mon profil</button></div>` : null}</div>`;
-}
-
 function QuickAsk({ ctx, mentor, onClose }) {
-  const { store, me, act } = ctx;
+  const { store, me, act, go } = ctx;
   const [sujet, setSujet] = useState(''); const [msg, setMsg] = useState('');
   return html`<${Modal} title=${`Demande à ${mentor.full_name}`} onClose=${onClose}>
-    <form class="form" onSubmit=${e => { e.preventDefault(); act(async () => { await store.insert('mentorships', { student_id: me.id, mentor_id: mentor.id, sujet: sujet.trim(), message: msg.trim() }); toast('Demande envoyée.'); onClose(); }); }}>
-      <${Field} label="Sujet"><input id="qa-sujet" value=${sujet} onInput=${e => setSujet(e.target.value)} maxlength="140"/><//>
+    <form class="form" onSubmit=${e => { e.preventDefault(); act(async () => { await store.insert('mentorships', { student_id: me.id, mentor_id: mentor.id, sujet: sujet.trim(), message: msg.trim() }); toast('Demande envoyée.'); onClose(); go('reseau/mentorat'); }); }}>
+      ${mentor.mentor_sujets ? html`<p class="muted small">Peut t’aider sur : ${mentor.mentor_sujets}</p>` : null}
+      <${Field} label="Sujet"><input id="qa-sujet" value=${sujet} onInput=${e => setSujet(e.target.value)} maxlength="140" placeholder="Ex. Préparer mon entretien chez…"/><//>
       <${Field} label="Message"><textarea id="qa-msg" rows="4" value=${msg} onInput=${e => setMsg(e.target.value)} maxlength="1500"></textarea><//>
       <div class="row-end"><button type="button" class="btn ghost" onClick=${onClose}>Annuler</button><button class="btn primary" disabled=${sujet.trim().length < 3}>Envoyer</button></div>
     </form><//>`;
@@ -107,94 +124,125 @@ function QuickAsk({ ctx, mentor, onClose }) {
 function PersonaSwitch({ store, go }) {
   const ps = store.personas();
   return html`<label class="persona"><span class="small muted">Voir en tant que</span>
-    <select id="persona" value=${store.me?.id} onChange=${e => { store.switchTo(e.target.value); go('accueil'); }}>${ps.map(p => html`<option value=${p.id}>${p._persona}</option>`)}</select></label>`;
+    <select id="persona" value=${store.me?.id} onChange=${e => { store.switchTo(e.target.value); go('accueil'); }}>${ps.map(p => html`<option value=${p.id}>${p._persona} · ${p.full_name.split(' ')[0]}</option>`)}</select></label>`;
 }
 
 // ---------------------------------------------------------------------------
 // Notifications calculées à partir des données
 // ---------------------------------------------------------------------------
+const recent = (iso, days) => Date.now() - new Date(iso) < days * 864e5;
+
 function buildNotifs({ data, me, store, saison }) {
   const out = [];
   const name = id => store.byId('profiles', id)?.full_name || 'Un membre';
-  for (const p of data.placements) if (p.laureat_id === me.id && p.status === 'en_attente') out.push({ kind: 'confirm', action: true, icon: 'trophy', to: 'impact', at: p.created_at, text: `${name(p.student_id)} dit avoir été retenu(e) chez ${p.entreprise} grâce à ton offre. Confirme-le.` });
-  for (const m of data.mentorships) {
-    if (m.mentor_id === me.id && m.status === 'demande') out.push({ action: true, icon: 'mentor', to: 'mentorat', at: m.created_at, text: `${name(m.student_id)} te demande un mentorat : ${m.sujet}` });
-    if (m.student_id === me.id && m.status === 'acceptee') out.push({ icon: 'mentor', to: 'mentorat', at: m.created_at, text: `${name(m.mentor_id)} a accepté ta demande : ${m.sujet}` });
+  const first = id => name(id).split(' ')[0];
+  // Étudiant : recrutement à confirmer, évolution des candidatures, nouvelles offres
+  for (const p of data.placements) {
+    if (p.student_id !== me.id) continue;
+    if (p.status === 'en_attente') out.push({ action: true, mine: true, tone: 'accent', icon: 'briefcase', to: 'parcours', at: p.created_at, text: `${name(p.laureat_id)} indique t’avoir recruté(e) chez ${p.entreprise}. Confirme-le.` });
+    if (p.status === 'confirme' && p.laureat_id && !p.merci) out.push({ action: true, mine: true, tone: 'brass', icon: 'heart', to: 'parcours', at: p.confirmed_at || p.created_at, text: `Ta réussite chez ${p.entreprise} est confirmée. Laisse un merci à ${first(p.laureat_id)}.` });
   }
-  for (const p of data.placements) if (p.student_id === me.id && p.status === 'confirme' && p.laureat_id) out.push({ icon: 'check', to: 'parcours', at: p.confirmed_at || p.created_at, action: !p.merci, text: `${name(p.laureat_id)} a confirmé ta réussite chez ${p.entreprise}.${p.merci ? '' : ' Laisse-lui un merci.'}` });
-  const myOffers = new Set(data.offers.filter(o => o.author_id === me.id).map(o => o.id));
-  for (const c of data.comments) if (myOffers.has(c.offer_id) && c.author_id !== me.id && Date.now() - new Date(c.created_at) < 14 * 864e5) out.push({ icon: 'comment', to: 'offres', at: c.created_at, text: `${name(c.author_id)} a commenté ton offre : « ${c.body.slice(0, 60)}${c.body.length > 60 ? '…' : ''} »` });
-  const myQ = new Set(data.questions.filter(q => q.author_id === me.id).map(q => q.id));
-  for (const a of data.answers) if (myQ.has(a.question_id) && a.author_id !== me.id) out.push({ icon: 'qa', to: 'entraide', at: a.created_at, text: `${name(a.author_id)} a répondu à ta question.` });
+  for (const a of data.applications) if (a.student_id === me.id && a.offer_id && a.status !== 'postule' && recent(a.updated_at || a.created_at, 21)) {
+    out.push({ icon: a.status === 'refuse' ? 'x' : a.status === 'entretien' ? 'people' : 'check', tone: a.status === 'refuse' ? '' : 'good', offer: a.offer_id, at: a.updated_at || a.created_at, text: `Ta candidature « ${a.titre} » : ${APP_STATUS[a.status]}.` });
+  }
   if (me.role === 'etudiant') {
-    const n = niveauOf(me, saison);
-    for (const o of data.offers) if (o.status === 'ouverte' && (o.annees || []).includes(n) && (!o.filieres?.length || o.filieres.includes(me.filiere)) && Date.now() - new Date(o.created_at) < 7 * 864e5) out.push({ icon: 'feed', to: 'offres', at: o.created_at, text: `Nouvelle offre pour toi : ${o.titre} (${o.entreprise})` });
+    for (const o of data.offers) if (o.status === 'ouverte' && matchesMe(o, me, saison) && recent(o.created_at, 7)) out.push({ icon: 'feed', offer: o.id, at: o.created_at, text: `Nouvelle offre pour toi : ${o.titre} (${o.entreprise})` });
   }
+  // Lauréat : candidatures reçues, confirmations, mercis, commentaires
+  const myOffers = new Map(data.offers.filter(o => o.author_id === me.id).map(o => [o.id, o]));
+  for (const a of data.applications) if (myOffers.has(a.offer_id) && a.status === 'postule') out.push({ action: true, mine: true, tone: 'accent', icon: 'inbox', offer: a.offer_id, at: a.created_at, text: `Nouvelle candidature de ${name(a.student_id)} : ${myOffers.get(a.offer_id).titre}` });
+  for (const p of data.placements) if (p.laureat_id === me.id && p.status === 'confirme' && recent(p.confirmed_at || p.created_at, 30)) out.push({ icon: 'trophy', tone: 'brass', to: 'espace', at: p.confirmed_at || p.created_at, text: `${name(p.student_id)} a confirmé son recrutement chez ${p.entreprise}. +50 points${p.merci ? ' et un merci' : ''}.` });
+  for (const c of data.comments) if (myOffers.has(c.offer_id) && c.author_id !== me.id && recent(c.created_at, 14)) out.push({ icon: 'comment', offer: c.offer_id, at: c.created_at, text: `${name(c.author_id)} a posé une question sur ton offre : « ${c.body.slice(0, 60)}${c.body.length > 60 ? '…' : ''} »` });
+  // Mentorat et entraide
+  for (const m of data.mentorships) {
+    if (m.mentor_id === me.id && m.status === 'demande') out.push({ action: true, tone: 'accent', icon: 'mentor', to: 'reseau/mentorat', at: m.created_at, text: `${name(m.student_id)} te demande un mentorat : ${m.sujet}` });
+    if (m.student_id === me.id && m.status === 'acceptee') out.push({ icon: 'mentor', tone: 'good', to: 'reseau/mentorat', at: m.created_at, text: `${name(m.mentor_id)} a accepté ta demande : ${m.sujet}` });
+  }
+  const myQ = new Set(data.questions.filter(q => q.author_id === me.id).map(q => q.id));
+  for (const a of data.answers) if (myQ.has(a.question_id) && a.author_id !== me.id) out.push({ icon: 'qa', to: 'reseau/entraide', at: a.created_at, text: `${name(a.author_id)} a répondu à ta question.` });
   return out.sort((a, b) => (b.action ? 1 : 0) - (a.action ? 1 : 0) || new Date(b.at) - new Date(a.at));
 }
 
 // ---------------------------------------------------------------------------
-// Accueil
+// Accueil : ce qu'il faut faire, où j'en suis, ce qui est nouveau
 // ---------------------------------------------------------------------------
-function Home(props) {
-  const ctx = props;
-  const { data, me, saison, scores, store, go, openProfile, notifs } = ctx;
+function Home(ctx) {
+  const { data, me, saison, scores, store, go, openProfile, openOffer, notifs, openNotif } = ctx;
   const n = niveauOf(me, saison);
   const st = useMemo(() => seasonStats(data, saison), [data, saison]);
   const first = me.full_name.split(' ')[0];
-  const [declare, setDeclare] = useState(false);
+  const [compose, setCompose] = useState(false);
   const actions = notifs.filter(x => x.action);
-  const forMe = data.offers.filter(o => o.status === 'ouverte' && (me.role !== 'etudiant' || ((o.annees || []).includes(n) && (!o.filieres?.length || o.filieres.includes(me.filiere))))).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 3);
+  const isStudent = me.role === 'etudiant';
+  const latest = data.offers.filter(o => o.status === 'ouverte' && (!isStudent || matchesMe(o, me, saison))).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 4);
   const month = useMemo(() => computeScores(data, new Date(Date.now() - 30 * 864e5)), [data]);
   const star = data.profiles.filter(p => p.role === 'laureat').map(p => ({ p, pts: month.get(p.id)?.points || 0 })).sort((a, b) => b.pts - a.pts)[0];
   const starHelped = star ? data.placements.filter(p => p.laureat_id === star.p.id && p.status === 'confirme').length : 0;
   const mercis = [
     ...data.placements.filter(p => p.merci && p.laureat_id).map(p => ({ from: p.student_id, to: p.laureat_id, txt: p.merci, at: p.confirmed_at || p.created_at })),
     ...data.mentorships.filter(m => m.merci).map(m => ({ from: m.student_id, to: m.mentor_id, txt: m.merci, at: m.created_at })),
-  ].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 4);
-  const stu = me.role === 'etudiant' ? statutOf(data, me, saison) : null;
+  ].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 2);
+  const stu = isStudent ? statutOf(data, me, saison) : null;
   const obj = OBJECTIFS[n];
   const s = scores.get(me.id);
+  const myApps = data.applications.filter(a => a.student_id === me.id);
+  const helper = stu?.pl?.laureat_id ? store.byId('profiles', stu.pl.laureat_id) : null;
+
+  const shortcuts = isStudent
+    ? [['feed', 'Offres pour moi', `${data.offers.filter(o => o.status === 'ouverte' && matchesMe(o, me, saison)).length} ouvertes`, () => go('offres')],
+      ['mentor', 'Trouver un mentor', 'Un lauréat, un appel', () => go('reseau/mentorat')],
+      ['qa', 'Poser une question', 'Les anciens répondent', () => go('reseau/entraide')],
+      ['chart', 'Suivi de ma promo', `${NIVEAUX[n]?.short || ''} cette saison`, () => go('suivi')]]
+    : me.role === 'laureat'
+      ? [['plus', 'Publier une offre', '+10 points', () => setCompose(true)],
+        ['inbox', 'Mes candidatures', `${data.applications.filter(a => a.status === 'postule' && data.offers.some(o => o.id === a.offer_id && o.author_id === me.id)).length} à voir`, () => go('espace')],
+        ['qa', 'Répondre aux étudiants', `${data.questions.filter(q => !data.answers.some(a => a.question_id === q.id)).length} sans réponse`, () => go('reseau/entraide')],
+        ['spark', 'Talents en recherche', 'Repère un profil', () => go('reseau/talents')]]
+      : [['shield', 'Administration', 'Vérifier les lauréats', () => go('admin')], ['chart', 'Suivi', 'Placement par promo', () => go('suivi')], ['feed', 'Offres', 'Modérer', () => go('offres')], ['network', 'Réseau', 'Annuaire', () => go('reseau/annuaire')]];
 
   return html`<section class="page home">
     <header class="hello">
-      <p class="eyebrow">Saison ${seasonLabel(saison)}${me.role === 'etudiant' ? ` · ${NIVEAUX[n]?.label} · ${me.filiere}` : me.role === 'laureat' ? ` · Promo ${me.promo}` : ''}</p>
+      <p class="eyebrow">Saison ${seasonLabel(saison)}${isStudent ? ` · ${NIVEAUX[n]?.label} · ${me.filiere}` : me.role === 'laureat' ? ` · Promo ${me.promo}` : ''}</p>
       <h1>Bonjour ${first}</h1>
-      <p class="lead">${me.role === 'etudiant' ? 'Les lauréats de l’école partagent ici leurs offres, leurs conseils et leur temps. Voici où tu en es.' : me.role === 'laureat' ? 'Chaque offre partagée et chaque réponse comptent. Voici ce qui t’attend aujourd’hui.' : 'Vue d’ensemble du réseau et des actions à mener.'}</p>
     </header>
 
-    ${me.role === 'etudiant' && obj ? html`<div class=${'objective compact st-' + stu.key}>
-      <div class="objective-main"><p class="eyebrow">Mon objectif</p><h2>${obj.titre}</h2><p class="muted small">Échéance le ${obj.deadline(saison).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</p></div>
-      <div class="objective-state"><span class=${'state-pill s-' + stu.key}>${stu.label}</span>${stu.pl ? html`<span>${stu.pl.entreprise}</span>` : html`<button class="btn accent small" onClick=${() => setDeclare(true)}><${Icon} name="trophy" size=${15}/> J’ai trouvé !</button>`}<button class="btn ghost small" onClick=${() => go('parcours')}>Mon parcours</button></div>
-    </div>` : null}
+    ${isStudent && stu.pl?.status === 'en_attente' ? html`<${ConfirmRecruit} ctx=${ctx} pl=${stu.pl} helper=${helper}/>` : null}
 
-    ${me.role !== 'etudiant' && s ? html`<div class="impact-strip"><span><b class="mono">${s.points}</b> points d’impact</span><${LevelChip} points=${s.points}/><span class="muted small">${s.recrutes} étudiant${s.recrutes > 1 ? 's' : ''} recruté${s.recrutes > 1 ? 's' : ''} grâce à toi</span><span class="spacer"></span><button class="btn small ghost" onClick=${() => go('impact')}>Mon impact</button></div>` : null}
+    ${isStudent && obj ? html`<button class=${'objective compact clickable st-' + stu.key} onClick=${() => go('parcours')}>
+      <div class="objective-top"><span class="obj-ico"><${Icon} name="route" size=${22}/></span>
+        <div class="objective-main"><p class="eyebrow">Mon objectif · avant le ${obj.deadline(saison).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</p><h2>${obj.titre}</h2></div>
+        <span class=${'state-pill s-' + stu.key}>${stu.label}</span></div>
+      <${Journey} step=${journeyStep(stu, myApps)}/>
+    </button>` : null}
 
-    ${actions.length ? html`<div class="callout"><h2>À faire (${actions.length})</h2><ul class="todo">${actions.slice(0, 5).map(a => html`<li><button class="notif act" onClick=${() => go(a.to)}><${Icon} name=${a.icon} size=${16}/><span>${a.text}</span><${Icon} name="arrow" size=${16}/></button></li>`)}</ul></div>` : null}
+    ${me.role === 'laureat' && s ? html`<button class="impact-strip clickable" onClick=${() => go('espace')}><span class="obj-ico brass"><${Icon} name="star" size=${20}/></span><span><b class="mono">${s.points}</b> points d’impact</span><${LevelChip} points=${s.points}/><span class="muted small">${s.recrutes} recruté${s.recrutes > 1 ? 's' : ''} grâce à toi</span><span class="spacer"></span><${Icon} name="arrow" size=${18}/></button>` : null}
+
+    ${actions.filter(a => !(isStudent && a.icon === 'briefcase')).length ? html`<div class="callout"><h2 class="h-ico"><${Icon} name="bell"/> À faire</h2><ul class="todo">${actions.filter(a => !(isStudent && a.icon === 'briefcase')).slice(0, 4).map(a => html`<li><button class="notif act" onClick=${() => openNotif(a)}><span class=${'n-ico ' + (a.tone || '')}><${Icon} name=${a.icon} size=${16}/></span><span>${a.text}</span><${Icon} name="arrow" size=${16}/></button></li>`)}</ul></div>` : null}
+
+    <div class="shortcuts">${shortcuts.map(([i, l, sub, fn]) => html`<button class="shortcut" onClick=${fn}><span class="sc-ico"><${Icon} name=${i} size=${22}/></span><strong>${l}</strong><span class="muted small">${sub}</span></button>`)}</div>
 
     <div class="home-grid">
       <div class="home-main">
-        <div class="section-head"><h2>${me.role === 'etudiant' ? 'Nouvelles offres pour toi' : 'Dernières offres'}</h2><button class="btn tiny ghost" onClick=${() => go('offres')}>Tout voir</button></div>
-        <div class="feed">${forMe.length ? forMe.map(o => html`<${OfferCard} key=${o.id} o=${o} ctx=${ctx}/>`) : html`<${Empty} icon="feed" title="Pas encore d’offre pour ton niveau">Elles arrivent vite : active les notifications en revenant chaque jour, et parle de la plateforme aux lauréats que tu connais.<//>`}</div>
-        ${me.role !== 'etudiant' ? html`<div class="cta-post"><div><strong>Une offre dans ton entreprise ?</strong><p class="muted small">Partage-la en 1 minute. Les étudiants de ta filière sont notifiés.</p></div><button class="btn primary" onClick=${() => go('offres')}><${Icon} name="plus"/> Publier</button></div>` : null}
+        <div class="section-head"><h2>${isStudent ? 'Nouvelles offres pour toi' : 'Dernières offres'}</h2><button class="btn tiny ghost" onClick=${() => go('offres')}>Tout voir <${Icon} name="arrow" size=${14}/></button></div>
+        <div class="offer-grid one">${latest.length ? latest.map(o => html`<${OfferCard} key=${o.id} o=${o} ctx=${ctx} onOpen=${() => openOffer(o.id)}/>`) : html`<${Empty} icon="feed" title="Pas encore d’offre pour ton niveau">Elles arrivent vite. Parle de la plateforme aux lauréats que tu connais.<//>`}</div>
       </div>
       <aside class="home-side">
-        <div class="panel pulse">
-          <div class="section-head"><h2>L’école en ce moment</h2><button class="btn tiny ghost" onClick=${() => go('tableau')}>Détails</button></div>
+        <button class="panel pulse clickable" onClick=${() => go('suivi')}>
+          <div class="section-head"><h2>L’école en ce moment</h2><${Icon} name="arrow" size=${16}/></div>
           ${st.rows.map(r => html`<div class="pulse-row"><span class="niv-badge">${NIVEAUX[r.n].short}</span><div class="pulse-bar"><div class="row small"><span>${r.objectif.court}</span><span class="spacer"></span><span class="mono">${pct(r.rate)}</span></div><${Bar} value=${r.rate} pace=${r.elapsed}/></div></div>`)}
-          <p class="small muted">${st.viaTotal} réussites cette saison grâce aux lauréats de la plateforme.</p>
-        </div>
+          <p class="small muted">${st.viaTotal} réussites vérifiées grâce aux lauréats cette saison.</p>
+        </button>
         ${star && star.pts ? html`<div class="panel star">
-          <p class="eyebrow">Lauréat du mois</p>
+          <p class="eyebrow"><${Icon} name="trophy" size=${14}/> Lauréat du mois</p>
           <${Person} p=${star.p} score=${scores.get(star.p.id)} onOpen=${openProfile} size=${48}/>
-          <p class="small"><b class="mono">+${star.pts}</b> points en 30 jours · ${starHelped} étudiant${starHelped > 1 ? 's' : ''} recruté${starHelped > 1 ? 's' : ''} grâce à ses offres</p>
+          <p class="small"><b class="mono">+${star.pts}</b> points en 30 jours · ${starHelped} recruté${starHelped > 1 ? 's' : ''} grâce à ses offres</p>
         </div>` : null}
-        ${mercis.length ? html`<div class="panel"><div class="section-head"><h2>Mur des mercis</h2></div>
+        ${mercis.length ? html`<div class="panel"><div class="section-head"><h2 class="h-ico"><${Icon} name="heart"/> Mur des mercis</h2></div>
           ${mercis.map(m => html`<blockquote class="merci"><p>« ${m.txt} »</p><footer><span class="small">${store.byId('profiles', m.from)?.full_name?.split(' ')[0] || 'Un étudiant'} → <button class="linkish" onClick=${() => openProfile(store.byId('profiles', m.to))}>${store.byId('profiles', m.to)?.full_name}</button></span></footer></blockquote>`)}
         </div>` : null}
       </aside>
     </div>
-    ${declare ? html`<${DeclareModal} ctx=${ctx} onClose=${() => setDeclare(false)}/>` : null}
+    ${compose ? html`<${OfferComposer} ctx=${ctx} onClose=${() => setCompose(false)}/>` : null}
   </section>`;
 }
 
@@ -202,7 +250,7 @@ function MyProfile({ ctx }) {
   const { me, store } = ctx;
   return html`<section class="page narrow">
     <header class="page-head"><div><p class="eyebrow">Visible par les membres connectés</p><h1>Mon profil</h1></div>
-      ${store.mode === 'live' ? html`<button class="btn ghost" onClick=${() => store.signOut()}><${Icon} name="logout"/> Se déconnecter</button>` : html`<button class="btn ghost" onClick=${() => { store.reset(); toast('Démo réinitialisée.'); }}>Réinitialiser la démo</button>`}</header>
+      ${store.mode === 'live' ? html`<button class="btn ghost" onClick=${() => store.signOut()}><${Icon} name="logout"/> Se déconnecter</button>` : null}</header>
     <${ProfileForm} ctx=${ctx} initial=${me} key=${me.id}/>
   </section>`;
 }
@@ -225,10 +273,15 @@ function AuthScreen({ store }) {
   };
   return html`<div class="auth">
     <div class="auth-side">
-      <span class="brand-mark big" aria-hidden="true">EM</span>
+      <${BrandLogo} size=${72}/>
       <h1>Réseau ENSAM Meknès</h1>
       <p>Les lauréats partagent leurs offres de stages, de PFE et d’emplois. Les étudiants trouvent plus vite, avec un suivi de chaque promo jusqu’au premier emploi.</p>
-      <ul class="auth-points"><li><${Icon} name="feed"/> Offres partagées par les anciens, avec cooptation</li><li><${Icon} name="route"/> Suivi de ta recherche, de la 3A au premier emploi</li><li><${Icon} name="mentor"/> Mentorat et entraide entre générations</li></ul>
+      <ul class="auth-points">
+        <li><span class="sc-ico"><${Icon} name="feed"/></span> Offres partagées par les anciens, avec cooptation</li>
+        <li><span class="sc-ico"><${Icon} name="check"/></span> Recrutements vérifiés : le lauréat déclare, l’étudiant confirme</li>
+        <li><span class="sc-ico"><${Icon} name="mentor"/></span> Mentorat et entraide entre générations</li>
+        <li><span class="sc-ico"><${Icon} name="chart"/></span> Suivi de chaque promo, de la 3A au premier emploi</li>
+      </ul>
     </div>
     <form class="auth-card form" onSubmit=${submit}>
       <h2>${{ connexion: 'Se connecter', inscription: 'Créer mon compte', oubli: 'Mot de passe oublié', nouveau: 'Nouveau mot de passe' }[mode]}</h2>
@@ -248,7 +301,7 @@ function Onboarding({ store }) {
   const act = async fn => { try { await fn(); } catch (e) { toast(e.message, 'err'); } };
   const ctx = { store, act };
   return html`<div class="auth"><div class="auth-card wide">
-    <p class="eyebrow">Dernière étape</p><h2>Présente-toi à la communauté</h2>
+    <div class="row"><${BrandLogo} size=${44}/><div><p class="eyebrow">Dernière étape</p><h2>Présente-toi à la communauté</h2></div></div>
     <p class="muted">Ces informations permettent de te proposer les bonnes offres et de suivre ta promo.</p>
     <${ProfileForm} ctx=${ctx} onboarding/>
     <button class="linkish small" onClick=${() => store.signOut()}>Se déconnecter</button>

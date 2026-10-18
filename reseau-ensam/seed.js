@@ -104,8 +104,12 @@ export function buildSeed(now = new Date()) {
 
   // ---------------- Placements ----------------
   const placements = [];
+  const recruitApps = []; // une candidature « retenue » accompagne chaque recrutement via une offre de la saison
   const place = (st, o) => { placements.push({ id: id('p'), student_id: st.id, offer_id: null, laureat_id: null, source: 'autre', status: 'declare', pays: 'Maroc', merci: null, note: null, confirmed_at: null, ...o }); };
-  const fromOffer = (st, off, saison, niveau, extra = {}) => place(st, { offer_id: off.id, laureat_id: off.author_id, source: 'plateforme', status: 'confirme', saison, niveau, type: off.type, entreprise: off.entreprise, ville: off.ville, pays: off.pays, confirmed_at: daysAgo(Math.floor(r() * 25) + 1), created_at: daysAgo(30), ...extra });
+  const fromOffer = (st, off, saison, niveau, extra = {}) => {
+    if (saison === S) recruitApps.push({ student_id: st.id, offer_id: off.id, entreprise: off.entreprise, titre: off.titre, created_at: daysAgo(35) });
+    place(st, { offer_id: off.id, laureat_id: off.author_id, source: 'plateforme', status: 'confirme', saison, niveau, type: off.type, entreprise: off.entreprise, ville: off.ville, pays: off.pays, confirmed_at: daysAgo(Math.floor(r() * 25) + 1), created_at: daysAgo(30), ...extra });
+  };
   const MERCIS = ['Merci infiniment pour la cooptation, l’entretien s’est très bien passé grâce à vos conseils.', 'Votre offre est tombée au bon moment. Merci d’avoir pris le temps de relire mon CV !', 'Grâce à vous j’ai décroché mon stage, je ferai pareil pour les promos suivantes.', 'Merci pour votre disponibilité et vos réponses rapides.'];
 
   const s5 = students.filter(s => s.promo === S + 1 && s !== salma), s4 = students.filter(s => s.promo === S + 2), s3 = students.filter(s => s.promo === S + 3);
@@ -165,18 +169,21 @@ export function buildSeed(now = new Date()) {
       const author = role === 'laureat' ? (c % 2 ? offers[i] && profiles.find(p => p.id === o.author_id) : pick(seniors)) : pick(students);
       comments.push({ id: id('c'), offer_id: o.id, author_id: author.id, body, created_at: new Date(new Date(o.created_at).getTime() + (c + 1) * 5 * 36e5).toISOString() });
     }
-    const nr = 3 + Math.floor(r() * 14);
-    const voters = new Set(); for (let v = 0; v < nr; v++) voters.add(pick(students).id);
-    for (const uid of voters) reactions.push({ id: id('r'), offer_id: o.id, user_id: uid, kind: 'utile', created_at: o.created_at });
   });
   reactions.push({ id: id('r'), offer_id: offerOf('Stage 6 mois').id, user_id: salma.id, kind: 'save', created_at: daysAgo(3) });
   reactions.push({ id: id('r'), offer_id: offerOf('Stage de recherche').id, user_id: salma.id, kind: 'save', created_at: daysAgo(2) });
 
   // Candidatures de Salma (persona) + d'autres
-  applications.push({ id: id('a'), student_id: salma.id, offer_id: offerOf('PFE : réduction').id, entreprise: 'Renault Group Maroc', titre: 'PFE réduction des rebuts', status: 'entretien', note: 'Entretien technique jeudi 10h avec le service méthodes', created_at: daysAgo(6), updated_at: daysAgo(1) });
-  applications.push({ id: id('a'), student_id: salma.id, offer_id: offerOf('Stage 6 mois').id, entreprise: 'Airbus Operations', titre: 'Stage aérostructures', status: 'postule', note: '', created_at: daysAgo(4), updated_at: daysAgo(4) });
-  applications.push({ id: id('a'), student_id: salma.id, offer_id: null, entreprise: 'Decathlon (candidature spontanée)', titre: 'PFE supply chain', status: 'refuse', note: 'Profil plus logistique recherché', created_at: daysAgo(15), updated_at: daysAgo(8) });
-  s5.slice(10, 16).forEach((st, i) => applications.push({ id: id('a'), student_id: st.id, offer_id: offers[i].id, entreprise: offers[i].entreprise, titre: offers[i].titre, status: i % 3 ? 'postule' : 'entretien', note: '', created_at: daysAgo(3 + i), updated_at: daysAgo(1 + i) }));
+  const MSG = ['Bonjour, je suis en 5A et ce sujet correspond exactement à mon projet de fin d’études. Mon CV est sur mon profil.', 'Bonjour, j’ai fait mon stage de 4A en méthodes et j’aimerais continuer dans cette voie. Disponible pour un appel quand vous voulez.', 'Bonjour, très intéressé(e) par l’offre. J’ai travaillé sur un projet AMDEC au club industrie de l’école.', 'Bonjour, je suis disponible dès février. Merci pour le partage !'];
+  for (const a of recruitApps) applications.push({ id: id('a'), ...a, status: 'retenu', message: pick(MSG), note: '', updated_at: a.created_at });
+  // Candidatures de Salma (persona)
+  applications.push({ id: id('a'), student_id: salma.id, offer_id: offerOf('PFE : réduction').id, entreprise: 'Renault Group Maroc', titre: offerOf('PFE : réduction').titre, status: 'entretien', message: 'Bonjour M. El Amrani, je suis en 5A Génie Industriel. J’ai appliqué la VSM et le SMED pendant mon stage chez Yazaki, et je voudrais en faire mon PFE. Mon CV est en lien sur mon profil.', note: 'Entretien technique jeudi 10h avec le service méthodes', created_at: daysAgo(6), updated_at: daysAgo(1) });
+  applications.push({ id: id('a'), student_id: salma.id, offer_id: offerOf('Stage 6 mois').id, entreprise: 'Airbus Operations', titre: offerOf('Stage 6 mois').titre, status: 'postule', message: 'Bonjour, je vise un stage à l’étranger pour mon PFE. Niveau B2 certifié en anglais.', note: '', created_at: daysAgo(4), updated_at: daysAgo(4) });
+  applications.push({ id: id('a'), student_id: salma.id, offer_id: null, entreprise: 'Decathlon', titre: 'PFE supply chain (candidature spontanée)', status: 'refuse', note: 'Profil plus logistique recherché', created_at: daysAgo(15), updated_at: daysAgo(8) });
+  // Autres candidats, dont plusieurs sur les offres de Youssef (persona lauréat)
+  const yOffer = offerOf('PFE : réduction');
+  s5.slice(12, 15).forEach((st, i) => applications.push({ id: id('a'), student_id: st.id, offer_id: yOffer.id, entreprise: yOffer.entreprise, titre: yOffer.titre, status: 'postule', message: MSG[(i + 1) % MSG.length], note: '', created_at: daysAgo(i, 2 + i * 3), updated_at: daysAgo(i) }));
+  s5.slice(15, 20).forEach((st, i) => { const o = offers[i + 1]; applications.push({ id: id('a'), student_id: st.id, offer_id: o.id, entreprise: o.entreprise, titre: o.titre, status: i % 3 ? 'postule' : 'entretien', message: pick(MSG), note: '', created_at: daysAgo(3 + i), updated_at: daysAgo(1 + i) }); });
 
   // Mentorat
   const mentors = seniors.filter(s => s.mentor_dispo);
