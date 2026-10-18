@@ -1,8 +1,9 @@
 // « Mon parcours » (étudiants) et « Mon espace » (lauréats).
 import { html, useState } from './vendor/preact-htm.js';
 import { Icon, Modal, Field, Empty, Person, Bar, toast, LevelChip, CompanyLogo, TYPE_ICON, Num } from './ui.js';
-import { OBJECTIFS, NIVEAUX, TYPES, niveauOf, statutOf, typeForNiveau, seasonLabel, timeAgo, levelOf, BADGES, badgesOf, BAREME, computeScores, NIVEAUX_IMPACT } from './logic.js';
+import { OBJECTIFS, NIVEAUX, TYPES, niveauOf, statutOf, typeForNiveau, seasonLabel, timeAgo, levelOf, BADGES, badgesOf, BAREME, computeScores, NIVEAUX_IMPACT, slotState } from './logic.js';
 import { APP_STATUS, OfferComposer } from './offers.js';
+import { AttestationCard, ShareModal, SlotDate } from './growth.js';
 
 // Étapes vues par l'étudiant : il postule, le lauréat fait avancer, l'étudiant confirme.
 const JOURNEY = [['send', 'Je postule'], ['people', 'Entretien'], ['briefcase', 'Recruté(e)'], ['check', 'Confirmé']];
@@ -26,6 +27,7 @@ export function ParcoursPage(ctx) {
   const pl = st.pl;
   const [declare, setDeclare] = useState(false);
   const [addApp, setAddApp] = useState(false);
+  const [share, setShare] = useState(false);
   const apps = data.applications.filter(a => a.student_id === me.id).sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at));
   const history = data.placements.filter(p => p.student_id === me.id && p.saison !== saison && p.status !== 'refuse').sort((a, b) => b.saison - a.saison);
   const helper = pl?.laureat_id ? store.byId('profiles', pl.laureat_id) : null;
@@ -47,7 +49,9 @@ export function ParcoursPage(ctx) {
         <span class=${'state-pill s-' + st.key}>${st.label}</span>
       </div>
       ${obj ? html`<${Journey} step=${step}/>` : null}
-      ${pl && pl.status !== 'en_attente' ? html`<div class="found-line"><${CompanyLogo} name=${pl.entreprise} size=${36}/><span><strong>${pl.entreprise}</strong>${pl.ville ? `, ${pl.ville}` : ''}${pl.pays && pl.pays !== 'Maroc' ? ` (${pl.pays})` : ''}<br/><span class="muted small">${pl.status === 'confirme' ? `Vérifié : recruté(e) par ${helper?.full_name || 'un lauréat'}, confirmé par toi` : 'Trouvé en dehors de la plateforme'}</span></span></div>` : null}
+      ${pl && pl.status !== 'en_attente' ? html`<div class="found-line"><${CompanyLogo} name=${pl.entreprise} size=${36}/><span class="grow"><strong>${pl.entreprise}</strong>${pl.ville ? `, ${pl.ville}` : ''}${pl.pays && pl.pays !== 'Maroc' ? ` (${pl.pays})` : ''}<br/><span class="muted small">${pl.status === 'confirme' ? `Vérifié : recruté(e) par ${helper?.full_name || 'un lauréat'}, confirmé par toi` : 'Trouvé en dehors de la plateforme'}</span></span>
+        <button class="btn small ghost" onClick=${() => setShare(true)}><${Icon} name="share" size=${15}/> Partager</button></div>` : null}
+      ${pl && pl.status === 'confirme' && helper ? html`<label class="check small consent"><input id="pl-partage" type="checkbox" checked=${!!pl.partage_ok} onChange=${e => act(() => store.update('placements', pl.id, { partage_ok: e.target.checked }))}/> ${helper.full_name.split(' ')[0]} peut citer mon nom s’il partage mon recrutement sur LinkedIn</label>` : null}
       ${!pl && obj ? html`<div class="row"><button class="btn primary" onClick=${() => ctx.go('offres')}><${Icon} name="search" size=${16}/> Voir les offres pour moi</button></div>` : null}
     </div>
 
@@ -72,6 +76,7 @@ export function ParcoursPage(ctx) {
       <ul class="app-list">${history.map(h => html`<li class="app-row"><${CompanyLogo} name=${h.entreprise} size=${36}/><span class="app-txt"><strong>${TYPES[h.type]?.label} chez ${h.entreprise}</strong><span class="muted small">${seasonLabel(h.saison)}${h.pays && h.pays !== 'Maroc' ? ` · ${h.pays}` : ''}</span></span>${h.source === 'plateforme' ? html`<span class="state-pill s-trouve">Via la plateforme</span>` : null}</li>`)}</ul>` : null}
 
     ${declare ? html`<${DeclareOutside} ctx=${ctx} onClose=${() => setDeclare(false)}/>` : null}
+    ${share && pl ? html`<${ShareModal} ctx=${ctx} pl=${pl} onClose=${() => setShare(false)}/>` : null}
     ${addApp ? html`<${AppModal} ctx=${ctx} onClose=${() => setAddApp(false)}/>` : null}
   </section>`;
 }
@@ -149,7 +154,7 @@ export function EspacePage(ctx) {
   const { data, me, store, scores, act, openProfile, openOffer } = ctx;
   const s = scores.get(me.id) || { points: 0, events: [], offres: 0, recrutes: 0, mentorats: 0, mercis: 0, reponses: 0 };
   const lvl = levelOf(s.points);
-  const mine = badgesOf(s, me);
+  const mine = badgesOf(s, me, { star: ctx.starId });
   const myOffers = data.offers.filter(o => o.author_id === me.id).sort((a, b) => (a.status === 'ouverte' ? 0 : 1) - (b.status === 'ouverte' ? 0 : 1) || new Date(b.created_at) - new Date(a.created_at));
   const myOfferIds = new Set(myOffers.map(o => o.id));
   const toTreat = data.applications.filter(a => myOfferIds.has(a.offer_id) && a.status === 'postule').sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -162,6 +167,9 @@ export function EspacePage(ctx) {
   const month = computeScores(data, new Date(Date.now() - 30 * 864e5)).get(me.id)?.points || 0;
   const [bareme, setBareme] = useState(false);
   const [compose, setCompose] = useState(false);
+  const [share, setShare] = useState(null);
+  const rdv = data.slots.filter(x => x.mentor_id === me.id && slotState(x) === 'reserve').sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+  const recrues = helped.filter(p => p.saison === ctx.saison).sort((a, b) => new Date(b.confirmed_at || b.created_at) - new Date(a.confirmed_at || a.created_at));
 
   return html`<section class="page">
     <header class="page-head"><div><p class="eyebrow">Promo ${me.promo}${me.entreprise ? ' · ' + me.entreprise : ''}</p><h1>Mon espace</h1></div>
@@ -194,6 +202,13 @@ export function EspacePage(ctx) {
         <${Person} p=${st} onOpen=${openProfile} size=${36}/><span class="app-txt right"><span class="muted small">${p.entreprise} · ${timeAgo(p.created_at)}</span></span>
         <button class="btn small ghost" onClick=${() => ctx.confirm('Annuler cette déclaration de recrutement ?', () => act(() => store.remove('placements', p.id)), 'Annuler la déclaration')}>Annuler</button></li>`; })}</ul></div>` : null}
 
+    ${rdv.length ? html`<div class="panel"><div class="section-head"><h2 class="h-ico"><${Icon} name="clock"/> Mes prochains entretiens de 15 min <span class="count">${rdv.length}</span></h2><button class="btn tiny ghost" onClick=${() => ctx.go('reseau/mentorat/rdv')}>Mes créneaux <${Icon} name="arrow" size=${14}/></button></div>
+      <ul class="slot-list">${rdv.slice(0, 3).map(x => html`<li class="slot-row" key=${x.id}><${SlotDate} iso=${x.starts_at}/><span class="slot-main"><${Person} p=${store.byId('profiles', x.student_id)} onOpen=${openProfile} size=${30}/><span class="small">${x.sujet}</span></span></li>`)}</ul></div>` : null}
+
+    ${recrues.length ? html`<div class="panel"><div class="section-head"><h2 class="h-ico"><${Icon} name="briefcase"/> Recrutés grâce à toi cette saison <span class="count">${recrues.length}</span></h2></div>
+      <ul class="app-list flat">${recrues.slice(0, 5).map(p => html`<li class="app-row" key=${p.id}><${Person} p=${store.byId('profiles', p.student_id)} onOpen=${openProfile} size=${36}/><span class="app-txt right"><span class="muted small">${p.entreprise} · ${TYPES[p.type]?.label}</span></span>
+        <button class="icon-btn small" aria-label="Partager sur LinkedIn" title="Partager sur LinkedIn" onClick=${() => setShare(p)}><${Icon} name="share" size=${16}/></button></li>`)}</ul></div>` : null}
+
     <div class="section-head"><h2>Mes offres</h2></div>
     ${myOffers.length ? html`<ul class="app-list">${myOffers.slice(0, 10).map(o => {
       const nApps = data.applications.filter(a => a.offer_id === o.id).length;
@@ -206,6 +221,7 @@ export function EspacePage(ctx) {
 
     <div class="section-head"><h2>Badges</h2><span class="muted small">${mine.length} sur ${BADGES.length}</span></div>
     <div class="badges">${BADGES.map(b => { const has = mine.some(x => x.id === b.id); return html`<div class=${'badge' + (has ? ' has' : '')} title=${b.desc}><span class="badge-medal"><${Icon} name=${has ? 'star' : 'spark'} size=${20}/></span><strong>${b.nom}</strong><span class="small muted">${b.desc}</span></div>`; })}</div>
+    <${AttestationCard} ctx=${ctx}/>
 
     <div class="two-col">
       <div>
@@ -222,5 +238,6 @@ export function EspacePage(ctx) {
       <p class="muted small">Niveaux : ${NIVEAUX_IMPACT.map(n => `${n.nom} (${n.min})`).join(' · ')}. Chaque mois, le lauréat qui a eu le plus d’impact est mis en avant sur l’accueil.</p>
     <//>` : null}
     ${compose ? html`<${OfferComposer} ctx=${ctx} onClose=${() => setCompose(false)}/>` : null}
+    ${share ? html`<${ShareModal} ctx=${ctx} pl=${share} onClose=${() => setShare(null)}/>` : null}
   </section>`;
 }

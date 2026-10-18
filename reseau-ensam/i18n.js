@@ -117,7 +117,8 @@ function trChildren(ch) {
 const ATTRS = ['placeholder', 'title', 'aria-label'];
 const prev = options.vnode;
 options.vnode = vnode => {
-  if (lang === 'ar' && typeof vnode.type === 'string' && vnode.props) {
+  // translate="no" : texte libre d'un membre (ex. sa disponibilité), laissé tel quel
+  if (lang === 'ar' && typeof vnode.type === 'string' && vnode.props && vnode.props.translate !== 'no') {
     const p = vnode.props;
     foreign = false;
     if (p.children !== undefined && p.children !== null && typeof p.children !== 'object' || Array.isArray(p.children)) p.children = trChildren(p.children);

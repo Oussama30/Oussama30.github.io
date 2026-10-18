@@ -170,7 +170,12 @@ function ApplyBox({ ctx, o }) {
     </div>`;
   }
   if (o.status !== 'ouverte') return html`<div class="apply-box"><p class="muted">Cette offre n’accepte plus de candidatures.</p></div>`;
-  if (!open) return html`<div class="apply-box cta"><div><strong>Intéressé(e) ?</strong><p class="small muted">Le lauréat verra ton profil${me.cv_url ? ' et ton CV' : ''}.</p></div><button class="btn primary" onClick=${() => setOpen(true)}><${Icon} name="send" size=${16}/> Postuler</button></div>`;
+  // Un lauréat a invité cet étudiant depuis le vivier de talents
+  const inv = (data.invitations || []).find(i => i.offer_id === o.id && i.student_id === me.id && i.status === 'envoyee');
+  const invite = inv ? html`<div class="invite-note"><${Icon} name="send" size=${16}/><div><p><strong>${store.byId('profiles', inv.laureat_id)?.full_name || 'Un lauréat'}</strong> t’a invité(e) à postuler.</p>
+    ${inv.message ? html`<p class="quote small">${inv.message}</p>` : null}
+    <button class="linkish small" onClick=${() => act(async () => { await store.update('invitations', inv.id, { status: 'declinee' }); toast('C’est noté, merci d’avoir répondu.'); })}>Pas intéressé(e)</button></div></div>` : null;
+  if (!open) return html`${invite}<div class="apply-box cta"><div><strong>Intéressé(e) ?</strong><p class="small muted">Le lauréat verra ton profil${me.cv_url ? ' et ton CV' : ''}.</p></div><button class="btn primary" onClick=${() => setOpen(true)}><${Icon} name="send" size=${16}/> Postuler</button></div>`;
   return html`<form class="apply-box form" onSubmit=${e => { e.preventDefault(); act(async () => { await store.insert('applications', { student_id: me.id, offer_id: o.id, entreprise: o.entreprise, titre: o.titre, message: msg.trim(), status: 'postule' }); toast('Candidature envoyée à ' + (store.byId('profiles', o.author_id)?.full_name || 'au lauréat') + '.'); }); }}>
     <${Field} label="Message au lauréat" hint="Deux ou trois phrases : qui tu es, pourquoi cette offre."><textarea id="ap-msg" rows="3" maxlength="1500" value=${msg} onInput=${e => setMsg(e.target.value)} placeholder="Bonjour, je suis en 5A Génie Industriel…"></textarea><//>
     ${!me.cv_url ? html`<p class="small warn-t"><${Icon} name="file" size=${14}/> Ajoute le lien de ton CV dans ton profil pour qu’il soit joint automatiquement.</p>` : html`<p class="small muted"><${Icon} name="file" size=${14}/> Ton CV sera joint.</p>`}
@@ -196,7 +201,7 @@ function Candidates({ ctx, o, apps }) {
       const st = store.byId('profiles', a.student_id);
       const pl = data.placements.find(p => p.student_id === a.student_id && p.offer_id === o.id && p.status !== 'refuse');
       return html`<div class="cand" key=${a.id}>
-        <div class="cand-head"><${Person} p=${st} onOpen=${openProfile} size=${36}/><span class="spacer"></span><span class="muted small">${timeAgo(a.created_at)}</span></div>
+        <div class="cand-head"><${Person} p=${st} onOpen=${openProfile} size=${36}/><span class="spacer"></span>${(data.invitations || []).some(i => i.offer_id === o.id && i.student_id === a.student_id) ? html`<span class="mini good">Invité(e) par toi</span>` : null}<span class="muted small">${timeAgo(a.created_at)}</span></div>
         ${a.message ? html`<p class="quote">${a.message}</p>` : null}
         ${st?.cv_url ? html`<a class="small" href=${st.cv_url.startsWith('http') ? st.cv_url : 'https://' + st.cv_url} target="_blank" rel="noopener"><${Icon} name="file" size=${14}/> Voir le CV</a>` : null}
         ${pl ? html`<p class=${'state-pill ' + (pl.status === 'confirme' ? 's-trouve' : 's-validation')}>${pl.status === 'confirme' ? 'Recrutement confirmé par l’étudiant' : 'Recruté(e) · attend sa confirmation'}</p>` : html`

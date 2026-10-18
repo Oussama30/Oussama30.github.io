@@ -229,5 +229,58 @@ export function buildSeed(now = new Date()) {
     });
   });
 
-  return { profiles, offers, comments, reactions, applications, placements, mentorships, questions, answers, votes };
+  // ---------------- Phase 1 : vivier, créneaux express, réussites ----------------
+  // Générateur à part pour ne pas changer les données ci-dessus.
+  const r2 = rng(1532); const pick2 = a => a[Math.floor(r2() * a.length)];
+  const COMP = {
+    'Génie Mécanique': ['CATIA', 'SolidWorks', 'RDM', 'Ansys', 'Fabrication', 'Cotation GPS'],
+    'Génie Industriel': ['Lean', 'VSM', 'SMED', 'Power BI', 'Supply chain', 'Six Sigma'],
+    'Génie Électromécanique': ['Automatisme', 'Siemens TIA', 'Maintenance', 'AMDEC', 'Électrotechnique'],
+    'Génie Civil': ['Robot Structural', 'Revit', 'Béton armé', 'Métré', 'AutoCAD'],
+    'Génie Énergétique': ['Thermique', 'PVsyst', 'Bilan énergétique', 'Matlab', 'Froid industriel'],
+    'Génie Informatique & IA': ['Python', 'Machine learning', 'SQL', 'React', 'Docker'],
+    'Mécatronique': ['Arduino', 'ROS', 'Simulink', 'Capteurs', 'Python'],
+  };
+  const DISPO = { 3: ['Juillet à août', 'Tout le mois de juillet'], 4: ['Juillet à septembre', 'Dès juin'], 5: ['Dès février', 'Dès janvier, 6 mois'] };
+  for (const st of students) {
+    if (st === salma) { st.disponibilite = 'Dès février, 6 mois'; st.cv_url = 'https://example.com/cv/salma-bennani.pdf'; continue; }
+    const pool = COMP[st.filiere] || ['Python'];
+    st.competences = [...new Set([pick2(pool), pick2(pool), pick2(pool)])];
+    const niv = 5 - (st.promo - (S + 1));
+    st.disponibilite = pick2(DISPO[niv] || ['À discuter']);
+    if (r2() > 0.4) st.cv_url = `https://example.com/cv/${st.full_name.toLowerCase().normalize('NFD').replace(/[^a-z ]/g, '').replace(/ +/g, '-')}.pdf`;
+  }
+
+  const at = (days, hh, mm = 0) => { const d = new Date(now); d.setDate(d.getDate() + days); d.setHours(hh, mm, 0, 0); return d.toISOString(); };
+  const slots = [];
+  const slot = (mentor, starts_at, o = {}) => slots.push({ id: id('sl'), mentor_id: mentor.id, starts_at, duree: 15, lieu: 'Google Meet', status: 'ouvert', student_id: null, sujet: null, merci: null, created_at: daysAgo(12), booked_at: o.student_id ? new Date(Math.min(Date.parse(starts_at) - 864e5, now.getTime() - 5 * 36e5)).toISOString() : null, ...o });
+  slot(youssef, at(-6, 18, 30), { student_id: s4[4].id, sujet: 'Choisir mon stage de 4A', merci: 'Quinze minutes qui m’ont fait gagner un mois de recherche. Merci !' });
+  slot(youssef, at(-3, 12, 30), { student_id: s5[8].id, sujet: 'Relire mon CV pour l’automobile', lieu: 'Appel téléphonique' });
+  slot(youssef, at(2, 18, 30), { student_id: s5[9].id, sujet: 'Préparer un entretien chez Lear' });
+  slot(youssef, at(4, 12, 30));
+  slot(youssef, at(9, 19, 0), { lieu: 'Appel téléphonique' });
+  const exp = mentors.slice(1, 6);
+  exp.forEach((m, i) => slot(m, at(1 + i * 2, [12, 13, 18, 19, 20][i], i % 2 ? 30 : 0), { lieu: i % 2 ? 'Appel téléphonique' : 'Google Meet' }));
+  slot(exp[0], at(1, 13, 0), { student_id: salma.id, sujet: 'Stage à l’étranger : par où commencer ?' });
+  for (let i = 0; i < 5; i++) slot(exp[1], at(-4 - i * 5, 19, 0), { student_id: pick2(students.filter(x => x !== salma)).id, sujet: pick2(['Mon premier entretien', 'Choisir ma filière de PFE', 'Le VIE, comment ça marche ?']), merci: i < 2 ? 'Merci pour ce moment, très clair !' : null });
+
+  const shortlists = [
+    { id: id('sh'), laureat_id: youssef.id, student_id: s5[10].id, note: 'Profil lean, à rappeler en janvier', created_at: daysAgo(5) },
+    { id: id('sh'), laureat_id: youssef.id, student_id: s5[16].id, note: '', created_at: daysAgo(2) },
+  ];
+  const lafarge = offerOf('PFE : optimisation');
+  const invitations = [
+    { id: id('in'), laureat_id: youssef.id, student_id: s5[10].id, offer_id: yOffer.id, message: 'Ton expérience en lean m’intéresse pour ce sujet. Postule si ça te parle !', status: 'envoyee', created_at: daysAgo(1, 4) },
+    { id: id('in'), laureat_id: lafarge.author_id, student_id: salma.id, offer_id: lafarge.id, message: 'Bonjour Salma, ton profil lean et Power BI colle bien à ce sujet à Meknès. Je serais ravi de recevoir ta candidature.', status: 'envoyee', created_at: daysAgo(0, 5) },
+  ];
+
+  const kudos = [];
+  const fans = profiles.filter(p => p.role !== 'admin' && !p._persona);
+  for (const pl of placements.filter(x => x.saison === S && (x.status === 'confirme' || x.status === 'declare'))) {
+    const k = Math.floor(r2() * 7); const who = new Set();
+    for (let i = 0; i < k; i++) who.add(pick2(fans).id);
+    for (const uid of who) if (uid !== pl.student_id) kudos.push({ id: id('k'), placement_id: pl.id, user_id: uid, created_at: pl.confirmed_at || pl.created_at });
+  }
+
+  return { profiles, offers, comments, reactions, applications, placements, mentorships, questions, answers, votes, shortlists, invitations, slots, kudos, attestations: [] };
 }

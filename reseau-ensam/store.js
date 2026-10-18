@@ -1,7 +1,10 @@
 // Couche de données : même interface en mode démo (navigateur) et en mode réel (Supabase).
 import { buildSeed } from './seed.js';
+import { attestationStats } from './logic.js';
 
-export const TABLES = ['profiles', 'offers', 'comments', 'reactions', 'applications', 'placements', 'mentorships', 'questions', 'answers', 'votes'];
+export const TABLES = ['profiles', 'offers', 'comments', 'reactions', 'applications', 'placements', 'mentorships', 'questions', 'answers', 'votes', 'shortlists', 'invitations', 'slots', 'kudos', 'attestations'];
+// Tables ajoutées par supabase/mise-a-jour-phase1.sql : tant que la base n'est pas à jour, elles restent vides au lieu de bloquer le site.
+const OPTIONAL = new Set(['shortlists', 'invitations', 'slots', 'kudos', 'attestations']);
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
 
@@ -18,13 +21,14 @@ class Base {
 // ---------------------------------------------------------------------------
 // Démo : données d'exemple, gardées dans le navigateur du visiteur
 // ---------------------------------------------------------------------------
-const DEMO_KEY = 'ensam-demo-v5';
+const DEMO_KEY = 'ensam-demo-v6';
 class DemoStore extends Base {
   constructor() { super(); this.mode = 'demo'; }
   async init() {
     let saved = null;
     try { saved = JSON.parse(safeGet(DEMO_KEY) || 'null'); } catch { saved = null; }
     this.data = saved?.data || buildSeed();
+    for (const t of TABLES) this.data[t] ||= [];
     const meId = saved?.meId || this.data.profiles.find(p => p.role === 'etudiant' && p._persona)?.id;
     this.me = this.byId('profiles', meId) || null;
     this.ready = true;
@@ -38,6 +42,11 @@ class DemoStore extends Base {
     if (table === 'placements') applyPlacementRules(this, r, null);
     if (table === 'applications') applyApplicationRules(this, r, null);
     if (table === 'mentorships') { r.status = 'demande'; }
+    if (table === 'shortlists') { r.laureat_id = this.me?.id; if (this.data.shortlists.some(x => x.laureat_id === r.laureat_id && x.student_id === r.student_id)) return r; }
+    if (table === 'kudos') { r.user_id = this.me?.id; if (this.data.kudos.some(x => x.placement_id === r.placement_id && x.user_id === r.user_id)) return r; }
+    if (table === 'invitations') applyInvitationRules(this, r, null);
+    if (table === 'slots') applySlotRules(this, r, null);
+    if (table === 'attestations') { if (this.me?.role !== 'laureat') throw new Error('Seul un lauréat peut obtenir une attestation.'); Object.assign(r, { laureat_id: this.me.id, stats: attestationStats(this.data, this.me.id) }); }
     if (table === 'reactions' && this.data.reactions.some(x => x.offer_id === r.offer_id && x.user_id === r.user_id && x.kind === r.kind)) return r;
     if (table === 'votes' && this.data.votes.some(x => x.answer_id === r.answer_id && x.user_id === r.user_id)) return r;
     if (table === 'placements' && this.data.placements.some(x => x.student_id === r.student_id && x.saison === r.saison && x.status !== 'refuse')) throw new Error('Une réussite est déjà enregistrée pour cet étudiant cette saison.');
@@ -51,6 +60,8 @@ class DemoStore extends Base {
     const r = { ...old, ...patch };
     if (table === 'placements') applyPlacementRules(this, r, old);
     if (table === 'applications') applyApplicationRules(this, r, old);
+    if (table === 'invitations') applyInvitationRules(this, r, old);
+    if (table === 'slots') applySlotRules(this, r, old);
     this.data[table] = this.data[table].map(x => x.id === id ? r : x);
     if (table === 'profiles' && id === this.me?.id) this.me = r;
     this.persist(); this.emit();
@@ -61,6 +72,11 @@ class DemoStore extends Base {
     this.persist(); this.emit();
   }
   async signOut() {}
+  async verifyAttestation(id) {
+    const a = this.byId('attestations', id); if (!a) return null;
+    const p = this.byId('profiles', a.laureat_id);
+    return { id: a.id, full_name: p?.full_name, filiere: p?.filiere, promo: p?.promo, stats: a.stats, created_at: a.created_at };
+  }
 }
 
 // Mêmes règles que le serveur (supabase/schema.sql), pour que la démo se comporte comme la vraie plateforme.
@@ -97,6 +113,45 @@ function applyApplicationRules(store, r, old) {
   if (old.student_id === me?.id && old.offer_id && r.status !== old.status) r.status = old.status;
 }
 
+// Invitation à postuler : un lauréat invite un étudiant sur une de ses offres ; l'étudiant peut seulement la décliner.
+function applyInvitationRules(store, r, old) {
+  const me = store.me; if (me?.role === 'admin') return;
+  if (!old) {
+    if (me?.role !== 'laureat') throw new Error('Seul un lauréat peut inviter un étudiant.');
+    if (store.byId('offers', r.offer_id)?.author_id !== me.id) throw new Error('Tu ne peux inviter que sur tes propres offres.');
+    if (store.data.invitations.some(x => x.offer_id === r.offer_id && x.student_id === r.student_id)) throw new Error('Cet étudiant est déjà invité sur cette offre.');
+    Object.assign(r, { laureat_id: me.id, status: 'envoyee' });
+    return;
+  }
+  for (const k of Object.keys(r)) if (k !== 'status') r[k] = old[k];
+  if (!(old.student_id === me?.id && r.status === 'declinee')) r.status = old.status;
+}
+
+// Créneau de 15 min : le lauréat l'ouvre, un étudiant le réserve (un seul), puis remercie.
+function applySlotRules(store, r, old) {
+  const me = store.me; if (me?.role === 'admin') return;
+  if (!old) {
+    if (me?.role !== 'laureat') throw new Error('Seul un lauréat peut ouvrir un créneau.');
+    if (new Date(r.starts_at) < new Date()) throw new Error('Choisis un moment à venir.');
+    Object.assign(r, { mentor_id: me.id, student_id: null, sujet: null, merci: null, booked_at: null, status: 'ouvert', duree: 15 });
+    return;
+  }
+  const want = { ...r };
+  Object.assign(r, old);
+  if (old.mentor_id === me?.id) { r.lieu = want.lieu; r.starts_at = old.student_id ? old.starts_at : want.starts_at; if (want.status === 'annule') r.status = 'annule'; return; }
+  if (!old.student_id && want.student_id === me?.id) {
+    if (old.status === 'annule' || new Date(old.starts_at) < new Date()) throw new Error('Ce créneau n’est plus disponible.');
+    if (me.role !== 'etudiant') throw new Error('Les créneaux express sont réservés aux étudiants.');
+    if (store.data.slots.filter(x => x.student_id === me.id && x.status !== 'annule' && new Date(x.starts_at) > new Date()).length >= 2) throw new Error('Tu as déjà 2 rendez-vous à venir.');
+    r.student_id = me.id; r.sujet = want.sujet; r.booked_at = new Date().toISOString(); return;
+  }
+  if (old.student_id && old.student_id !== me?.id && want.student_id === me?.id) throw new Error('Ce créneau vient d’être réservé par quelqu’un d’autre.');
+  if (old.student_id === me?.id) {
+    if (!want.student_id && new Date(old.starts_at) > new Date()) { r.student_id = null; r.sujet = null; r.booked_at = null; }
+    else { r.merci = want.merci; r.sujet = want.sujet; }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Réel : Supabase (comptes, base partagée, temps réel)
 // ---------------------------------------------------------------------------
@@ -127,6 +182,7 @@ class SupabaseStore extends Base {
     const all = [];
     for (let from = 0; ; from += 1000) {
       const { data, error } = await this.sb.from(t).select('*').order('created_at', { ascending: false }).range(from, from + 999);
+      if (error && OPTIONAL.has(t)) { this.data[t] = []; return; }
       if (error) throw error;
       all.push(...data);
       if (data.length < 1000) break;
@@ -159,6 +215,8 @@ class SupabaseStore extends Base {
   }
   async update(table, id, patch) {
     const { data, error } = await this.sb.from(table).update(patch).eq('id', id).select().single();
+    // Aucune ligne modifiée : quelqu'un est passé avant (ex. créneau réservé entre-temps)
+    if (error?.code === 'PGRST116') throw new Error(table === 'slots' ? 'Ce créneau vient d’être réservé par quelqu’un d’autre.' : 'Cette action n’est plus possible. Recharge la page.');
     if (error) throw new Error(frError(error));
     this.data[table] = this.data[table].map(x => x.id === id ? data : x);
     if (table === 'profiles') this.me = this.byId('profiles', this.userId);
@@ -188,6 +246,11 @@ class SupabaseStore extends Base {
     if (error) throw new Error(frError(error));
   }
   async signOut() { await this.sb.auth.signOut(); }
+  async verifyAttestation(id) {
+    const { data, error } = await this.sb.rpc('attestation_publique', { p_id: id });
+    if (error) return null;
+    return (Array.isArray(data) ? data[0] : data) || null;
+  }
 }
 
 function frError(e) {
@@ -198,6 +261,8 @@ function frError(e) {
   if (m.includes('email not confirmed')) return "Confirme d'abord ton email (regarde ta boîte de réception).";
   if (m.includes('duplicate key') && m.includes('placements')) return 'Une réussite est déjà enregistrée pour cet étudiant cette saison.';
   if (m.includes('duplicate key') && m.includes('applications')) return 'Tu as déjà postulé à cette offre.';
+  if (m.includes('duplicate key') && m.includes('invitations')) return 'Cet étudiant est déjà invité sur cette offre.';
+  if (m.includes('could not find the table') || m.includes('does not exist')) return 'Cette fonction arrive bientôt : la base est en cours de mise à jour.';
   if (m.includes('row-level security')) return "Action non autorisée pour ton compte.";
   if (m.includes('rate limit')) return 'Trop de tentatives. Réessaie dans quelques minutes.';
   return e?.message || 'Erreur inconnue.';

@@ -1,21 +1,29 @@
 // Mentorat, Entraide, Communauté (classement, annuaire, vitrine), profils et administration.
 import { html, useState, useMemo } from './vendor/preact-htm.js';
 import { Icon, Modal, Field, Empty, Person, Avatar, Tabs, toast, LevelChip, RoleLine } from './ui.js';
-import { FILIERES, NIVEAUX, CATEGORIES_Q, niveauOf, statutOf, timeAgo, computeScores, badgesOf, levelOf, seasonLabel } from './logic.js';
+import { FILIERES, NIVEAUX, CATEGORIES_Q, niveauOf, statutOf, timeAgo, computeScores, badgesOf, levelOf, seasonLabel, slotState } from './logic.js';
+import { TalentPool, ExpressMentor, ExpressStrip, MyBookings } from './growth.js';
 
 // ---------------------------------------------------------------------------
 // Mentorat
 // ---------------------------------------------------------------------------
 export function MentoratPage(ctx) {
   const { data, me, store, scores, act, openProfile } = ctx;
-  const [tab, setTab] = useState(me.role === 'etudiant' ? 'mentors' : 'recues');
+  const isStudent = me.role === 'etudiant';
+  // « reseau/mentorat/rdv » ouvre directement les rendez-vous de 15 min
+  const [tab, setTab] = useState(ctx.sub2 === 'rdv' ? (isStudent ? 'envoyees' : 'creneaux') : isStudent ? 'mentors' : 'recues');
   const [fil, setFil] = useState('');
   const [ask, setAsk] = useState(null);
   const mentors = data.profiles.filter(p => p.mentor_dispo && p.id !== me.id && (!fil || p.filiere === fil))
     .sort((a, b) => (scores.get(b.id)?.points || 0) - (scores.get(a.id)?.points || 0));
   const recues = data.mentorships.filter(m => m.mentor_id === me.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const envoyees = data.mentorships.filter(m => m.student_id === me.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  const tabs = [['mentors', 'Les mentors'], ...(me.role !== 'etudiant' ? [['recues', 'Demandes reçues', recues.filter(m => m.status === 'demande').length]] : []), ...(me.role === 'etudiant' || envoyees.length ? [['envoyees', 'Mes demandes', envoyees.length]] : [])];
+  const freeSlots = id => data.slots.filter(s => s.mentor_id === id && slotState(s) === 'libre').length;
+  const myRdv = data.slots.filter(s => s.student_id === me.id && slotState(s) === 'reserve').length;
+  const booked = data.slots.filter(s => s.mentor_id === me.id && slotState(s) === 'reserve').length;
+  const tabs = [['mentors', 'Les mentors'],
+    ...(me.role === 'laureat' ? [['recues', 'Demandes reçues', recues.filter(m => m.status === 'demande').length], ['creneaux', 'Mes créneaux', booked]] : me.role !== 'etudiant' ? [['recues', 'Demandes reçues', recues.filter(m => m.status === 'demande').length]] : []),
+    ...(isStudent || envoyees.length ? [['envoyees', 'Mes demandes', envoyees.length + myRdv]] : [])];
 
   return html`<div class="sub-page">
     <div class="toolbar">
@@ -23,15 +31,20 @@ export function MentoratPage(ctx) {
       ${me.role !== 'etudiant' ? html`<label class="switch"><input id="mentor-dispo" type="checkbox" checked=${!!me.mentor_dispo} onChange=${e => act(() => store.update('profiles', me.id, { mentor_dispo: e.target.checked }))}/> Disponible pour du mentorat</label>` : null}
     </div>
     ${tab === 'mentors' ? html`
+      <${ExpressStrip} ctx=${ctx} fil=${fil}/>
+      ${isStudent ? html`<div class="section-head"><h2 class="h-ico"><${Icon} name="mentor"/> Demander un mentorat</h2><span class="muted small">Pour un suivi plus long : CV, choix de PFE, candidatures</span></div>` : null}
       <div class="filter-row"><select id="m-fil" value=${fil} onChange=${e => setFil(e.target.value)} aria-label="Filière"><option value="">Toutes filières</option>${FILIERES.map(f => html`<option value=${f}>${f}</option>`)}</select></div>
       <div class="cards">${mentors.length ? mentors.map(p => html`<div class="mcard" key=${p.id}>
         <${Person} p=${p} score=${scores.get(p.id)} onOpen=${openProfile} size=${44}/>
         <p class="small"><${Icon} name="briefcase" size=${14}/> ${p.poste ? `${p.poste}${p.entreprise ? ' · ' + p.entreprise : ''}` : ''}${p.ville ? ` · ${p.ville}` : ''}</p>
         ${p.mentor_sujets ? html`<p class="topics"><span class="muted small">Peut t’aider sur :</span> ${p.mentor_sujets}</p>` : null}
-        <div class="row"><span class="muted small">${data.mentorships.filter(m => m.mentor_id === p.id && m.status === 'terminee').length} mentorats terminés</span><span class="spacer"></span><button class="btn small primary" onClick=${() => setAsk(p)}>Demander</button></div>
+        ${freeSlots(p.id) ? html`<p><span class="mini good"><${Icon} name="clock" size=${12}/> ${freeSlots(p.id)} créneau${freeSlots(p.id) > 1 ? 'x' : ''} de 15 min</span></p>` : null}
+        <div class="row"><span class="muted small">${(n => `${n} mentorat${n > 1 ? 's' : ''} terminé${n > 1 ? 's' : ''}`)(data.mentorships.filter(m => m.mentor_id === p.id && m.status === 'terminee').length)}</span><span class="spacer"></span><button class="btn small primary" onClick=${() => setAsk(p)}>Demander</button></div>
       </div>`) : html`<${Empty} icon="mentor" title="Aucun mentor dans cette filière pour l’instant">Essaie une autre filière, ou pose ta question dans l’Entraide.<//>`}</div>` : null}
     ${tab === 'recues' ? html`<div class="list">${recues.length ? recues.map(m => html`<${MentorshipRow} key=${m.id} m=${m} ctx=${ctx} side="mentor"/>`) : html`<${Empty} icon="mentor" title="Aucune demande reçue">Active ta disponibilité pour apparaître dans la liste des mentors.<//>`}</div>` : null}
-    ${tab === 'envoyees' ? html`<div class="list">${envoyees.length ? envoyees.map(m => html`<${MentorshipRow} key=${m.id} m=${m} ctx=${ctx} side="student"/>`) : html`<${Empty} icon="mentor" title="Aucune demande envoyée">Choisis un mentor et explique en deux phrases ce dont tu as besoin.<//>`}</div>` : null}
+    ${tab === 'creneaux' ? html`<${ExpressMentor} ctx=${ctx}/>` : null}
+    ${tab === 'envoyees' ? html`<${MyBookings} ctx=${ctx}/>` : null}
+    ${tab === 'envoyees' && (envoyees.length || !data.slots.some(s => s.student_id === me.id)) ? html`<div class="list">${envoyees.length ? envoyees.map(m => html`<${MentorshipRow} key=${m.id} m=${m} ctx=${ctx} side="student"/>`) : html`<${Empty} icon="mentor" title="Aucune demande envoyée">Choisis un mentor et explique en deux phrases ce dont tu as besoin.<//>`}</div>` : null}
     ${ask ? html`<${AskMentor} ctx=${ctx} mentor=${ask} onClose=${() => setAsk(null)}/>` : null}
   </div>`;
 }
@@ -152,10 +165,10 @@ export function ReseauPage(ctx) {
     <header class="page-head"><div><p class="eyebrow">${data.profiles.filter(p => p.role === 'laureat').length} lauréats · ${data.profiles.filter(p => p.role === 'etudiant').length} étudiants</p><h1>Réseau</h1></div></header>
     <div class="icon-tabs" role="tablist" style=${`--n:${tabs.length}`}>${tabs.map(([k, l, i]) => html`<button role="tab" aria-selected=${tab === k} class=${tab === k ? 'on' : ''} onClick=${() => go('reseau/' + k)}><${Icon} name=${i} size=${20}/><span>${l}</span>${k === 'mentorat' && pendingM ? html`<span class="dotn"></span>` : null}</button>`)}</div>
     ${tab === 'entraide' ? html`<${EntraidePage} ...${ctx}/>` : null}
-    ${tab === 'mentorat' ? html`<${MentoratPage} ...${ctx}/>` : null}
+    ${tab === 'mentorat' ? html`<${MentoratPage} ...${ctx} key=${ctx.sub2 || 'm'}/>` : null}
     ${tab === 'annuaire' ? html`<${Annuaire} ctx=${ctx}/>` : null}
     ${tab === 'classement' ? html`<${Classement} ctx=${ctx}/>` : null}
-    ${tab === 'talents' ? html`<${Talents} ctx=${ctx}/>` : null}
+    ${tab === 'talents' ? html`<${TalentPool} ctx=${ctx}/>` : null}
   </section>`;
 }
 
@@ -172,21 +185,6 @@ function Classement({ ctx }) {
       <span class="board-facts small muted"><span title="Recrutés"><${Icon} name="briefcase" size=${14}/> ${s?.recrutes || 0}</span><span title="Mentorats"><${Icon} name="mentor" size=${14}/> ${s?.mentorats || 0}</span><span title="Offres"><${Icon} name="feed" size=${14}/> ${s?.offres || 0}</span></span>
       <span class="mono pts">${x.pts} pts</span></li>`; })}</ol>
     ${!board.length ? html`<${Empty} icon="trophy" title="Personne n’a encore marqué de points sur cette période">Publie une offre ou réponds à une question pour ouvrir le classement.<//>` : null}
-  </div>`;
-}
-
-function Talents({ ctx }) {
-  const { data, saison, openProfile } = ctx;
-  const [fil, setFil] = useState('');
-  const talents = data.profiles.filter(p => p.role === 'etudiant' && p.vitrine !== false && [3, 4, 5].includes(niveauOf(p, saison)) && !['trouve', 'validation'].includes(statutOf(data, p, saison).key) && (!fil || p.filiere === fil));
-  return html`<div class="sub-page">
-    <p class="muted small">Étudiants encore en recherche qui ont choisi d’être visibles. Lauréats : si un profil correspond à un besoin dans votre entreprise, écrivez-lui.</p>
-    <div class="filter-row"><select id="v-fil" value=${fil} onChange=${e => setFil(e.target.value)} aria-label="Filière"><option value="">Toutes filières</option>${FILIERES.map(f => html`<option value=${f}>${f}</option>`)}</select></div>
-    <div class="cards">${talents.map(p => html`<div class="mcard" key=${p.id}><${Person} p=${p} onOpen=${openProfile} size=${40}/>
-      <p class="small">Cherche : <strong>${{ 3: 'stage de 3A', 4: 'stage de 4A', 5: 'PFE ou stage à l’étranger' }[niveauOf(p, saison)]}</strong></p>
-      ${(p.competences || []).length ? html`<p>${p.competences.slice(0, 5).map(c => html`<span class="mini">${c}</span>`)}</p>` : null}
-      <span class=${'state-pill s-' + statutOf(data, p, saison).key}>${statutOf(data, p, saison).label}</span></div>`)}</div>
-    ${!talents.length ? html`<${Empty} icon="spark" title="Personne en recherche dans cette filière">Tout le monde a trouvé, bravo !<//>` : null}
   </div>`;
 }
 
@@ -211,7 +209,7 @@ function Annuaire({ ctx }) {
 export function ProfileModal({ ctx, p, onClose, onAskMentor }) {
   const { data, me, scores, saison } = ctx;
   const s = scores.get(p.id);
-  const badges = badgesOf(s, p);
+  const badges = badgesOf(s, p, { star: ctx.starId });
   const helped = data.placements.filter(x => x.laureat_id === p.id && x.status === 'confirme').length;
   const st = p.role === 'etudiant' ? statutOf(data, p, saison) : null;
   return html`<${Modal} title="Profil" onClose=${onClose}>
@@ -220,6 +218,7 @@ export function ProfileModal({ ctx, p, onClose, onAskMentor }) {
         <p class="small muted">${p.role === 'laureat' ? `${p.filiere} · Promo ${p.promo}` : p.role === 'etudiant' ? `${NIVEAUX[niveauOf(p, saison)]?.label} · promo ${p.promo}` : ''}${p.ville ? ` · ${p.ville}` : ''}${p.pays && p.pays !== 'Maroc' ? `, ${p.pays}` : ''}</p></div></div>
       ${p.poste ? html`<p><strong>${p.poste}</strong>${p.entreprise ? ` chez ${p.entreprise}` : ''}</p>` : null}
       ${st ? html`<p><span class=${'state-pill s-' + st.key}>${st.label}</span>${st.pl ? ` ${st.pl.entreprise}` : ''}</p>` : null}
+      ${p.role === 'etudiant' && p.disponibilite ? html`<p class="small"><${Icon} name="calendar" size=${14}/> Disponibilité : <span translate="no" dir="auto">${p.disponibilite}</span></p>` : null}
       ${p.bio ? html`<p>${p.bio}</p>` : null}
       ${(p.competences || []).length ? html`<p class="offer-target">${p.competences.map(c => html`<span class="mini">${c}</span>`)}</p>` : null}
       ${p.role !== 'etudiant' ? html`<div class="profile-stats"><span><b class="mono">${s?.points || 0}</b> points</span><span><b class="mono">${helped}</b> recrutés</span><span><b class="mono">${s?.mentorats || 0}</b> mentorats</span><span><b class="mono">${s?.offres || 0}</b> offres</span></div>` : null}
@@ -232,13 +231,15 @@ export function ProfileModal({ ctx, p, onClose, onAskMentor }) {
 
 export function ProfileForm({ ctx, initial, onDone, onboarding }) {
   const { store, act } = ctx;
-  const [f, setF] = useState(() => ({ full_name: '', role: 'etudiant', filiere: FILIERES[0], promo: new Date().getFullYear() + 1, entreprise: '', poste: '', ville: '', pays: 'Maroc', bio: '', competences: [], linkedin: '', contact: '', cv_url: '', mentor_dispo: false, mentor_sujets: '', vitrine: true, ...(initial || {}) }));
+  const [f, setF] = useState(() => ({ full_name: '', role: 'etudiant', filiere: FILIERES[0], promo: new Date().getFullYear() + 1, entreprise: '', poste: '', ville: '', pays: 'Maroc', bio: '', competences: [], linkedin: '', contact: '', cv_url: '', disponibilite: '', mentor_dispo: false, mentor_sujets: '', vitrine: true, ...(initial || {}) }));
   const set = (k, v) => setF({ ...f, [k]: v });
   const [comp, setComp] = useState((f.competences || []).join(', '));
   const ok = f.full_name.trim().length >= 2 && f.promo >= 1990 && f.promo <= 2040;
   const submit = e => {
     e.preventDefault(); if (!ok) return;
     const row = { full_name: f.full_name.trim(), role: f.role === 'admin' ? 'admin' : f.role, filiere: f.filiere, promo: +f.promo, entreprise: f.entreprise.trim() || null, poste: f.poste.trim() || null, ville: f.ville.trim() || null, pays: f.pays.trim() || 'Maroc', bio: f.bio.trim() || null, competences: comp.split(',').map(x => x.trim()).filter(Boolean).slice(0, 15), linkedin: f.linkedin.trim() || null, contact: f.contact.trim() || null, cv_url: f.cv_url.trim() || null, mentor_dispo: !!f.mentor_dispo, mentor_sujets: f.mentor_sujets.trim() || null, vitrine: !!f.vitrine };
+    // Colonne ajoutée par la mise à jour Phase 1 : envoyée seulement si la base la connaît déjà ou si elle est remplie
+    if ((f.disponibilite || '').trim() || (initial && 'disponibilite' in initial)) row.disponibilite = (f.disponibilite || '').trim() || null;
     act(async () => {
       if (onboarding) await store.insert('profiles', { id: store.userId, ...row });
       else await store.update('profiles', initial.id, row);
@@ -259,7 +260,8 @@ export function ProfileForm({ ctx, initial, onDone, onboarding }) {
     <${Field} label="Bio courte"><textarea id="pf-bio" rows="3" maxlength="600" value=${f.bio || ''} onInput=${e => set('bio', e.target.value)} placeholder=${isStudent ? 'Ce que tu cherches, tes projets…' : 'Ton parcours, comment tu peux aider…'}></textarea><//>
     <${Field} label="Compétences" hint="Séparées par des virgules"><input id="pf-comp" value=${comp} onInput=${e => setComp(e.target.value)} placeholder="Lean, CATIA, Python…"/><//>
     <div class="grid2"><${Field} label="LinkedIn"><input id="pf-li" value=${f.linkedin || ''} onInput=${e => set('linkedin', e.target.value)} placeholder="linkedin.com/in/…"/><//><${Field} label="Contact visible par les membres"><input id="pf-contact" value=${f.contact || ''} onInput=${e => set('contact', e.target.value)} placeholder="Email ou téléphone"/><//></div>
-    ${isStudent ? html`<${Field} label="Lien vers ton CV (Google Drive, etc.)"><input id="pf-cv" value=${f.cv_url || ''} onInput=${e => set('cv_url', e.target.value)}/><//>
+    ${isStudent ? html`<div class="grid2"><${Field} label="Lien vers ton CV (Google Drive, etc.)"><input id="pf-cv" value=${f.cv_url || ''} onInput=${e => set('cv_url', e.target.value)}/><//>
+      <${Field} label="Disponibilité"><input id="pf-dispo" maxlength="80" value=${f.disponibilite || ''} onInput=${e => set('disponibilite', e.target.value)} placeholder="Ex. dès février, 6 mois"/><//></div>
       <label class="check"><input id="pf-vit" type="checkbox" checked=${f.vitrine} onChange=${e => set('vitrine', e.target.checked)}/> Apparaître dans la Vitrine des talents quand je cherche (visible par les lauréats)</label>` : html`
       <label class="check"><input id="pf-mentor" type="checkbox" checked=${f.mentor_dispo} onChange=${e => set('mentor_dispo', e.target.checked)}/> Je suis disponible pour du mentorat</label>
       ${f.mentor_dispo ? html`<${Field} label="Sujets sur lesquels je peux aider"><input id="pf-msuj" value=${f.mentor_sujets || ''} onInput=${e => set('mentor_sujets', e.target.value)} placeholder="Stages à l’étranger, entretiens, automobile…"/><//>` : null}

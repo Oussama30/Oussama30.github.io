@@ -3,13 +3,14 @@ import { getLang, setLang } from './i18n.js';
 import { html, render, useState, useEffect, useMemo } from './vendor/preact-htm.js';
 import { createStore } from './store.js';
 import { Icon, Modal, Field, Empty, Person, Avatar, Bar, Toaster, toast, Confirm, LevelChip, BrandLogo, CompanyLogo, SchoolScene, Num, useLocal } from './ui.js';
-import { seasonOf, seasonLabel, niveauOf, NIVEAUX, OBJECTIFS, statutOf, seasonStats, computeScores, timeAgo, pct } from './logic.js';
+import { seasonOf, seasonLabel, niveauOf, NIVEAUX, OBJECTIFS, FOUND, statutOf, seasonStats, computeScores, starOfMonth, slotState, timeAgo, pct } from './logic.js';
 import { OffersPage, OfferCard, OfferDetail, OfferComposer, matchesMe, APP_STATUS } from './offers.js';
 import { ParcoursPage, EspacePage, ConfirmRecruit, Journey, journeyStep } from './me.js';
 import { DashboardPage } from './dashboard.js';
 import { ReseauPage, ProfileModal, ProfileForm, AdminPage } from './community.js';
+import { SuccessFeed, VerifyPage, slotWhen } from './growth.js';
 
-const ROUTES = ['accueil', 'offres', 'parcours', 'espace', 'reseau', 'suivi', 'profil', 'admin'];
+const ROUTES = ['accueil', 'offres', 'parcours', 'espace', 'reseau', 'suivi', 'profil', 'admin', 'verifier'];
 const ALIASES = { impact: 'espace', tableau: 'suivi', communaute: 'reseau', mentorat: 'reseau/mentorat', entraide: 'reseau/entraide' };
 
 function navFor(me) {
@@ -24,8 +25,8 @@ function navFor(me) {
 function readRoute() {
   let h = decodeURIComponent((location.hash || '').slice(1));
   h = ALIASES[h] || h;
-  const [base, sub] = h.split('/');
-  return ROUTES.includes(base) ? { base, sub: sub || '' } : { base: 'accueil', sub: '' };
+  const [base, sub, sub2] = h.split('/');
+  return ROUTES.includes(base) ? { base, sub: sub || '', sub2: sub2 || '' } : { base: 'accueil', sub: '', sub2: '' };
 }
 
 function App({ store }) {
@@ -39,20 +40,24 @@ function App({ store }) {
   useEffect(() => store.on(() => setTick(t => t + 1)), []);
   useEffect(() => { const f = () => setRoute(readRoute()); addEventListener('hashchange', f); return () => removeEventListener('hashchange', f); }, []);
   useEffect(() => { if (!pop) return; const f = e => { if (!e.target.closest('.pop-wrap')) setPop(null); }; document.addEventListener('click', f); return () => document.removeEventListener('click', f); }, [pop]);
-  const go = r => { try { history.replaceState(null, '', '#' + r); } catch { /* cadre */ } const [base, sub] = r.split('/'); setRoute({ base, sub: sub || '' }); setPop(null); window.scrollTo?.(0, 0); };
+  const go = r => { try { history.replaceState(null, '', '#' + r); } catch { /* cadre */ } const [base, sub, sub2] = r.split('/'); setRoute({ base, sub: sub || '', sub2: sub2 || '' }); setPop(null); window.scrollTo?.(0, 0); };
 
   const data = store.data;
   const me = store.me;
   const saison = seasonOf();
-  const scores = useMemo(() => computeScores(data), [data.offers, data.applications, data.comments, data.placements, data.mentorships, data.answers, data.questions, data.votes]);
+  const scores = useMemo(() => computeScores(data), [data.offers, data.applications, data.comments, data.placements, data.mentorships, data.answers, data.questions, data.votes, data.slots]);
+  const monthScores = useMemo(() => computeScores(data, new Date(Date.now() - 30 * 864e5)), [data]);
+  const star = useMemo(() => starOfMonth(data, monthScores), [data, monthScores]);
 
   const relang = () => setTick(t => t + 1);
+  // Vérification d'une attestation : page publique, sans compte
+  if (route.base === 'verifier') return html`<div class="auth verify-wrap"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><${VerifyPage} store=${store} id=${route.sub}/></div>`;
   if (store.mode === 'live' && !store.session) return html`<${AuthScreen} store=${store} relang=${relang}/>`;
   if (store.mode === 'live' && !me) return html`<${Onboarding} store=${store} relang=${relang}/>`;
 
   const act = async fn => { try { await fn(); } catch (e) { toast(e.message || String(e), 'err'); } };
   const ctx = {
-    store, data, me, saison, scores, go, act, sub: route.sub,
+    store, data, me, saison, scores, go, act, sub: route.sub, sub2: route.sub2, star, starId: star?.p.id,
     openProfile: p => p && setProfile(p),
     openOffer: id => { setOfferId(id); setPop(null); },
     confirm: (text, onYes, yes) => setConfirmBox({ text, onYes, yes }),
@@ -169,6 +174,29 @@ function buildNotifs({ data, me, store, saison }) {
     if (m.mentor_id === me.id && m.status === 'demande') out.push({ action: true, tone: 'accent', icon: 'mentor', to: 'reseau/mentorat', at: m.created_at, text: `${name(m.student_id)} te demande un mentorat : ${m.sujet}` });
     if (m.student_id === me.id && m.status === 'acceptee') out.push({ icon: 'mentor', tone: 'good', to: 'reseau/mentorat', at: m.created_at, text: `${name(m.mentor_id)} a accepté ta demande : ${m.sujet}` });
   }
+  // Invitations à postuler (étudiant)
+  for (const i of data.invitations) if (i.student_id === me.id && i.status === 'envoyee' && !data.applications.some(a => a.offer_id === i.offer_id && a.student_id === me.id)) {
+    const o = store.byId('offers', i.offer_id);
+    if (o && o.status === 'ouverte') out.push({ action: true, mine: true, tone: 'accent', icon: 'send', offer: o.id, at: i.created_at, text: `${name(i.laureat_id)} t’invite à postuler : ${o.titre}` });
+  }
+  // Entretiens express de 15 min
+  for (const s of data.slots) {
+    const st = slotState(s); const w = slotWhen(s.starts_at);
+    const soon = st === 'reserve' && w.diff <= 1 ? `${w.diff === 0 ? 'aujourd’hui' : 'demain'} à ${w.time}` : null;
+    if (s.mentor_id === me.id && st === 'reserve') out.push(soon
+      ? { action: true, tone: 'accent', icon: 'clock', to: 'reseau/mentorat/rdv', at: s.booked_at || s.created_at, text: `Rendez-vous de 15 min avec ${name(s.student_id)} ${soon}` }
+      : { icon: 'clock', tone: 'good', to: 'reseau/mentorat/rdv', at: s.booked_at || s.created_at, text: `${name(s.student_id)} a réservé ton créneau de 15 min : ${s.sujet}` });
+    if (s.student_id !== me.id) continue;
+    if (soon) out.push({ action: true, mine: true, tone: 'accent', icon: 'clock', to: 'reseau/mentorat/rdv', at: s.booked_at || s.created_at, text: `Rendez-vous de 15 min avec ${name(s.mentor_id)} ${soon}` });
+    if (st === 'annule' && new Date(s.starts_at) > Date.now()) out.push({ icon: 'x', to: 'reseau/mentorat/rdv', at: s.booked_at || s.created_at, text: `${name(s.mentor_id)} a dû annuler votre rendez-vous de 15 min.` });
+    if (st === 'fait' && !s.merci && recent(s.starts_at, 14)) out.push({ action: true, mine: true, tone: 'brass', icon: 'heart', to: 'reseau/mentorat/rdv', at: s.starts_at, text: `Dis merci à ${first(s.mentor_id)} pour l’entretien de 15 min.` });
+  }
+  // Bravos reçus sur sa réussite
+  for (const p of data.placements) if (p.student_id === me.id && FOUND.has(p.status)) {
+    const k = data.kudos.filter(x => x.placement_id === p.id && x.user_id !== me.id);
+    const last = k.reduce((m, x) => (x.created_at > m ? x.created_at : m), '');
+    if (k.length && recent(last, 14)) out.push({ icon: 'clap', tone: 'brass', to: 'accueil', at: last, text: `${k.length} bravo${k.length > 1 ? 's' : ''} pour ta réussite chez ${p.entreprise}` });
+  }
   const myQ = new Set(data.questions.filter(q => q.author_id === me.id).map(q => q.id));
   for (const a of data.answers) if (myQ.has(a.question_id) && a.author_id !== me.id) out.push({ icon: 'qa', to: 'reseau/entraide', at: a.created_at, text: `${name(a.author_id)} a répondu à ta question.` });
   return out.sort((a, b) => (b.action ? 1 : 0) - (a.action ? 1 : 0) || new Date(b.at) - new Date(a.at));
@@ -186,8 +214,7 @@ function Home(ctx) {
   const actions = notifs.filter(x => x.action);
   const isStudent = me.role === 'etudiant';
   const latest = data.offers.filter(o => o.status === 'ouverte' && (!isStudent || matchesMe(o, me, saison))).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 4);
-  const month = useMemo(() => computeScores(data, new Date(Date.now() - 30 * 864e5)), [data]);
-  const star = data.profiles.filter(p => p.role === 'laureat').map(p => ({ p, pts: month.get(p.id)?.points || 0 })).sort((a, b) => b.pts - a.pts)[0];
+  const star = ctx.star;
   const starHelped = star ? data.placements.filter(p => p.laureat_id === star.p.id && p.status === 'confirme').length : 0;
   const mercis = [
     ...data.placements.filter(p => p.merci && p.laureat_id).map(p => ({ from: p.student_id, to: p.laureat_id, txt: p.merci, at: p.confirmed_at || p.created_at })),
@@ -242,6 +269,7 @@ function Home(ctx) {
       <div class="home-main">
         <div class="section-head"><h2>${isStudent ? 'Nouvelles offres pour toi' : 'Dernières offres'}</h2><button class="btn tiny ghost" onClick=${() => go('offres')}>Tout voir <${Icon} name="arrow" size=${14}/></button></div>
         <div class="offer-grid one">${latest.length ? latest.map(o => html`<${OfferCard} key=${o.id} o=${o} ctx=${ctx} onOpen=${() => openOffer(o.id)}/>`) : html`<${Empty} icon="feed" title="Pas encore d’offre pour ton niveau">Elles arrivent vite. Parle de la plateforme aux lauréats que tu connais.<//>`}</div>
+        <${SuccessFeed} ctx=${ctx}/>
       </div>
       <aside class="home-side">
         <button class="panel pulse clickable" onClick=${() => go('suivi')}>

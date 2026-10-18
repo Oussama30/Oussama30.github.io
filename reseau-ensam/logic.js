@@ -125,6 +125,7 @@ export const BAREME = [
   ['Bonus stage ou emploi à l’étranger', 25],
   ['Mentorat accepté', 10],
   ['Mentorat terminé', 20],
+  ['Entretien express de 15 min réalisé', 10],
   ['Message de remerciement reçu', 10],
   ['Réponse dans l’Entraide', 5],
   ['Meilleure réponse choisie', 15],
@@ -150,7 +151,7 @@ export function levelOf(points) {
 // Retourne une Map id -> { points, events[], stats } ; `since` limite aux événements récents.
 export function computeScores(data, since = null) {
   const S = new Map();
-  const get = id => { if (!S.has(id)) S.set(id, { points: 0, events: [], offres: 0, recrutes: 0, etranger: 0, mentorats: 0, mercis: 0, reponses: 0, meilleures: 0, candidatures: 0 }); return S.get(id); };
+  const get = id => { if (!S.has(id)) S.set(id, { points: 0, events: [], offres: 0, recrutes: 0, etranger: 0, mentorats: 0, express: 0, mercis: 0, reponses: 0, meilleures: 0, candidatures: 0 }); return S.get(id); };
   const add = (id, pts, label, at) => {
     if (!id) return; if (since && new Date(at) < since) return;
     const s = get(id); s.points += pts; s.events.push({ pts, label, at });
@@ -173,6 +174,11 @@ export function computeScores(data, since = null) {
     if (m.status === 'terminee') { add(m.mentor_id, 20, `Mentorat terminé : ${m.sujet}`, m.created_at); get(m.mentor_id).mentorats++; }
     if (m.merci) { add(m.mentor_id, 10, 'Message de remerciement', m.created_at); get(m.mentor_id).mercis++; }
   }
+  for (const sl of data.slots || []) {
+    if (slotState(sl) !== 'fait') continue;
+    add(sl.mentor_id, 10, `Entretien express : ${sl.sujet || '15 min'}`, sl.starts_at); get(sl.mentor_id).express++;
+    if (sl.merci) { add(sl.mentor_id, 10, 'Message de remerciement', sl.starts_at); get(sl.mentor_id).mercis++; }
+  }
   const ansAuthor = new Map(data.answers.map(a => [a.id, a.author_id]));
   for (const a of data.answers) { add(a.author_id, 5, 'Réponse dans l’Entraide', a.created_at); get(a.author_id).reponses++; }
   for (const q of data.questions) if (q.best_answer_id && ansAuthor.get(q.best_answer_id)) { const a = ansAuthor.get(q.best_answer_id); add(a, 15, 'Meilleure réponse', q.created_at); get(a).meilleures++; }
@@ -187,13 +193,46 @@ export const BADGES = [
   { id: 'faiseur', nom: 'Faiseur de carrières', desc: '10 étudiants recrutés', test: s => s.recrutes >= 10 },
   { id: 'passeport', nom: 'Passeport', desc: 'A ouvert une porte à l’étranger', test: s => s.etranger >= 1 },
   { id: 'mentor', nom: 'Mentor', desc: '3 mentorats terminés', test: s => s.mentorats >= 3 },
+  { id: 'express', nom: 'Mentor express', desc: '5 entretiens de 15 minutes', test: s => s.express >= 5 },
   { id: 'sage', nom: 'Sage de l’entraide', desc: '3 meilleures réponses', test: s => s.meilleures >= 3 },
   { id: 'aime', nom: 'Aimé de la promo', desc: '5 messages de remerciement', test: s => s.mercis >= 5 },
+  { id: 'top', nom: 'Top contributeur', desc: '300 points d’impact (niveau Or)', test: s => s.points >= 300 },
+  { id: 'mois', nom: 'Lauréat du mois', desc: 'Le plus d’impact sur les 30 derniers jours', test: (s, p, x) => !!p.id && x.star === p.id },
 ];
 
-export function badgesOf(score, profile) {
-  const s = score || { offres: 0, recrutes: 0, etranger: 0, mentorats: 0, meilleures: 0, mercis: 0 };
-  return BADGES.filter(b => b.test(s, profile || {}));
+// `extra.star` : id du lauréat du mois (voir starOfMonth)
+export function badgesOf(score, profile, extra = {}) {
+  const s = score || { points: 0, offres: 0, recrutes: 0, etranger: 0, mentorats: 0, express: 0, meilleures: 0, mercis: 0 };
+  return BADGES.filter(b => b.test(s, profile || {}, extra));
+}
+
+// Lauréat qui a eu le plus d'impact sur 30 jours (null si personne n'a de points)
+export function starOfMonth(data, monthScores = computeScores(data, new Date(Date.now() - 30 * 864e5))) {
+  const best = data.profiles.filter(p => p.role === 'laureat').map(p => ({ p, pts: monthScores.get(p.id)?.points || 0 })).sort((a, b) => b.pts - a.pts)[0];
+  return best && best.pts > 0 ? best : null;
+}
+
+// ---------------------------------------------------------------------------
+// Entretiens express de 15 minutes (créneaux ouverts par les lauréats)
+// ---------------------------------------------------------------------------
+// libre : réservable · reserve : à venir · fait : passé et réservé · annule · expire : passé sans réservation
+export function slotState(sl, now = new Date()) {
+  if (sl.status === 'annule') return 'annule';
+  const past = new Date(sl.starts_at).getTime() + (sl.duree || 15) * 6e4 < now.getTime();
+  if (sl.student_id) return past ? 'fait' : 'reserve';
+  return past ? 'expire' : 'libre';
+}
+
+export const fmtSlot = iso => new Date(iso).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+
+// Ce que l'attestation certifie : uniquement des actions vérifiées par l'autre partie.
+export function attestationStats(data, uid) {
+  return {
+    mentorats: data.mentorships.filter(m => m.mentor_id === uid && m.status === 'terminee').length,
+    express: (data.slots || []).filter(sl => sl.mentor_id === uid && slotState(sl) === 'fait').length,
+    recrutes: data.placements.filter(p => p.laureat_id === uid && p.status === 'confirme').length,
+    reponses: data.answers.filter(a => a.author_id === uid).length,
+  };
 }
 
 // ---------------------------------------------------------------------------
