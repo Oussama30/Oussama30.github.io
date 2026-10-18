@@ -1,6 +1,7 @@
 // Composants partagés de l'interface.
 import { html, useState, useEffect, useRef } from './vendor/preact-htm.js';
 import { initials, levelOf, NIVEAUX, niveauOf, seasonOf } from './logic.js';
+import { EMBLEM, sceneMarkup } from './scene.js';
 
 export { html };
 
@@ -140,16 +141,40 @@ export function useLocal(key, init) {
   return [v, set];
 }
 
-// Logo de la plateforme : un engrenage (Arts et Métiers) qui porte le monogramme EM
-export function BrandLogo({ size = 38 }) {
-  const teeth = Array.from({ length: 10 }, (_, i) => {
-    const a = (i / 10) * Math.PI * 2;
-    return `<rect x="22.5" y="1.5" width="5" height="8" rx="1.4" transform="rotate(${(a * 180) / Math.PI} 25 25)"/>`;
-  }).join('');
-  return html`<svg class="brand-logo" width=${size} height=${size} viewBox="0 0 50 50" aria-hidden="true" dangerouslySetInnerHTML=${{ __html: `
-    <g fill="var(--accent)">${teeth}<circle cx="25" cy="25" r="18"/></g>
-    <circle cx="25" cy="25" r="14.5" fill="none" stroke="var(--accent-ink)" stroke-opacity=".35" stroke-width="1"/>
-    <text x="25" y="29.6" text-anchor="middle" font-family="Bricolage Grotesque, system-ui, sans-serif" font-weight="750" font-size="13" fill="var(--accent-ink)">EM</text>` }}></svg>`;
+// Logo de la plateforme : l'emblème aux couleurs de l'école (voir scene.js). « draw » le trace à l'arrivée.
+export function BrandLogo({ size = 38, draw = false }) {
+  return html`<svg class=${'brand-logo' + (draw ? ' draw' : '')} width=${size} height=${size} viewBox="0 0 64 64" aria-hidden="true" dangerouslySetInnerHTML=${{ __html: EMBLEM }}></svg>`;
+}
+
+// L'entrée de l'école dessinée. La porte s'ouvre une seule fois par visite ; les animations
+// s'arrêtent quand l'image sort de l'écran.
+let gateOpened = false;
+export function SchoolScene({ align = 'xMidYMax', fit = 'meet' }) {
+  const ref = useRef();
+  const [opening] = useState(() => { const o = !gateOpened; gateOpened = true; return o; });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([e]) => el.toggleAttribute('data-paused', !e.isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return html`<div ref=${ref} class=${'scene' + (opening ? ' opening' : '')} aria-hidden="true" dangerouslySetInnerHTML=${{ __html: sceneMarkup(align, fit) }}></div>`;
+}
+
+// Nombre qui monte jusqu'à sa valeur à l'affichage
+export function Num({ v }) {
+  const n = Number(v) || 0;
+  const ref = useRef();
+  useEffect(() => {
+    const t = ref.current?.firstChild;
+    if (!t || n <= 0 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let raf, t0;
+    const step = now => { t0 ??= now; const k = Math.min(1, (now - t0) / 900); t.data = String(Math.round(n * (1 - (1 - k) ** 3))); if (k < 1) raf = requestAnimationFrame(step); };
+    raf = requestAnimationFrame(step);
+    return () => { cancelAnimationFrame(raf); t.data = String(n); };
+  }, [n]);
+  return html`<span ref=${ref}>${String(n)}</span>`;
 }
 
 // « Logo » d'entreprise : monogramme coloré, stable pour un même nom
