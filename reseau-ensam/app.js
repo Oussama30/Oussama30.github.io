@@ -2,7 +2,7 @@
 import { getLang, setLang } from './i18n.js';
 import { html, render, useState, useEffect, useMemo } from './vendor/preact-htm.js';
 import { createStore } from './store.js';
-import { Icon, Modal, Field, Empty, Person, Avatar, Bar, Toaster, toast, Confirm, LevelChip, BrandLogo, CompanyLogo, useLocal } from './ui.js';
+import { Icon, Modal, Field, Empty, Person, Avatar, Bar, Toaster, toast, Confirm, LevelChip, BrandLogo, CompanyLogo, SchoolScene, Num, useLocal } from './ui.js';
 import { seasonOf, seasonLabel, niveauOf, NIVEAUX, OBJECTIFS, statutOf, seasonStats, computeScores, timeAgo, pct } from './logic.js';
 import { OffersPage, OfferCard, OfferDetail, OfferComposer, matchesMe, APP_STATUS } from './offers.js';
 import { ParcoursPage, EspacePage, ConfirmRecruit, Journey, journeyStep } from './me.js';
@@ -212,9 +212,13 @@ function Home(ctx) {
       : [['shield', 'Administration', 'Vérifier les lauréats', () => go('admin')], ['chart', 'Suivi', 'Placement par promo', () => go('suivi')], ['feed', 'Offres', 'Modérer', () => go('offres')], ['network', 'Réseau', 'Annuaire', () => go('reseau/annuaire')]];
 
   return html`<section class="page home">
-    <header class="hello">
-      <p class="eyebrow">Saison ${seasonLabel(saison)}${isStudent ? ` · ${NIVEAUX[n]?.label} · ${me.filiere}` : me.role === 'laureat' ? ` · Promo ${me.promo}` : ''}</p>
-      <h1>Bonjour ${first}</h1>
+    <header class="hello home-hero sky">
+      <div class="hello-txt">
+        <p class="eyebrow">Saison ${seasonLabel(saison)}${isStudent ? ` · ${NIVEAUX[n]?.label} · ${me.filiere}` : me.role === 'laureat' ? ` · Promo ${me.promo}` : ''}</p>
+        <h1>Bonjour ${first}</h1>
+        <p class="hello-sub">${isStudent ? 'Les lauréats de l’école t’ouvrent leurs portes. Avance à ton rythme.' : me.role === 'laureat' ? 'Merci de garder la porte ouverte aux étudiants de l’école.' : 'Tout le réseau de l’école, en un coup d’œil.'}</p>
+      </div>
+      <${SchoolScene} align=${getLang() === 'ar' ? 'xMinYMax' : 'xMaxYMax'}/>
     </header>
 
     <${Guide} ctx=${ctx} setCompose=${setCompose}/>
@@ -228,7 +232,7 @@ function Home(ctx) {
       <${Journey} step=${journeyStep(stu, myApps)}/>
     </button>` : null}
 
-    ${me.role === 'laureat' && s ? html`<button class="impact-strip clickable" onClick=${() => go('espace')}><span class="obj-ico brass"><${Icon} name="star" size=${20}/></span><span><b class="mono">${s.points}</b> points d’impact</span><${LevelChip} points=${s.points}/><span class="muted small">${s.recrutes} recruté${s.recrutes > 1 ? 's' : ''} grâce à toi</span><span class="spacer"></span><${Icon} name="arrow" size=${18}/></button>` : null}
+    ${me.role === 'laureat' && s ? html`<button class="impact-strip clickable" onClick=${() => go('espace')}><span class="obj-ico brass"><${Icon} name="star" size=${20}/></span><span><b class="mono"><${Num} v=${s.points}/></b> points d’impact</span><${LevelChip} points=${s.points}/><span class="muted small">${s.recrutes} recruté${s.recrutes > 1 ? 's' : ''} grâce à toi</span><span class="spacer"></span><${Icon} name="arrow" size=${18}/></button>` : null}
 
     ${actions.filter(a => !(isStudent && a.icon === 'briefcase')).length ? html`<div class="callout"><h2 class="h-ico"><${Icon} name="bell"/> À faire</h2><ul class="todo">${actions.filter(a => !(isStudent && a.icon === 'briefcase')).slice(0, 4).map(a => html`<li><button class="notif act" onClick=${() => openNotif(a)}><span class=${'n-ico ' + (a.tone || '')}><${Icon} name=${a.icon} size=${16}/></span><span>${a.text}</span><${Icon} name="arrow" size=${16}/></button></li>`)}</ul></div>` : null}
 
@@ -317,17 +321,15 @@ function AuthScreen({ store, relang }) {
   };
   return html`<div class="auth">
     <div class="auth-lang"><${LangToggle} onChange=${relang}/></div>
-    <div class="auth-side">
-      <${BrandLogo} size=${72}/>
-      <h1>Réseau ENSAM Meknès</h1>
-      <p>Les lauréats partagent leurs offres de stages, de PFE et d’emplois. Les étudiants trouvent plus vite, avec un suivi de chaque promo jusqu’au premier emploi.</p>
-      <ul class="auth-points">
-        <li><span class="sc-ico"><${Icon} name="feed"/></span> Offres partagées par les anciens, avec cooptation</li>
-        <li><span class="sc-ico"><${Icon} name="check"/></span> Recrutements vérifiés : le lauréat déclare, l’étudiant confirme</li>
-        <li><span class="sc-ico"><${Icon} name="mentor"/></span> Mentorat et entraide entre générations</li>
-        <li><span class="sc-ico"><${Icon} name="chart"/></span> Suivi de chaque promo, de la 3A au premier emploi</li>
-      </ul>
-    </div>
+    <section class="auth-hero sky">
+      <div class="auth-hero-txt">
+        <${BrandLogo} size=${64} draw/>
+        <h1>Réseau ENSAM Meknès</h1>
+        <p>Les lauréats partagent leurs offres de stages, de PFE et d’emplois. Les étudiants trouvent plus vite, avec un suivi de chaque promo jusqu’au premier emploi.</p>
+      </div>
+      <${SchoolScene} fit="slice"/>
+    </section>
+    <div class="auth-right">
     <form class="auth-card form" onSubmit=${submit}>
       <h2>${{ connexion: 'Se connecter', inscription: 'Créer mon compte', oubli: 'Mot de passe oublié', nouveau: 'Nouveau mot de passe' }[mode]}</h2>
       ${mode !== 'nouveau' ? html`<${Field} label="Email"><input id="au-email" type="email" required autocomplete="email" value=${email} onInput=${e => setEmail(e.target.value)}/><//>` : null}
@@ -339,6 +341,13 @@ function AuthScreen({ store, relang }) {
         ${mode === 'connexion' ? html`<button type="button" class="linkish" onClick=${() => { setMode('oubli'); setMsg(null); }}>Mot de passe oublié ?</button>` : null}
       </div>
     </form>
+    <ul class="auth-points">
+      <li><span class="sc-ico"><${Icon} name="feed"/></span> Offres partagées par les anciens, avec cooptation</li>
+      <li><span class="sc-ico"><${Icon} name="check"/></span> Recrutements vérifiés : le lauréat déclare, l’étudiant confirme</li>
+      <li><span class="sc-ico"><${Icon} name="mentor"/></span> Mentorat et entraide entre générations</li>
+      <li><span class="sc-ico"><${Icon} name="chart"/></span> Suivi de chaque promo, de la 3A au premier emploi</li>
+    </ul>
+    </div>
   </div>`;
 }
 

@@ -1,6 +1,6 @@
 // « Mon parcours » (étudiants) et « Mon espace » (lauréats).
 import { html, useState } from './vendor/preact-htm.js';
-import { Icon, Modal, Field, Empty, Person, Bar, toast, LevelChip, CompanyLogo, TYPE_ICON } from './ui.js';
+import { Icon, Modal, Field, Empty, Person, Bar, toast, LevelChip, CompanyLogo, TYPE_ICON, Num } from './ui.js';
 import { OBJECTIFS, NIVEAUX, TYPES, niveauOf, statutOf, typeForNiveau, seasonLabel, timeAgo, levelOf, BADGES, badgesOf, BAREME, computeScores, NIVEAUX_IMPACT } from './logic.js';
 import { APP_STATUS, OfferComposer } from './offers.js';
 
@@ -170,16 +170,16 @@ export function EspacePage(ctx) {
     <div class="impact-hero">
       <div class="impact-score">
         <span class="row"><${Icon} name="star" size=${20}/><span class="muted">Points d’impact</span></span>
-        <span class="big mono">${s.points}</span>
+        <span class="big mono"><${Num} v=${s.points}/></span>
         <div class="lvl-row"><${LevelChip} points=${s.points}/>${lvl.next ? html`<span class="muted small">encore ${lvl.next.min - s.points} pour ${lvl.next.nom}</span>` : html`<span class="muted small">Niveau maximum</span>`}</div>
         <${Bar} value=${lvl.progress} label="Progression vers le niveau suivant"/>
         <span class="row small muted">+${month} ces 30 jours<span class="spacer"></span><button class="linkish small on-dark" onClick=${() => setBareme(true)}>Comment gagner des points ?</button></span>
       </div>
       <div class="impact-facts">
-        <div><span class="fact-ico"><${Icon} name="briefcase" size=${18}/></span><span class="big mono">${helped.length}</span><span>recruté${helped.length > 1 ? 's' : ''} grâce à toi</span></div>
-        <div><span class="fact-ico"><${Icon} name="feed" size=${18}/></span><span class="big mono">${myOffers.length}</span><span>offre${myOffers.length > 1 ? 's' : ''} partagée${myOffers.length > 1 ? 's' : ''}</span></div>
-        <div><span class="fact-ico"><${Icon} name="mentor" size=${18}/></span><span class="big mono">${s.mentorats}</span><span>mentorat${s.mentorats > 1 ? 's' : ''} terminé${s.mentorats > 1 ? 's' : ''}</span></div>
-        <div><span class="fact-ico"><${Icon} name="heart" size=${18}/></span><span class="big mono">${mercis.length}</span><span>merci${mercis.length > 1 ? 's' : ''} reçu${mercis.length > 1 ? 's' : ''}</span></div>
+        <div><span class="fact-ico"><${Icon} name="briefcase" size=${18}/></span><span class="big mono"><${Num} v=${helped.length}/></span><span>recruté${helped.length > 1 ? 's' : ''} grâce à toi</span></div>
+        <div><span class="fact-ico"><${Icon} name="feed" size=${18}/></span><span class="big mono"><${Num} v=${myOffers.length}/></span><span>offre${myOffers.length > 1 ? 's' : ''} partagée${myOffers.length > 1 ? 's' : ''}</span></div>
+        <div><span class="fact-ico"><${Icon} name="mentor" size=${18}/></span><span class="big mono"><${Num} v=${s.mentorats}/></span><span>mentorat${s.mentorats > 1 ? 's' : ''} terminé${s.mentorats > 1 ? 's' : ''}</span></div>
+        <div><span class="fact-ico"><${Icon} name="heart" size=${18}/></span><span class="big mono"><${Num} v=${mercis.length}/></span><span>merci${mercis.length > 1 ? 's' : ''} reçu${mercis.length > 1 ? 's' : ''}</span></div>
       </div>
     </div>
 

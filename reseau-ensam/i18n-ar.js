@@ -53,6 +53,9 @@ export const AR = {
   'Ouverte': 'مفتوح', 'Pourvue': 'تم شغله', 'Fermée': 'مغلق', 'Cooptation': 'تزكية', 'Dernier jour': 'آخر يوم',
 
   // Accueil
+  'Les lauréats de l’école t’ouvrent leurs portes. Avance à ton rythme.': 'خريجو المدرسة يفتحون لك أبوابهم. تقدّم بالوتيرة التي تناسبك.',
+  'Merci de garder la porte ouverte aux étudiants de l’école.': 'شكرًا لأنك تُبقي الباب مفتوحًا لطلبة المدرسة.',
+  'Tout le réseau de l’école, en un coup d’œil.': 'شبكة المدرسة كاملة، بنظرة واحدة.',
   'Bonjour': 'مرحبًا', 'Mon objectif de l’année': 'هدفي لهذه السنة', 'Offres pour moi': 'عروض تناسبني',
   'Trouver un mentor': 'إيجاد مرشد', 'Un lauréat, un appel': 'خريج، ومكالمة', 'Poser une question': 'طرح سؤال', 'Les anciens répondent': 'القدامى يجيبون',
   'Lauréat du mois': 'خريج الشهر', 'grâce à ses offres': 'بفضل عروضه', 'Mur des mercis': 'جدار الشكر',

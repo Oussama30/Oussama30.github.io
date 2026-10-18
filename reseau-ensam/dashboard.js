@@ -1,6 +1,6 @@
 // Tableau de bord de suivi : qui a trouvé quoi, par niveau, filière et saison.
 import { html, useState, useMemo } from './vendor/preact-htm.js';
-import { Icon, Bar, Person, Tabs } from './ui.js';
+import { Icon, Bar, Person, Tabs, Num } from './ui.js';
 import { seasonStats, monthlyActivity, seasonLabel, NIVEAUX, pct, OBJECTIFS, statutOf, FOUND, niveauOf } from './logic.js';
 import { CompanyLogo } from './ui.js';
 
@@ -27,10 +27,10 @@ export function DashboardPage(ctx) {
     </header>
 
     <div class="kpis">
-      <div class="kpi"><span class="kpi-label">Ont trouvé</span><span class="kpi-val mono">${totalFound}<small>/${totalPop}</small></span><span class="small muted">${pct(totalPop ? totalFound / totalPop : 0)} des inscrits 3A, 4A, 5A et jeunes diplômés</span></div>
-      <div class="kpi"><span class="kpi-label">Grâce à la plateforme</span><span class="kpi-val mono">${st.viaTotal}</span><span class="small muted">${pct(st.totalFound ? st.viaTotal / st.totalFound : 0)} des réussites, vérifiées des deux côtés</span></div>
-      <div class="kpi"><span class="kpi-label">À confirmer</span><span class="kpi-val mono">${pendingAll}</span><span class="small muted">recrutés, attendent la confirmation de l’étudiant</span></div>
-      <div class="kpi"><span class="kpi-label">Offres ouvertes</span><span class="kpi-val mono">${openOffers}</span><span class="small muted">publiées par ${new Set(data.offers.filter(o => o.status === 'ouverte').map(o => o.author_id)).size} lauréats</span></div>
+      <div class="kpi"><span class="kpi-label">Ont trouvé</span><span class="kpi-val mono"><${Num} v=${totalFound}/><small>/${totalPop}</small></span><span class="small muted">${pct(totalPop ? totalFound / totalPop : 0)} des inscrits 3A, 4A, 5A et jeunes diplômés</span></div>
+      <div class="kpi"><span class="kpi-label">Grâce à la plateforme</span><span class="kpi-val mono"><${Num} v=${st.viaTotal}/></span><span class="small muted">${pct(st.totalFound ? st.viaTotal / st.totalFound : 0)} des réussites, vérifiées des deux côtés</span></div>
+      <div class="kpi"><span class="kpi-label">À confirmer</span><span class="kpi-val mono"><${Num} v=${pendingAll}/></span><span class="small muted">recrutés, attendent la confirmation de l’étudiant</span></div>
+      <div class="kpi"><span class="kpi-label">Offres ouvertes</span><span class="kpi-val mono"><${Num} v=${openOffers}/></span><span class="small muted">publiées par ${new Set(data.offers.filter(o => o.status === 'ouverte').map(o => o.author_id)).size} lauréats</span></div>
     </div>
 
     <div class="niv-grid">${st.rows.map(r => {
