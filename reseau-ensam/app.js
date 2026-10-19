@@ -1,19 +1,22 @@
 // Point d'entrée : coque de l'application, connexion, accueil, notifications.
 import { getLang, setLang } from './i18n.js';
-import { html, render, useState, useEffect, useMemo } from './vendor/preact-htm.js';
+import { html, render, useState, useEffect, useMemo, useRef } from './vendor/preact-htm.js';
 import { createStore } from './store.js';
-import { Icon, Modal, Field, Empty, Person, Avatar, Bar, Toaster, toast, Confirm, LevelChip, BrandLogo, CompanyLogo, SchoolScene, Num, useLocal } from './ui.js';
-import { seasonOf, seasonLabel, niveauOf, NIVEAUX, OBJECTIFS, statutOf, seasonStats, computeScores, timeAgo, pct } from './logic.js';
-import { OffersPage, OfferCard, OfferDetail, OfferComposer, matchesMe, APP_STATUS } from './offers.js';
+import { Icon, Field, Empty, Person, Avatar, Bar, Toaster, toast, Confirm, LevelChip, BrandLogo, SchoolScene, Num, useLocal } from './ui.js';
+import { seasonOf, seasonLabel, niveauOf, NIVEAUX, OBJECTIFS, FOUND, statutOf, seasonStats, computeScores, starOfMonth, mentorState, requestsFor, timeAgo, pct } from './logic.js';
+import { OffersPage, OfferCard, OfferDetail, OfferComposer, RecoOffers, matchesMe, APP_STATUS } from './offers.js';
 import { ParcoursPage, EspacePage, ConfirmRecruit, Journey, journeyStep } from './me.js';
 import { DashboardPage } from './dashboard.js';
-import { ReseauPage, ProfileModal, ProfileForm, AdminPage } from './community.js';
+import { ReseauPage, ProfileModal, ProfileForm } from './community.js';
+import { AdminPage, AnnonceBanner } from './admin.js';
+import { MentoratPage, AskHelp, NextRdv, HelpNeeded, slotWhen } from './mentorat.js';
+import { SuccessFeed, VerifyPage } from './growth.js';
 
-const ROUTES = ['accueil', 'offres', 'parcours', 'espace', 'reseau', 'suivi', 'profil', 'admin'];
-const ALIASES = { impact: 'espace', tableau: 'suivi', communaute: 'reseau', mentorat: 'reseau/mentorat', entraide: 'reseau/entraide' };
+const ROUTES = ['accueil', 'offres', 'mentorat', 'parcours', 'espace', 'reseau', 'suivi', 'profil', 'admin', 'verifier'];
+const ALIASES = { impact: 'espace', tableau: 'suivi', communaute: 'reseau', entraide: 'reseau/entraide', 'reseau/mentorat': 'mentorat', 'reseau/mentorat/rdv': 'mentorat' };
 
 function navFor(me) {
-  const items = [['accueil', 'Accueil', 'home'], ['offres', 'Offres', 'feed']];
+  const items = [['accueil', 'Accueil', 'home'], ['offres', 'Offres', 'feed'], ['mentorat', 'Mentorat', 'mentor']];
   if (me.role === 'etudiant') items.push(['parcours', 'Mon parcours', 'route']);
   else if (me.role === 'laureat') items.push(['espace', 'Mon espace', 'star']);
   items.push(['reseau', 'Réseau', 'network'], ['suivi', me.role === 'etudiant' ? 'Ma promo' : 'Suivi', 'chart']);
@@ -24,8 +27,8 @@ function navFor(me) {
 function readRoute() {
   let h = decodeURIComponent((location.hash || '').slice(1));
   h = ALIASES[h] || h;
-  const [base, sub] = h.split('/');
-  return ROUTES.includes(base) ? { base, sub: sub || '' } : { base: 'accueil', sub: '' };
+  const [base, sub, sub2] = h.split('/');
+  return ROUTES.includes(base) ? { base, sub: sub || '', sub2: sub2 || '' } : { base: 'accueil', sub: '', sub2: '' };
 }
 
 function App({ store }) {
@@ -33,39 +36,62 @@ function App({ store }) {
   const [route, setRoute] = useState(readRoute);
   const [profile, setProfile] = useState(null);
   const [offerId, setOfferId] = useState(null);
+  const [applyNow, setApplyNow] = useState(false);
   const [askMentor, setAskMentor] = useState(null);
   const [confirmBox, setConfirmBox] = useState(null);
   const [pop, setPop] = useState(null); // 'bell' | 'me'
+  const seen = useRef(null); const lastAct = useRef(0);
   useEffect(() => store.on(() => setTick(t => t + 1)), []);
   useEffect(() => { const f = () => setRoute(readRoute()); addEventListener('hashchange', f); return () => removeEventListener('hashchange', f); }, []);
   useEffect(() => { if (!pop) return; const f = e => { if (!e.target.closest('.pop-wrap')) setPop(null); }; document.addEventListener('click', f); return () => document.removeEventListener('click', f); }, [pop]);
-  const go = r => { try { history.replaceState(null, '', '#' + r); } catch { /* cadre */ } const [base, sub] = r.split('/'); setRoute({ base, sub: sub || '' }); setPop(null); window.scrollTo?.(0, 0); };
+  const go = r => { try { history.replaceState(null, '', '#' + r); } catch { /* cadre */ } const [base, sub, sub2] = r.split('/'); setRoute({ base, sub: sub || '', sub2: sub2 || '' }); setPop(null); window.scrollTo?.(0, 0); };
 
   const data = store.data;
   const me = store.me;
   const saison = seasonOf();
   const scores = useMemo(() => computeScores(data), [data.offers, data.applications, data.comments, data.placements, data.mentorships, data.answers, data.questions, data.votes]);
+  const monthScores = useMemo(() => computeScores(data, new Date(Date.now() - 30 * 864e5)), [data]);
+  const star = useMemo(() => starOfMonth(data, monthScores), [data, monthScores]);
+
+  // Temps réel : une nouvelle notification venue d'un autre membre s'affiche aussi en bas de l'écran
+  const latest = useRef(null);
+  useEffect(() => {
+    const cur = latest.current; latest.current = null;
+    if (!cur) return;
+    const { notifs, todo, me: who } = cur;
+    const keys = new Set(notifs.map(n => n.key).filter(Boolean));
+    const prev = seen.current;
+    if (prev && prev.id === who.id && Date.now() - lastAct.current > 2500) {
+      const fresh = notifs.find(n => n.key && !prev.keys.has(n.key) && (n.action || n.tone === 'good'));
+      if (fresh) toast(fresh.text);
+    }
+    seen.current = { id: who.id, keys };
+    try { document.title = (todo ? `(${todo}) ` : '') + 'Réseau ENSAM Meknès'; } catch { /* */ }
+  });
 
   const relang = () => setTick(t => t + 1);
+  // Vérification d'une attestation : page publique, sans compte
+  if (route.base === 'verifier') return html`<div class="auth verify-wrap"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><${VerifyPage} store=${store} id=${route.sub}/></div>`;
   if (store.mode === 'live' && !store.session) return html`<${AuthScreen} store=${store} relang=${relang}/>`;
   if (store.mode === 'live' && !me) return html`<${Onboarding} store=${store} relang=${relang}/>`;
 
-  const act = async fn => { try { await fn(); } catch (e) { toast(e.message || String(e), 'err'); } };
+  const act = async fn => { lastAct.current = Date.now(); try { await fn(); } catch (e) { toast(e.message || String(e), 'err'); } lastAct.current = Date.now(); };
   const ctx = {
-    store, data, me, saison, scores, go, act, sub: route.sub,
+    store, data, me, saison, scores, go, act, sub: route.sub, sub2: route.sub2, star, starId: star?.p.id,
     openProfile: p => p && setProfile(p),
-    openOffer: id => { setOfferId(id); setPop(null); },
+    openOffer: (id, apply = false) => { setOfferId(id); setApplyNow(apply); setPop(null); },
     confirm: (text, onYes, yes) => setConfirmBox({ text, onYes, yes }),
   };
   const notifs = buildNotifs(ctx);
   const todo = notifs.filter(n => n.action).length;
+  latest.current = { notifs, todo, me };
   const nav = navFor(me);
   let page = route.base;
   if (page === 'parcours' && me.role !== 'etudiant') page = me.role === 'laureat' ? 'espace' : 'accueil';
   if (page === 'espace' && me.role !== 'laureat') page = me.role === 'etudiant' ? 'parcours' : 'accueil';
   if (page === 'admin' && me.role !== 'admin') page = 'accueil';
   const openNotif = n => { setPop(null); if (n.offer) ctx.openOffer(n.offer); else go(n.to); };
-  const dotFor = k => (k === 'parcours' || k === 'espace') && notifs.some(n => n.action && n.mine);
+  const dotFor = k => ((k === 'parcours' || k === 'espace') && notifs.some(n => n.action && n.mine)) || (k === 'mentorat' && notifs.some(n => n.action && n.to === 'mentorat'));
 
   return html`<div class="shell">
     <aside class="side">
@@ -92,10 +118,11 @@ function App({ store }) {
           </div>` : null}
         </div>
       </header>
-      ${store.mode === 'demo' ? html`<div class="demo-band"><${Icon} name="spark" size=${15}/><span>Démo avec des données fictives. Essaie le circuit : <b>Salma</b> postule, <b>Youssef</b> (lauréat) la marque « Recruté(e) », puis Salma confirme. Change de rôle en haut.</span></div>` : null}
+      ${store.mode === 'demo' ? html`<div class="demo-band"><${Icon} name="spark" size=${15}/><span>Démo avec des données fictives. Essaie le mentorat : <b translate="no">Salma</b> demande de l’aide, <b translate="no">Youssef</b> (lauréat) clique sur un horaire, la visio est prête. Change de rôle en haut.</span></div>` : null}
       <main class="content">
         ${page === 'accueil' ? html`<${Home} ...${ctx} notifs=${notifs} openNotif=${openNotif}/>` : null}
         ${page === 'offres' ? html`<${OffersPage} ...${ctx}/>` : null}
+        ${page === 'mentorat' ? html`<${MentoratPage} ...${ctx}/>` : null}
         ${page === 'parcours' ? html`<${ParcoursPage} ...${ctx}/>` : null}
         ${page === 'espace' ? html`<${EspacePage} ...${ctx}/>` : null}
         ${page === 'reseau' ? html`<${ReseauPage} ...${ctx}/>` : null}
@@ -105,9 +132,9 @@ function App({ store }) {
       </main>
     </div>
     <nav class="bottom-nav">${nav.map(([k, l, i]) => html`<a href=${'#' + k} class=${page === k ? 'on' : ''} onClick=${e => { e.preventDefault(); go(k); }}><span class="bn-ico"><${Icon} name=${i}/>${dotFor(k) ? html`<span class="dotn"></span>` : null}</span><span>${{ 'Mon parcours': 'Parcours', 'Mon espace': 'Espace', 'Ma promo': 'Promo' }[l] || l}</span></a>`)}</nav>
-    ${offerId ? html`<${OfferDetail} ctx=${ctx} id=${offerId} key=${offerId} onClose=${() => setOfferId(null)}/>` : null}
+    ${offerId ? html`<${OfferDetail} ctx=${ctx} id=${offerId} key=${offerId} apply=${applyNow} onClose=${() => setOfferId(null)}/>` : null}
     ${profile ? html`<${ProfileModal} ctx=${ctx} p=${profile} onClose=${() => setProfile(null)} onAskMentor=${p => { setProfile(null); setAskMentor(p); }}/>` : null}
-    ${askMentor ? html`<${QuickAsk} ctx=${ctx} mentor=${askMentor} onClose=${() => setAskMentor(null)}/>` : null}
+    ${askMentor ? html`<${AskHelp} ctx=${ctx} mentor=${askMentor} onClose=${() => setAskMentor(null)}/>` : null}
     ${confirmBox ? html`<${Confirm} text=${confirmBox.text} onYes=${confirmBox.onYes} onClose=${() => setConfirmBox(null)} yes=${confirmBox.yes || 'Supprimer'}/>` : null}
     <${Toaster}/>
   </div>`;
@@ -118,18 +145,6 @@ export function LangToggle({ onChange }) {
   const ar = getLang() === 'ar';
   return html`<button class="lang-btn" onClick=${() => { setLang(ar ? 'fr' : 'ar'); onChange?.(); }} aria-label=${ar ? 'Passer en français' : 'التبديل إلى العربية'} lang=${ar ? 'fr' : 'ar'}>
     <${Icon} name="globe" size=${16}/><span>${ar ? 'FR' : 'ع'}</span><span class="lang-long">${ar ? 'Français' : 'العربية'}</span></button>`;
-}
-
-function QuickAsk({ ctx, mentor, onClose }) {
-  const { store, me, act, go } = ctx;
-  const [sujet, setSujet] = useState(''); const [msg, setMsg] = useState('');
-  return html`<${Modal} title=${`Demande à ${mentor.full_name}`} onClose=${onClose}>
-    <form class="form" onSubmit=${e => { e.preventDefault(); act(async () => { await store.insert('mentorships', { student_id: me.id, mentor_id: mentor.id, sujet: sujet.trim(), message: msg.trim() }); toast('Demande envoyée.'); onClose(); go('reseau/mentorat'); }); }}>
-      ${mentor.mentor_sujets ? html`<p class="muted small">Peut t’aider sur : ${mentor.mentor_sujets}</p>` : null}
-      <${Field} label="Sujet"><input id="qa-sujet" value=${sujet} onInput=${e => setSujet(e.target.value)} maxlength="140" placeholder="Ex. Préparer mon entretien chez…"/><//>
-      <${Field} label="Message"><textarea id="qa-msg" rows="4" value=${msg} onInput=${e => setMsg(e.target.value)} maxlength="1500"></textarea><//>
-      <div class="row-end"><button type="button" class="btn ghost" onClick=${onClose}>Annuler</button><button class="btn primary" disabled=${sujet.trim().length < 3}>Envoyer</button></div>
-    </form><//>`;
 }
 
 function PersonaSwitch({ store, go }) {
@@ -150,32 +165,62 @@ function buildNotifs({ data, me, store, saison }) {
   // Étudiant : recrutement à confirmer, évolution des candidatures, nouvelles offres
   for (const p of data.placements) {
     if (p.student_id !== me.id) continue;
-    if (p.status === 'en_attente') out.push({ action: true, mine: true, tone: 'accent', icon: 'briefcase', to: 'parcours', at: p.created_at, text: `${name(p.laureat_id)} indique t’avoir recruté(e) chez ${p.entreprise}. Confirme-le.` });
+    if (p.status === 'en_attente') out.push({ key: 'pa' + p.id, action: true, mine: true, tone: 'accent', icon: 'briefcase', to: 'parcours', at: p.created_at, text: `${name(p.laureat_id)} indique t’avoir recruté(e) chez ${p.entreprise}. Confirme-le.` });
     if (p.status === 'confirme' && p.laureat_id && !p.merci) out.push({ action: true, mine: true, tone: 'brass', icon: 'heart', to: 'parcours', at: p.confirmed_at || p.created_at, text: `Ta réussite chez ${p.entreprise} est confirmée. Laisse un merci à ${first(p.laureat_id)}.` });
   }
   for (const a of data.applications) if (a.student_id === me.id && a.offer_id && a.status !== 'postule' && recent(a.updated_at || a.created_at, 21)) {
-    out.push({ icon: a.status === 'refuse' ? 'x' : a.status === 'entretien' ? 'people' : 'check', tone: a.status === 'refuse' ? '' : 'good', offer: a.offer_id, at: a.updated_at || a.created_at, text: `Ta candidature « ${a.titre} » : ${APP_STATUS[a.status]}.` });
+    out.push({ key: 'as' + a.id + a.status, icon: a.status === 'refuse' ? 'x' : a.status === 'entretien' ? 'people' : 'check', tone: a.status === 'refuse' ? '' : 'good', offer: a.offer_id, at: a.updated_at || a.created_at, text: `Ta candidature « ${a.titre} » : ${APP_STATUS[a.status]}.` });
   }
   if (me.role === 'etudiant') {
     for (const o of data.offers) if (o.status === 'ouverte' && matchesMe(o, me, saison) && recent(o.created_at, 7)) out.push({ icon: 'feed', offer: o.id, at: o.created_at, text: `Nouvelle offre pour toi : ${o.titre} (${o.entreprise})` });
   }
-  // Lauréat : candidatures reçues, confirmations, mercis, commentaires
+  // Lauréat : candidatures reçues, confirmations, commentaires
   const myOffers = new Map(data.offers.filter(o => o.author_id === me.id).map(o => [o.id, o]));
-  for (const a of data.applications) if (myOffers.has(a.offer_id) && a.status === 'postule') out.push({ action: true, mine: true, tone: 'accent', icon: 'inbox', offer: a.offer_id, at: a.created_at, text: `Nouvelle candidature de ${name(a.student_id)} : ${myOffers.get(a.offer_id).titre}` });
-  for (const p of data.placements) if (p.laureat_id === me.id && p.status === 'confirme' && recent(p.confirmed_at || p.created_at, 30)) out.push({ icon: 'trophy', tone: 'brass', to: 'espace', at: p.confirmed_at || p.created_at, text: `${name(p.student_id)} a confirmé son recrutement chez ${p.entreprise}. +50 points${p.merci ? ' et un merci' : ''}.` });
+  for (const a of data.applications) if (myOffers.has(a.offer_id) && a.status === 'postule') out.push({ key: 'ap' + a.id, action: true, mine: true, tone: 'accent', icon: 'inbox', offer: a.offer_id, at: a.created_at, text: `Nouvelle candidature de ${name(a.student_id)} : ${myOffers.get(a.offer_id).titre}` });
+  for (const p of data.placements) if (p.laureat_id === me.id && p.status === 'confirme' && recent(p.confirmed_at || p.created_at, 30)) out.push({ key: 'pc' + p.id, icon: 'trophy', tone: 'brass', to: 'espace', at: p.confirmed_at || p.created_at, text: `${name(p.student_id)} a confirmé son recrutement chez ${p.entreprise}. +50 points${p.merci ? ' et un merci' : ''}.` });
   for (const c of data.comments) if (myOffers.has(c.offer_id) && c.author_id !== me.id && recent(c.created_at, 14)) out.push({ icon: 'comment', offer: c.offer_id, at: c.created_at, text: `${name(c.author_id)} a posé une question sur ton offre : « ${c.body.slice(0, 60)}${c.body.length > 60 ? '…' : ''} »` });
-  // Mentorat et entraide
+  // Mentorat : demande reçue, horaire choisi, rendez-vous proche, puis merci
   for (const m of data.mentorships) {
-    if (m.mentor_id === me.id && m.status === 'demande') out.push({ action: true, tone: 'accent', icon: 'mentor', to: 'reseau/mentorat', at: m.created_at, text: `${name(m.student_id)} te demande un mentorat : ${m.sujet}` });
-    if (m.student_id === me.id && m.status === 'acceptee') out.push({ icon: 'mentor', tone: 'good', to: 'reseau/mentorat', at: m.created_at, text: `${name(m.mentor_id)} a accepté ta demande : ${m.sujet}` });
+    const st = mentorState(m);
+    const w = st === 'rdv' && m.rdv_at ? slotWhen(m.rdv_at) : null;
+    const soon = w && w.diff >= 0 && w.diff <= 1 ? `${w.diff === 0 ? 'aujourd’hui' : 'demain'} à ${w.time}` : null;
+    const upcoming = m.rdv_at && new Date(m.rdv_at) > Date.now();
+    if (m.mentor_id === me.id) {
+      if (st === 'demande') out.push({ key: 'md' + m.id, action: true, tone: 'accent', icon: 'mentor', to: 'mentorat', at: m.created_at, text: `${name(m.student_id)} te demande de l’aide : ${m.sujet}` });
+      if (soon) out.push({ key: 'mr' + m.id, rdv: true, action: true, tone: 'accent', icon: 'video', to: 'mentorat', at: m.accepted_at || m.created_at, text: `Rendez-vous avec ${name(m.student_id)} ${soon}` });
+      if (st === 'apres') out.push({ key: 'mf' + m.id, action: true, tone: 'brass', icon: 'check', to: 'mentorat', at: m.rdv_at, text: `Ton rendez-vous avec ${first(m.student_id)} a eu lieu ? Marque-le comme terminé.` });
+      if (st === 'terminee' && m.merci && recent(m.rdv_at || m.created_at, 14)) out.push({ key: 'mm' + m.id, tone: 'brass', icon: 'heart', to: 'espace', at: m.rdv_at || m.created_at, text: `${first(m.student_id)} te remercie pour le mentorat : ${m.sujet}` });
+      if (st === 'annulee' && upcoming) out.push({ key: 'mx' + m.id, icon: 'x', to: 'mentorat', at: m.accepted_at || m.created_at, text: `Rendez-vous annulé : ${m.sujet}` });
+    }
+    if (m.student_id === me.id) {
+      if (st === 'rdv' && !soon && recent(m.accepted_at || m.created_at, 10)) out.push({ key: 'sa' + m.id + m.rdv_at, icon: 'mentor', tone: 'good', to: 'mentorat', at: m.accepted_at || m.created_at, text: `${name(m.mentor_id)} a accepté ta demande : ${m.sujet}` });
+      if (soon) out.push({ key: 'sr' + m.id + m.rdv_at, rdv: true, action: true, mine: true, tone: 'accent', icon: 'video', to: 'mentorat', at: m.accepted_at || m.created_at, text: `Rendez-vous avec ${name(m.mentor_id)} ${soon}` });
+      if (st === 'apres') out.push({ key: 'sf' + m.id, action: true, mine: true, tone: 'brass', icon: 'heart', to: 'mentorat', at: m.rdv_at, text: `Comment s’est passé ton échange avec ${first(m.mentor_id)} ? Dis-lui merci.` });
+      if (st === 'annulee' && upcoming && m.mentor_id) out.push({ key: 'sx' + m.id, icon: 'x', to: 'mentorat', at: m.accepted_at || m.created_at, text: `Rendez-vous annulé : ${m.sujet}` });
+    }
+  }
+  // Lauréat : demandes ouvertes à tous qui lui correspondent bien (deux au plus)
+  if (me.role === 'laureat') for (const { m } of requestsFor(data, me, id => store.byId('profiles', id)).filter(x => !x.direct && x.score >= 3).slice(0, 2)) {
+    out.push({ key: 'mo' + m.id, tone: 'accent', icon: 'heart', to: 'mentorat', at: m.created_at, text: `${name(m.student_id)} cherche de l’aide : ${m.sujet}` });
+  }
+  // Invitations à postuler (étudiant)
+  for (const i of data.invitations) if (i.student_id === me.id && i.status === 'envoyee' && !data.applications.some(a => a.offer_id === i.offer_id && a.student_id === me.id)) {
+    const o = store.byId('offers', i.offer_id);
+    if (o && o.status === 'ouverte') out.push({ key: 'in' + i.id, action: true, mine: true, tone: 'accent', icon: 'send', offer: o.id, at: i.created_at, text: `${name(i.laureat_id)} t’invite à postuler : ${o.titre}` });
+  }
+  // Bravos reçus sur sa réussite
+  for (const p of data.placements) if (p.student_id === me.id && FOUND.has(p.status)) {
+    const k = data.kudos.filter(x => x.placement_id === p.id && x.user_id !== me.id);
+    const last = k.reduce((m, x) => (x.created_at > m ? x.created_at : m), '');
+    if (k.length && recent(last, 14)) out.push({ icon: 'clap', tone: 'brass', to: 'accueil', at: last, text: `${k.length} bravo${k.length > 1 ? 's' : ''} pour ta réussite chez ${p.entreprise}` });
   }
   const myQ = new Set(data.questions.filter(q => q.author_id === me.id).map(q => q.id));
-  for (const a of data.answers) if (myQ.has(a.question_id) && a.author_id !== me.id) out.push({ icon: 'qa', to: 'reseau/entraide', at: a.created_at, text: `${name(a.author_id)} a répondu à ta question.` });
+  for (const a of data.answers) if (myQ.has(a.question_id) && a.author_id !== me.id) out.push({ key: 'an' + a.id, tone: 'good', icon: 'qa', to: 'reseau/entraide', at: a.created_at, text: `${name(a.author_id)} a répondu à ta question.` });
   return out.sort((a, b) => (b.action ? 1 : 0) - (a.action ? 1 : 0) || new Date(b.at) - new Date(a.at));
 }
 
 // ---------------------------------------------------------------------------
-// Accueil : ce qu'il faut faire, où j'en suis, ce qui est nouveau
+// Accueil : ce qu'il y a à faire aujourd'hui, le prochain rendez-vous, ce qui est pour moi
 // ---------------------------------------------------------------------------
 function Home(ctx) {
   const { data, me, saison, scores, store, go, openProfile, openOffer, notifs, openNotif } = ctx;
@@ -183,33 +228,23 @@ function Home(ctx) {
   const st = useMemo(() => seasonStats(data, saison), [data, saison]);
   const first = me.full_name.split(' ')[0];
   const [compose, setCompose] = useState(false);
-  const actions = notifs.filter(x => x.action);
   const isStudent = me.role === 'etudiant';
-  const latest = data.offers.filter(o => o.status === 'ouverte' && (!isStudent || matchesMe(o, me, saison))).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 4);
-  const month = useMemo(() => computeScores(data, new Date(Date.now() - 30 * 864e5)), [data]);
-  const star = data.profiles.filter(p => p.role === 'laureat').map(p => ({ p, pts: month.get(p.id)?.points || 0 })).sort((a, b) => b.pts - a.pts)[0];
+  // Le prochain rendez-vous a sa propre carte ; la confirmation de recrutement aussi
+  // Les demandes d'aide et le prochain rendez-vous ont leur propre bloc juste en dessous
+  const actions = notifs.filter(x => x.action && !x.rdv && !x.key?.startsWith('md') && !(isStudent && x.icon === 'briefcase'));
+  const latest = data.offers.filter(o => o.status === 'ouverte').sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 4);
+  const star = ctx.star;
   const starHelped = star ? data.placements.filter(p => p.laureat_id === star.p.id && p.status === 'confirme').length : 0;
   const mercis = [
     ...data.placements.filter(p => p.merci && p.laureat_id).map(p => ({ from: p.student_id, to: p.laureat_id, txt: p.merci, at: p.confirmed_at || p.created_at })),
-    ...data.mentorships.filter(m => m.merci).map(m => ({ from: m.student_id, to: m.mentor_id, txt: m.merci, at: m.created_at })),
+    ...data.mentorships.filter(m => m.merci && m.mentor_id).map(m => ({ from: m.student_id, to: m.mentor_id, txt: m.merci, at: m.rdv_at || m.created_at })),
   ].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 2);
   const stu = isStudent ? statutOf(data, me, saison) : null;
   const obj = OBJECTIFS[n];
   const s = scores.get(me.id);
   const myApps = data.applications.filter(a => a.student_id === me.id);
   const helper = stu?.pl?.laureat_id ? store.byId('profiles', stu.pl.laureat_id) : null;
-
-  const shortcuts = isStudent
-    ? [['feed', 'Offres pour moi', `${data.offers.filter(o => o.status === 'ouverte' && matchesMe(o, me, saison)).length} ouvertes`, () => go('offres')],
-      ['mentor', 'Trouver un mentor', 'Un lauréat, un appel', () => go('reseau/mentorat')],
-      ['qa', 'Poser une question', 'Les anciens répondent', () => go('reseau/entraide')],
-      ['chart', 'Ma promo', `${NIVEAUX[n]?.short || ''} cette saison`, () => go('suivi')]]
-    : me.role === 'laureat'
-      ? [['plus', 'Publier une offre', '+10 points', () => setCompose(true)],
-        ['inbox', 'Mes candidatures', `${data.applications.filter(a => a.status === 'postule' && data.offers.some(o => o.id === a.offer_id && o.author_id === me.id)).length} à voir`, () => go('espace')],
-        ['qa', 'Répondre aux étudiants', `${data.questions.filter(q => !data.answers.some(a => a.question_id === q.id)).length} sans réponse`, () => go('reseau/entraide')],
-        ['spark', 'Talents en recherche', 'Repère un profil', () => go('reseau/talents')]]
-      : [['shield', 'Administration', 'Vérifier les lauréats', () => go('admin')], ['chart', 'Suivi', 'Placement par promo', () => go('suivi')], ['feed', 'Offres', 'Modérer', () => go('offres')], ['network', 'Réseau', 'Annuaire', () => go('reseau/annuaire')]];
+  const asking = data.mentorships.some(m => m.student_id === me.id && ['demande', 'acceptee'].includes(m.status));
 
   return html`<section class="page home">
     <header class="hello home-hero sky">
@@ -221,9 +256,15 @@ function Home(ctx) {
       <${SchoolScene} align=${getLang() === 'ar' ? 'xMinYMax' : 'xMaxYMax'}/>
     </header>
 
+    <${AnnonceBanner} ctx=${ctx}/>
     <${Guide} ctx=${ctx} setCompose=${setCompose}/>
 
     ${isStudent && stu.pl?.status === 'en_attente' ? html`<${ConfirmRecruit} ctx=${ctx} pl=${stu.pl} helper=${helper}/>` : null}
+
+    ${actions.length ? html`<div class="callout today"><h2 class="h-ico"><${Icon} name="bell"/> À faire aujourd’hui</h2><ul class="todo">${actions.slice(0, 4).map(a => html`<li><button class="notif act" onClick=${() => openNotif(a)}><span class=${'n-ico ' + (a.tone || '')}><${Icon} name=${a.icon} size=${16}/></span><span>${a.text}</span><${Icon} name="arrow" size=${16}/></button></li>`)}</ul></div>` : null}
+
+    <${NextRdv} ctx=${ctx}/>
+    <${HelpNeeded} ctx=${ctx}/>
 
     ${isStudent && obj ? html`<button class=${'objective compact clickable st-' + stu.key} onClick=${() => go('parcours')}>
       <div class="objective-top"><span class="obj-ico"><${Icon} name="route" size=${22}/></span>
@@ -232,16 +273,17 @@ function Home(ctx) {
       <${Journey} step=${journeyStep(stu, myApps)}/>
     </button>` : null}
 
+    ${isStudent && !asking ? html`<div class="help-cta"><span class="obj-ico"><${Icon} name="mentor" size=${22}/></span>
+      <div class="grow"><strong>Besoin d’un conseil ?</strong><span class="small muted">CV, stage, entretien, étranger : un lauréat te parle 20 minutes en visio.</span></div>
+      <button class="btn primary small" onClick=${() => go('mentorat')}>Demander de l’aide</button></div>` : null}
+
     ${me.role === 'laureat' && s ? html`<button class="impact-strip clickable" onClick=${() => go('espace')}><span class="obj-ico brass"><${Icon} name="star" size=${20}/></span><span><b class="mono"><${Num} v=${s.points}/></b> points d’impact</span><${LevelChip} points=${s.points}/><span class="muted small">${s.recrutes} recruté${s.recrutes > 1 ? 's' : ''} grâce à toi</span><span class="spacer"></span><${Icon} name="arrow" size=${18}/></button>` : null}
-
-    ${actions.filter(a => !(isStudent && a.icon === 'briefcase')).length ? html`<div class="callout"><h2 class="h-ico"><${Icon} name="bell"/> À faire</h2><ul class="todo">${actions.filter(a => !(isStudent && a.icon === 'briefcase')).slice(0, 4).map(a => html`<li><button class="notif act" onClick=${() => openNotif(a)}><span class=${'n-ico ' + (a.tone || '')}><${Icon} name=${a.icon} size=${16}/></span><span>${a.text}</span><${Icon} name="arrow" size=${16}/></button></li>`)}</ul></div>` : null}
-
-    <div class="shortcuts">${shortcuts.map(([i, l, sub, fn]) => html`<button class="shortcut" onClick=${fn}><span class="sc-ico"><${Icon} name=${i} size=${22}/></span><strong>${l}</strong><span class="muted small">${sub}</span></button>`)}</div>
 
     <div class="home-grid">
       <div class="home-main">
-        <div class="section-head"><h2>${isStudent ? 'Nouvelles offres pour toi' : 'Dernières offres'}</h2><button class="btn tiny ghost" onClick=${() => go('offres')}>Tout voir <${Icon} name="arrow" size=${14}/></button></div>
-        <div class="offer-grid one">${latest.length ? latest.map(o => html`<${OfferCard} key=${o.id} o=${o} ctx=${ctx} onOpen=${() => openOffer(o.id)}/>`) : html`<${Empty} icon="feed" title="Pas encore d’offre pour ton niveau">Elles arrivent vite. Parle de la plateforme aux lauréats que tu connais.<//>`}</div>
+        ${isStudent ? html`<${RecoOffers} ctx=${ctx}/>` : html`<div class="section-head"><h2>Dernières offres</h2><button class="btn tiny ghost" onClick=${() => go('offres')}>Tout voir <${Icon} name="arrow" size=${14}/></button></div>
+          <div class="offer-grid one">${latest.length ? latest.map(o => html`<${OfferCard} key=${o.id} o=${o} ctx=${ctx} onOpen=${() => openOffer(o.id)}/>`) : html`<${Empty} icon="feed" title="Pas encore d’offre">Publie la première : les étudiants concernés la voient tout de suite.<//>`}</div>`}
+        <${SuccessFeed} ctx=${ctx}/>
       </div>
       <aside class="home-side">
         <button class="panel pulse clickable" onClick=${() => go('suivi')}>
@@ -274,12 +316,12 @@ function Guide({ ctx, setCompose }) {
   const steps = me.role === 'etudiant' ? [
     ['user', 'Complète ton profil', 'Ajoute le lien de ton CV : il sera joint à chaque candidature.', !!me.cv_url, () => go('profil'), 'Mon profil'],
     ['feed', 'Postule à une offre', `Tu ne vois que les offres de ${NIVEAUX[n]?.short || 'ton année'}. Un message de deux phrases suffit.`, myApps.some(a => a.offer_id), () => go('offres'), 'Voir les offres'],
-    ['people', 'Le lauréat te répond', 'Il fait avancer ta candidature : entretien, puis « Recruté(e) ». Tu suis tout dans Mon parcours.', myApps.some(a => a.offer_id && a.status !== 'postule'), () => go('parcours'), 'Mon parcours'],
+    ['mentor', 'Demande un conseil', 'Un lauréat choisit un de tes horaires et t’appelle 20 minutes en visio.', data.mentorships.some(m => m.student_id === me.id), () => go('mentorat'), 'Mentorat'],
     ['heart', 'Confirme et dis merci', 'Quand il te marque recruté(e), tu confirmes en un clic et tu lui laisses un mot.', data.placements.some(p => p.student_id === me.id && p.status === 'confirme' && p.merci), null, ''],
   ] : [
     ['user', 'Complète ton profil', 'Entreprise, poste, sujets sur lesquels tu peux aider : les étudiants te trouvent plus facilement.', !!(me.entreprise && me.poste), () => go('profil'), 'Mon profil'],
     ['plus', 'Publie une offre', 'Une minute suffit. Seuls les étudiants de l’année concernée la voient.', myOffers.length > 0, () => setCompose(true), 'Publier'],
-    ['inbox', 'Réponds aux candidats', 'Les candidatures arrivent dans Mon espace, avec message et CV.', data.applications.some(a => myOffers.some(o => o.id === a.offer_id) && a.status !== 'postule'), () => go('espace'), 'Mon espace'],
+    ['mentor', 'Aide un étudiant', 'Clique sur un de ses horaires : la visio et l’invitation sont prêtes.', data.mentorships.some(m => m.mentor_id === me.id && m.status !== 'demande'), () => go('mentorat'), 'Mentorat'],
     ['check', 'Marque « Recruté(e) »', 'L’étudiant confirme, et tu reçois ses remerciements et 50 points.', data.placements.some(p => p.laureat_id === me.id && p.status === 'confirme'), null, ''],
   ];
   const done = steps.filter(x => x[3]).length;

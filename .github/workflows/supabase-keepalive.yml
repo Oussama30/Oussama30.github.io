@@ -1,0 +1,34 @@
+# Garde la base Supabase du Réseau ENSAM éveillée.
+# Un projet Supabase gratuit se met en pause après environ 7 jours sans activité :
+# cette tâche fait une petite lecture tous les 3 jours. L'URL et la clé publique
+# sont lues dans reseau-ensam/config.js, il n'y a rien à configurer.
+name: Supabase anti-pause
+
+on:
+  schedule:
+    - cron: '17 6 */3 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Interroger la base
+        run: |
+          url=$(sed -n "s/.*supabaseUrl: *'\([^']*\)'.*/\1/p" reseau-ensam/config.js)
+          key=$(sed -n "s/.*supabaseAnonKey: *'\([^']*\)'.*/\1/p" reseau-ensam/config.js)
+          if [ -z "$url" ] || [ -z "$key" ]; then echo "config.js sans base Supabase : rien à faire."; exit 0; fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$url/rest/v1/profiles?select=id&limit=1" -H "apikey: $key" -H "Authorization: Bearer $key")
+          echo "Réponse de Supabase : $code"
+          test "$code" = 200
+      # GitHub désactive les tâches planifiées d'un dépôt sans commit depuis 60 jours.
+      # On réactive celle-ci à chaque passage pour qu'elle ne s'arrête jamais.
+      - name: Rester active
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/supabase-keepalive.yml/enable" || true

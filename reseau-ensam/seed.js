@@ -188,14 +188,20 @@ export function buildSeed(now = new Date()) {
   s5.slice(12, 15).forEach((st, i) => applications.push({ id: id('a'), student_id: st.id, offer_id: yOffer.id, entreprise: yOffer.entreprise, titre: yOffer.titre, status: 'postule', message: MSG[(i + 1) % MSG.length], note: '', created_at: daysAgo(i, 2 + i * 3), updated_at: daysAgo(i) }));
   s5.slice(15, 20).forEach((st, i) => { const o = offers[i + 1]; applications.push({ id: id('a'), student_id: st.id, offer_id: o.id, entreprise: o.entreprise, titre: o.titre, status: i % 3 ? 'postule' : 'entretien', message: pick(MSG), note: '', created_at: daysAgo(3 + i), updated_at: daysAgo(1 + i) }); });
 
-  // Mentorat
+  // Mentorat : l'étudiant dit ce dont il a besoin et propose 3 horaires, un lauréat en choisit un
   const mentors = seniors.filter(s => s.mentor_dispo);
-  mentorships.push({ id: id('m'), student_id: s5[11].id, mentor_id: youssef.id, sujet: 'Préparer un entretien technique en méthodes', message: 'Bonjour, j’ai un entretien chez un équipementier automobile la semaine prochaine. Pourriez-vous m’aider à me préparer ?', status: 'demande', created_at: daysAgo(0, 3) });
-  mentorships.push({ id: id('m'), student_id: s4[3].id, mentor_id: youssef.id, sujet: 'Choisir entre deux stages de 4A', message: 'J’hésite entre un stage en qualité et un stage en méthodes.', status: 'terminee', reponse: 'Appel de 30 min fait.', merci: 'Merci pour l’appel, j’ai choisi les méthodes et je ne regrette pas !', created_at: daysAgo(20) });
-  mentorships.push({ id: id('m'), student_id: s5[7].id, mentor_id: youssef.id, sujet: 'Relire mon CV pour l’automobile', message: '', status: 'acceptee', reponse: 'Envoie-le moi, je te fais un retour samedi.', created_at: daysAgo(5) });
+  const at = (days, hh, mm = 0) => { const d = new Date(now); d.setDate(d.getDate() + days); d.setHours(hh, mm, 0, 0); return d.toISOString(); };
+  const later = (iso, h) => new Date(Date.parse(iso) + h * 36e5).toISOString();
+  const ms = o => { const m = { id: id('m'), besoin: 'stage', message: '', creneaux: [], rdv_at: null, accepted_at: null, reponse: null, merci: null, note: null, ...o }; mentorships.push(m); return m; };
+  ms({ student_id: s5[11].id, mentor_id: youssef.id, besoin: 'entretien', sujet: 'Préparer un entretien technique en méthodes', message: 'Bonjour, j’ai un entretien chez un équipementier automobile la semaine prochaine. Pourriez-vous m’aider à me préparer ?', status: 'demande', creneaux: [at(1, 18, 30), at(2, 12, 30), at(3, 19, 0)], created_at: daysAgo(0, 3) });
+  ms({ student_id: s4[3].id, mentor_id: youssef.id, besoin: 'stage', sujet: 'Choisir entre deux stages de 4A', message: 'J’hésite entre un stage en qualité et un stage en méthodes.', status: 'terminee', created_at: daysAgo(20), accepted_at: daysAgo(20, 6), rdv_at: daysAgo(18, -8), note: 5, merci: 'Merci pour l’appel, j’ai choisi les méthodes et je ne regrette pas !' });
+  ms({ student_id: s5[7].id, mentor_id: youssef.id, besoin: 'cv', sujet: 'Relire mon CV pour l’automobile', status: 'acceptee', created_at: daysAgo(5), accepted_at: daysAgo(4), rdv_at: at(-1, 18, 30) });
   mentors.slice(1).forEach((m, i) => {
     const st = pick(students);
-    mentorships.push({ id: id('m'), student_id: st.id, mentor_id: m.id, sujet: pick(['Procédure Campus France', 'Préparer un entretien', 'Choisir mon sujet de PFE', 'Négocier un premier salaire', 'Trouver un stage à l’étranger']), message: '', status: i % 3 === 0 ? 'acceptee' : 'terminee', reponse: 'Avec plaisir.', merci: i % 3 ? 'Merci beaucoup pour vos conseils !' : null, created_at: daysAgo(8 + i * 4) });
+    const sujet = pick(['Procédure Campus France', 'Préparer un entretien', 'Choisir mon sujet de PFE', 'Négocier un premier salaire', 'Trouver un stage à l’étranger']);
+    const besoin = /France|étranger/.test(sujet) ? 'etranger' : /entretien/.test(sujet) ? 'entretien' : /salaire/.test(sujet) ? 'carriere' : 'stage';
+    const created_at = daysAgo(8 + i * 4);
+    ms({ student_id: st.id, mentor_id: m.id, besoin, sujet, status: i % 3 === 0 ? 'acceptee' : 'terminee', created_at, accepted_at: later(created_at, 5 + i % 4 * 9), rdv_at: i % 3 === 0 ? at(3 + i % 5, 18, 30) : later(created_at, 50), note: i % 3 ? 4 + i % 2 : null, merci: i % 3 ? 'Merci beaucoup pour vos conseils !' : null });
   });
 
   // Entraide
@@ -229,5 +235,69 @@ export function buildSeed(now = new Date()) {
     });
   });
 
-  return { profiles, offers, comments, reactions, applications, placements, mentorships, questions, answers, votes };
+  // ---------------- Phase 1 : vivier, mentorat, réussites ----------------
+  // Générateur à part pour ne pas changer les données ci-dessus.
+  const r2 = rng(1532); const pick2 = a => a[Math.floor(r2() * a.length)];
+  const COMP = {
+    'Génie Mécanique': ['CATIA', 'SolidWorks', 'RDM', 'Ansys', 'Fabrication', 'Cotation GPS'],
+    'Génie Industriel': ['Lean', 'VSM', 'SMED', 'Power BI', 'Supply chain', 'Six Sigma'],
+    'Génie Électromécanique': ['Automatisme', 'Siemens TIA', 'Maintenance', 'AMDEC', 'Électrotechnique'],
+    'Génie Civil': ['Robot Structural', 'Revit', 'Béton armé', 'Métré', 'AutoCAD'],
+    'Génie Énergétique': ['Thermique', 'PVsyst', 'Bilan énergétique', 'Matlab', 'Froid industriel'],
+    'Génie Informatique & IA': ['Python', 'Machine learning', 'SQL', 'React', 'Docker'],
+    'Mécatronique': ['Arduino', 'ROS', 'Simulink', 'Capteurs', 'Python'],
+  };
+  const DISPO = { 3: ['Juillet à août', 'Tout le mois de juillet'], 4: ['Juillet à septembre', 'Dès juin'], 5: ['Dès février', 'Dès janvier, 6 mois'] };
+  for (const st of students) {
+    if (st === salma) { st.disponibilite = 'Dès février, 6 mois'; st.cv_url = 'https://example.com/cv/salma-bennani.pdf'; continue; }
+    const pool = COMP[st.filiere] || ['Python'];
+    st.competences = [...new Set([pick2(pool), pick2(pool), pick2(pool)])];
+    const niv = 5 - (st.promo - (S + 1));
+    st.disponibilite = pick2(DISPO[niv] || ['À discuter']);
+    if (r2() > 0.4) st.cv_url = `https://example.com/cv/${st.full_name.toLowerCase().normalize('NFD').replace(/[^a-z ]/g, '').replace(/ +/g, '-')}.pdf`;
+  }
+
+  // Mentorat de Youssef et de Salma, demandes ouvertes à tous les lauréats
+  ms({ student_id: s5[9].id, mentor_id: youssef.id, besoin: 'entretien', sujet: 'Préparer un entretien chez Lear', message: 'Entretien technique la semaine prochaine, je voudrais m’entraîner.', status: 'acceptee', creneaux: [at(2, 18, 30)], created_at: daysAgo(1, 8), accepted_at: daysAgo(1, 4), rdv_at: at(2, 18, 30) });
+  ms({ student_id: s4[4].id, mentor_id: youssef.id, besoin: 'stage', sujet: 'Choisir mon stage de 4A', status: 'terminee', created_at: daysAgo(8), accepted_at: daysAgo(8, 4), rdv_at: at(-6, 18, 30), note: 5, merci: 'Vingt minutes qui m’ont fait gagner un mois de recherche. Merci !' });
+  ms({ student_id: s5[8].id, mentor_id: youssef.id, besoin: 'cv', sujet: 'Relire mon CV pour l’automobile', status: 'terminee', created_at: daysAgo(5), accepted_at: daysAgo(5, 7), rdv_at: at(-3, 12, 30), note: 4 });
+  const exp = mentors.slice(1, 6);
+  ms({ student_id: salma.id, mentor_id: exp[0].id, besoin: 'etranger', sujet: 'Stage à l’étranger : par où commencer ?', message: 'Je vise un PFE en Europe à partir de février. Je ne sais pas par quoi commencer.', status: 'acceptee', creneaux: [at(1, 18, 30), at(2, 13, 0)], created_at: daysAgo(2), accepted_at: daysAgo(1, 9), rdv_at: at(1, 18, 30) });
+  for (let i = 0; i < 5; i++) {
+    const created_at = daysAgo(6 + i * 5);
+    ms({ student_id: pick2(students.filter(x => x !== salma)).id, mentor_id: exp[1].id, besoin: 'stage', sujet: pick2(['Mon premier entretien', 'Choisir ma filière de PFE', 'Le VIE, comment ça marche ?']), status: 'terminee', created_at, accepted_at: later(created_at, 3), rdv_at: later(created_at, 30), note: 5, merci: i < 2 ? 'Merci pour ce moment, très clair !' : null });
+  }
+  // Demandes ouvertes : n'importe quel lauréat peut les prendre
+  const meca = students.filter(x => x.filiere === 'Génie Mécanique' && x !== salma && x.promo <= S + 2 && ![s5[11], s5[9], s5[7], s4[4]].includes(x));
+  const OPEN = [
+    [meca[0], 'stage', 'Trouver un PFE dans l’automobile', 'Je cherche un sujet en méthodes ou en industrialisation, idéalement à Tanger ou Kénitra.', 0, 6],
+    [meca[1], 'entretien', 'Simuler un entretien en bureau d’études', 'Premier entretien technique bientôt, je ne sais pas quelles questions on pose.', 1, 2],
+    [s5[13], 'etranger', 'Partir en VIE après le diplôme', 'Comment ça marche concrètement, et quelles entreprises en proposent ?', 2, 20],
+    [s4[6], 'cv', 'Mon CV pour un stage de 4A', 'C’est mon premier vrai CV, j’aimerais un regard d’ingénieur.', 0, 9],
+  ];
+  for (const [st, besoin, sujet, message, dd, hh] of OPEN) if (st) ms({ student_id: st.id, mentor_id: null, besoin, sujet, message, status: 'demande', creneaux: [at(1, 18, 30), at(2, 12, 30), at(4, 19, 0)], created_at: daysAgo(dd, hh) });
+
+  const hex = () => Array.from({ length: 12 }, () => '0123456789abcdef'[Math.floor(r2() * 16)]).join('');
+  const liens_rdv = mentorships.filter(m => m.status === 'acceptee' || m.status === 'terminee').map(m => ({ id: m.id, lien: `https://meet.jit.si/ReseauENSAM-${hex()}`, created_at: m.accepted_at || m.created_at }));
+  const annonces = [{ id: id('an'), author_id: admin.id, texte: 'Nouveau : besoin d’un conseil ? Demande l’aide d’un lauréat en une minute. Dès qu’il accepte, le rendez-vous en visio et l’invitation agenda sont prêts.', lien: null, active: true, created_at: daysAgo(1) }];
+
+  const shortlists = [
+    { id: id('sh'), laureat_id: youssef.id, student_id: s5[10].id, note: 'Profil lean, à rappeler en janvier', created_at: daysAgo(5) },
+    { id: id('sh'), laureat_id: youssef.id, student_id: s5[16].id, note: '', created_at: daysAgo(2) },
+  ];
+  const lafarge = offerOf('PFE : optimisation');
+  const invitations = [
+    { id: id('in'), laureat_id: youssef.id, student_id: s5[10].id, offer_id: yOffer.id, message: 'Ton expérience en lean m’intéresse pour ce sujet. Postule si ça te parle !', status: 'envoyee', created_at: daysAgo(1, 4) },
+    { id: id('in'), laureat_id: lafarge.author_id, student_id: salma.id, offer_id: lafarge.id, message: 'Bonjour Salma, ton profil lean et Power BI colle bien à ce sujet à Meknès. Je serais ravi de recevoir ta candidature.', status: 'envoyee', created_at: daysAgo(0, 5) },
+  ];
+
+  const kudos = [];
+  const fans = profiles.filter(p => p.role !== 'admin' && !p._persona);
+  for (const pl of placements.filter(x => x.saison === S && (x.status === 'confirme' || x.status === 'declare'))) {
+    const k = Math.floor(r2() * 7); const who = new Set();
+    for (let i = 0; i < k; i++) who.add(pick2(fans).id);
+    for (const uid of who) if (uid !== pl.student_id) kudos.push({ id: id('k'), placement_id: pl.id, user_id: uid, created_at: pl.confirmed_at || pl.created_at });
+  }
+
+  return { profiles, offers, comments, reactions, applications, placements, mentorships, questions, answers, votes, shortlists, invitations, kudos, attestations: [], liens_rdv, annonces };
 }

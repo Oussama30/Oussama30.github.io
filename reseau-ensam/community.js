@@ -1,75 +1,8 @@
-// Mentorat, Entraide, Communauté (classement, annuaire, vitrine), profils et administration.
+// Entraide, Communauté (classement, annuaire, vitrine des talents) et profils.
 import { html, useState, useMemo } from './vendor/preact-htm.js';
 import { Icon, Modal, Field, Empty, Person, Avatar, Tabs, toast, LevelChip, RoleLine } from './ui.js';
 import { FILIERES, NIVEAUX, CATEGORIES_Q, niveauOf, statutOf, timeAgo, computeScores, badgesOf, levelOf, seasonLabel } from './logic.js';
-
-// ---------------------------------------------------------------------------
-// Mentorat
-// ---------------------------------------------------------------------------
-export function MentoratPage(ctx) {
-  const { data, me, store, scores, act, openProfile } = ctx;
-  const [tab, setTab] = useState(me.role === 'etudiant' ? 'mentors' : 'recues');
-  const [fil, setFil] = useState('');
-  const [ask, setAsk] = useState(null);
-  const mentors = data.profiles.filter(p => p.mentor_dispo && p.id !== me.id && (!fil || p.filiere === fil))
-    .sort((a, b) => (scores.get(b.id)?.points || 0) - (scores.get(a.id)?.points || 0));
-  const recues = data.mentorships.filter(m => m.mentor_id === me.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  const envoyees = data.mentorships.filter(m => m.student_id === me.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  const tabs = [['mentors', 'Les mentors'], ...(me.role !== 'etudiant' ? [['recues', 'Demandes reçues', recues.filter(m => m.status === 'demande').length]] : []), ...(me.role === 'etudiant' || envoyees.length ? [['envoyees', 'Mes demandes', envoyees.length]] : [])];
-
-  return html`<div class="sub-page">
-    <div class="toolbar">
-      <div class="seg" role="group">${tabs.map(([k, l, c]) => html`<button class=${tab === k ? 'on' : ''} onClick=${() => setTab(k)}>${l}${c ? html` <span class="count">${c}</span>` : null}</button>`)}</div>
-      ${me.role !== 'etudiant' ? html`<label class="switch"><input id="mentor-dispo" type="checkbox" checked=${!!me.mentor_dispo} onChange=${e => act(() => store.update('profiles', me.id, { mentor_dispo: e.target.checked }))}/> Disponible pour du mentorat</label>` : null}
-    </div>
-    ${tab === 'mentors' ? html`
-      <div class="filter-row"><select id="m-fil" value=${fil} onChange=${e => setFil(e.target.value)} aria-label="Filière"><option value="">Toutes filières</option>${FILIERES.map(f => html`<option value=${f}>${f}</option>`)}</select></div>
-      <div class="cards">${mentors.length ? mentors.map(p => html`<div class="mcard" key=${p.id}>
-        <${Person} p=${p} score=${scores.get(p.id)} onOpen=${openProfile} size=${44}/>
-        <p class="small"><${Icon} name="briefcase" size=${14}/> ${p.poste ? `${p.poste}${p.entreprise ? ' · ' + p.entreprise : ''}` : ''}${p.ville ? ` · ${p.ville}` : ''}</p>
-        ${p.mentor_sujets ? html`<p class="topics"><span class="muted small">Peut t’aider sur :</span> ${p.mentor_sujets}</p>` : null}
-        <div class="row"><span class="muted small">${data.mentorships.filter(m => m.mentor_id === p.id && m.status === 'terminee').length} mentorats terminés</span><span class="spacer"></span><button class="btn small primary" onClick=${() => setAsk(p)}>Demander</button></div>
-      </div>`) : html`<${Empty} icon="mentor" title="Aucun mentor dans cette filière pour l’instant">Essaie une autre filière, ou pose ta question dans l’Entraide.<//>`}</div>` : null}
-    ${tab === 'recues' ? html`<div class="list">${recues.length ? recues.map(m => html`<${MentorshipRow} key=${m.id} m=${m} ctx=${ctx} side="mentor"/>`) : html`<${Empty} icon="mentor" title="Aucune demande reçue">Active ta disponibilité pour apparaître dans la liste des mentors.<//>`}</div>` : null}
-    ${tab === 'envoyees' ? html`<div class="list">${envoyees.length ? envoyees.map(m => html`<${MentorshipRow} key=${m.id} m=${m} ctx=${ctx} side="student"/>`) : html`<${Empty} icon="mentor" title="Aucune demande envoyée">Choisis un mentor et explique en deux phrases ce dont tu as besoin.<//>`}</div>` : null}
-    ${ask ? html`<${AskMentor} ctx=${ctx} mentor=${ask} onClose=${() => setAsk(null)}/>` : null}
-  </div>`;
-}
-
-const M_STATUS = { demande: 'En attente', acceptee: 'Acceptée', terminee: 'Terminée', refusee: 'Déclinée' };
-
-function MentorshipRow({ m, ctx, side }) {
-  const { store, act, openProfile } = ctx;
-  const other = store.byId('profiles', side === 'mentor' ? m.student_id : m.mentor_id);
-  const [rep, setRep] = useState(m.reponse || '');
-  const [merci, setMerci] = useState(m.merci || '');
-  return html`<div class="mrow">
-    <div class="mrow-head"><${Person} p=${other} onOpen=${openProfile} size=${34}/><span class="spacer"></span><span class=${'state-pill m-' + m.status}>${M_STATUS[m.status]}</span></div>
-    <p><strong>${m.sujet}</strong> <span class="muted small">· ${timeAgo(m.created_at)}</span></p>
-    ${m.message ? html`<p class="quote">${m.message}</p>` : null}
-    ${m.reponse && !(side === 'mentor' && m.status === 'demande') ? html`<p class="small"><span class="muted">Réponse du mentor :</span> ${m.reponse}</p>` : null}
-    ${m.merci ? html`<p class="small merci-inline"><${Icon} name="heart" size=${14}/> ${m.merci}</p>` : null}
-    ${side === 'mentor' && m.status === 'demande' ? html`<div class="form">
-      <input id=${'rep-' + m.id} placeholder="Ta réponse (créneau proposé, contact…)" value=${rep} onInput=${e => setRep(e.target.value)}/>
-      <div class="row-end"><button class="btn small ghost" onClick=${() => act(() => store.update('mentorships', m.id, { status: 'refusee', reponse: rep }))}>Décliner</button><button class="btn small primary" onClick=${() => act(async () => { await store.update('mentorships', m.id, { status: 'acceptee', reponse: rep }); toast('Mentorat accepté. +10 points'); })}>Accepter</button></div></div>` : null}
-    ${side === 'mentor' && m.status === 'acceptee' ? html`<div class="row-end"><button class="btn small" onClick=${() => act(async () => { await store.update('mentorships', m.id, { status: 'terminee' }); toast('Mentorat terminé. +20 points'); })}>Marquer comme terminé</button></div>` : null}
-    ${side === 'student' && m.status === 'acceptee' ? html`<div class="row-end"><button class="btn small" onClick=${() => act(() => store.update('mentorships', m.id, { status: 'terminee' }))}>L’échange a eu lieu</button></div>` : null}
-    ${side === 'student' && m.status === 'terminee' && !m.merci ? html`<form class="comment-form" onSubmit=${e => { e.preventDefault(); act(async () => { await store.update('mentorships', m.id, { merci: merci.trim() }); toast('Merci envoyé !'); }); }}>
-      <input id=${'merci-' + m.id} placeholder="Un mot de remerciement pour ton mentor…" value=${merci} onInput=${e => setMerci(e.target.value)}/><button class="btn small primary" disabled=${!merci.trim()}>Remercier</button></form>` : null}
-  </div>`;
-}
-
-function AskMentor({ ctx, mentor, onClose }) {
-  const { store, me, act } = ctx;
-  const [sujet, setSujet] = useState(''); const [msg, setMsg] = useState('');
-  return html`<${Modal} title=${`Demande à ${mentor.full_name}`} onClose=${onClose}>
-    <form class="form" onSubmit=${e => { e.preventDefault(); act(async () => { await store.insert('mentorships', { student_id: me.id, mentor_id: mentor.id, sujet: sujet.trim(), message: msg.trim() }); toast('Demande envoyée.'); onClose(); }); }}>
-      ${mentor.mentor_sujets ? html`<p class="muted small">Peut t’aider sur : ${mentor.mentor_sujets}</p>` : null}
-      <${Field} label="Sujet"><input id="am-sujet" required value=${sujet} onInput=${e => setSujet(e.target.value)} placeholder="Ex. Préparer mon entretien chez…" maxlength="140"/><//>
-      <${Field} label="Message" hint="Présente-toi en deux phrases et dis ce que tu attends (relecture de CV, appel de 20 min…)."><textarea id="am-msg" rows="4" value=${msg} onInput=${e => setMsg(e.target.value)} maxlength="1500"></textarea><//>
-      <div class="row-end"><button type="button" class="btn ghost" onClick=${onClose}>Annuler</button><button class="btn primary" disabled=${sujet.trim().length < 3}>Envoyer</button></div>
-    </form><//>`;
-}
+import { TalentPool } from './growth.js';
 
 // ---------------------------------------------------------------------------
 // Entraide (questions / réponses)
@@ -139,23 +72,21 @@ function AskQuestion({ ctx, onClose, onDone }) {
 }
 
 // ---------------------------------------------------------------------------
-// Réseau : entraide, mentorat, annuaire, classement et vitrine des talents
+// Réseau : entraide, annuaire, classement et vitrine des talents (le mentorat a sa propre page)
 // ---------------------------------------------------------------------------
-const RESEAU_TABS = [['entraide', 'Entraide', 'qa'], ['mentorat', 'Mentorat', 'mentor'], ['annuaire', 'Annuaire', 'people'], ['classement', 'Classement', 'trophy'], ['talents', 'Talents', 'spark']];
+const RESEAU_TABS = [['entraide', 'Entraide', 'qa'], ['annuaire', 'Annuaire', 'people'], ['classement', 'Classement', 'trophy'], ['talents', 'Talents', 'spark']];
 
 export function ReseauPage(ctx) {
   const { data, me, sub, go } = ctx;
   const tabs = RESEAU_TABS.filter(([k]) => me.role !== 'etudiant' || !['classement', 'talents'].includes(k));
   const tab = tabs.some(([k]) => k === sub) ? sub : 'entraide';
-  const pendingM = data.mentorships.filter(m => m.mentor_id === me.id && m.status === 'demande').length;
   return html`<section class="page">
     <header class="page-head"><div><p class="eyebrow">${data.profiles.filter(p => p.role === 'laureat').length} lauréats · ${data.profiles.filter(p => p.role === 'etudiant').length} étudiants</p><h1>Réseau</h1></div></header>
-    <div class="icon-tabs" role="tablist" style=${`--n:${tabs.length}`}>${tabs.map(([k, l, i]) => html`<button role="tab" aria-selected=${tab === k} class=${tab === k ? 'on' : ''} onClick=${() => go('reseau/' + k)}><${Icon} name=${i} size=${20}/><span>${l}</span>${k === 'mentorat' && pendingM ? html`<span class="dotn"></span>` : null}</button>`)}</div>
+    <div class="icon-tabs" role="tablist" style=${`--n:${tabs.length}`}>${tabs.map(([k, l, i]) => html`<button role="tab" aria-selected=${tab === k} class=${tab === k ? 'on' : ''} onClick=${() => go('reseau/' + k)}><${Icon} name=${i} size=${20}/><span>${l}</span></button>`)}</div>
     ${tab === 'entraide' ? html`<${EntraidePage} ...${ctx}/>` : null}
-    ${tab === 'mentorat' ? html`<${MentoratPage} ...${ctx}/>` : null}
     ${tab === 'annuaire' ? html`<${Annuaire} ctx=${ctx}/>` : null}
     ${tab === 'classement' ? html`<${Classement} ctx=${ctx}/>` : null}
-    ${tab === 'talents' ? html`<${Talents} ctx=${ctx}/>` : null}
+    ${tab === 'talents' ? html`<${TalentPool} ctx=${ctx}/>` : null}
   </section>`;
 }
 
@@ -172,21 +103,6 @@ function Classement({ ctx }) {
       <span class="board-facts small muted"><span title="Recrutés"><${Icon} name="briefcase" size=${14}/> ${s?.recrutes || 0}</span><span title="Mentorats"><${Icon} name="mentor" size=${14}/> ${s?.mentorats || 0}</span><span title="Offres"><${Icon} name="feed" size=${14}/> ${s?.offres || 0}</span></span>
       <span class="mono pts">${x.pts} pts</span></li>`; })}</ol>
     ${!board.length ? html`<${Empty} icon="trophy" title="Personne n’a encore marqué de points sur cette période">Publie une offre ou réponds à une question pour ouvrir le classement.<//>` : null}
-  </div>`;
-}
-
-function Talents({ ctx }) {
-  const { data, saison, openProfile } = ctx;
-  const [fil, setFil] = useState('');
-  const talents = data.profiles.filter(p => p.role === 'etudiant' && p.vitrine !== false && [3, 4, 5].includes(niveauOf(p, saison)) && !['trouve', 'validation'].includes(statutOf(data, p, saison).key) && (!fil || p.filiere === fil));
-  return html`<div class="sub-page">
-    <p class="muted small">Étudiants encore en recherche qui ont choisi d’être visibles. Lauréats : si un profil correspond à un besoin dans votre entreprise, écrivez-lui.</p>
-    <div class="filter-row"><select id="v-fil" value=${fil} onChange=${e => setFil(e.target.value)} aria-label="Filière"><option value="">Toutes filières</option>${FILIERES.map(f => html`<option value=${f}>${f}</option>`)}</select></div>
-    <div class="cards">${talents.map(p => html`<div class="mcard" key=${p.id}><${Person} p=${p} onOpen=${openProfile} size=${40}/>
-      <p class="small">Cherche : <strong>${{ 3: 'stage de 3A', 4: 'stage de 4A', 5: 'PFE ou stage à l’étranger' }[niveauOf(p, saison)]}</strong></p>
-      ${(p.competences || []).length ? html`<p>${p.competences.slice(0, 5).map(c => html`<span class="mini">${c}</span>`)}</p>` : null}
-      <span class=${'state-pill s-' + statutOf(data, p, saison).key}>${statutOf(data, p, saison).label}</span></div>`)}</div>
-    ${!talents.length ? html`<${Empty} icon="spark" title="Personne en recherche dans cette filière">Tout le monde a trouvé, bravo !<//>` : null}
   </div>`;
 }
 
@@ -211,7 +127,7 @@ function Annuaire({ ctx }) {
 export function ProfileModal({ ctx, p, onClose, onAskMentor }) {
   const { data, me, scores, saison } = ctx;
   const s = scores.get(p.id);
-  const badges = badgesOf(s, p);
+  const badges = badgesOf(s, p, { star: ctx.starId });
   const helped = data.placements.filter(x => x.laureat_id === p.id && x.status === 'confirme').length;
   const st = p.role === 'etudiant' ? statutOf(data, p, saison) : null;
   return html`<${Modal} title="Profil" onClose=${onClose}>
@@ -220,25 +136,28 @@ export function ProfileModal({ ctx, p, onClose, onAskMentor }) {
         <p class="small muted">${p.role === 'laureat' ? `${p.filiere} · Promo ${p.promo}` : p.role === 'etudiant' ? `${NIVEAUX[niveauOf(p, saison)]?.label} · promo ${p.promo}` : ''}${p.ville ? ` · ${p.ville}` : ''}${p.pays && p.pays !== 'Maroc' ? `, ${p.pays}` : ''}</p></div></div>
       ${p.poste ? html`<p><strong>${p.poste}</strong>${p.entreprise ? ` chez ${p.entreprise}` : ''}</p>` : null}
       ${st ? html`<p><span class=${'state-pill s-' + st.key}>${st.label}</span>${st.pl ? ` ${st.pl.entreprise}` : ''}</p>` : null}
+      ${p.role === 'etudiant' && p.disponibilite ? html`<p class="small"><${Icon} name="calendar" size=${14}/> Disponibilité : <span translate="no" dir="auto">${p.disponibilite}</span></p>` : null}
       ${p.bio ? html`<p>${p.bio}</p>` : null}
       ${(p.competences || []).length ? html`<p class="offer-target">${p.competences.map(c => html`<span class="mini">${c}</span>`)}</p>` : null}
       ${p.role !== 'etudiant' ? html`<div class="profile-stats"><span><b class="mono">${s?.points || 0}</b> points</span><span><b class="mono">${helped}</b> recrutés</span><span><b class="mono">${s?.mentorats || 0}</b> mentorats</span><span><b class="mono">${s?.offres || 0}</b> offres</span></div>` : null}
       ${badges.length ? html`<div class="badge-row">${badges.map(b => html`<span class="mini badge-mini" title=${b.desc}><${Icon} name="star" size=${12}/> ${b.nom}</span>`)}</div>` : null}
       ${(p.linkedin || p.contact) ? html`<dl class="offer-more">${p.linkedin ? html`<div><dt>LinkedIn</dt><dd><a href=${p.linkedin.startsWith('http') ? p.linkedin : 'https://' + p.linkedin} target="_blank" rel="noopener">${p.linkedin}</a></dd></div>` : null}${p.contact ? html`<div><dt>Contact</dt><dd class="sel">${p.contact}</dd></div>` : null}${p.cv_url ? html`<div><dt>CV</dt><dd><a href=${p.cv_url} target="_blank" rel="noopener">Voir le CV</a></dd></div>` : null}</dl>` : null}
-      ${p.mentor_dispo && p.id !== me.id ? html`<div class="row-end"><button class="btn primary" onClick=${() => onAskMentor(p)}>Demander un mentorat</button></div>` : null}
+      ${p.mentor_dispo && p.role === 'laureat' && p.id !== me.id && me.role !== 'admin' ? html`<div class="row-end"><button class="btn primary" onClick=${() => onAskMentor(p)}><${Icon} name="mentor" size=${16}/> Demander de l’aide</button></div>` : null}
     </div>
   <//>`;
 }
 
 export function ProfileForm({ ctx, initial, onDone, onboarding }) {
   const { store, act } = ctx;
-  const [f, setF] = useState(() => ({ full_name: '', role: 'etudiant', filiere: FILIERES[0], promo: new Date().getFullYear() + 1, entreprise: '', poste: '', ville: '', pays: 'Maroc', bio: '', competences: [], linkedin: '', contact: '', cv_url: '', mentor_dispo: false, mentor_sujets: '', vitrine: true, ...(initial || {}) }));
+  const [f, setF] = useState(() => ({ full_name: '', role: 'etudiant', filiere: FILIERES[0], promo: new Date().getFullYear() + 1, entreprise: '', poste: '', ville: '', pays: 'Maroc', bio: '', competences: [], linkedin: '', contact: '', cv_url: '', disponibilite: '', mentor_dispo: false, mentor_sujets: '', vitrine: true, ...(initial || {}) }));
   const set = (k, v) => setF({ ...f, [k]: v });
   const [comp, setComp] = useState((f.competences || []).join(', '));
   const ok = f.full_name.trim().length >= 2 && f.promo >= 1990 && f.promo <= 2040;
   const submit = e => {
     e.preventDefault(); if (!ok) return;
     const row = { full_name: f.full_name.trim(), role: f.role === 'admin' ? 'admin' : f.role, filiere: f.filiere, promo: +f.promo, entreprise: f.entreprise.trim() || null, poste: f.poste.trim() || null, ville: f.ville.trim() || null, pays: f.pays.trim() || 'Maroc', bio: f.bio.trim() || null, competences: comp.split(',').map(x => x.trim()).filter(Boolean).slice(0, 15), linkedin: f.linkedin.trim() || null, contact: f.contact.trim() || null, cv_url: f.cv_url.trim() || null, mentor_dispo: !!f.mentor_dispo, mentor_sujets: f.mentor_sujets.trim() || null, vitrine: !!f.vitrine };
+    // Colonne ajoutée par la mise à jour Phase 1 : envoyée seulement si la base la connaît déjà ou si elle est remplie
+    if ((f.disponibilite || '').trim() || (initial && 'disponibilite' in initial)) row.disponibilite = (f.disponibilite || '').trim() || null;
     act(async () => {
       if (onboarding) await store.insert('profiles', { id: store.userId, ...row });
       else await store.update('profiles', initial.id, row);
@@ -259,36 +178,14 @@ export function ProfileForm({ ctx, initial, onDone, onboarding }) {
     <${Field} label="Bio courte"><textarea id="pf-bio" rows="3" maxlength="600" value=${f.bio || ''} onInput=${e => set('bio', e.target.value)} placeholder=${isStudent ? 'Ce que tu cherches, tes projets…' : 'Ton parcours, comment tu peux aider…'}></textarea><//>
     <${Field} label="Compétences" hint="Séparées par des virgules"><input id="pf-comp" value=${comp} onInput=${e => setComp(e.target.value)} placeholder="Lean, CATIA, Python…"/><//>
     <div class="grid2"><${Field} label="LinkedIn"><input id="pf-li" value=${f.linkedin || ''} onInput=${e => set('linkedin', e.target.value)} placeholder="linkedin.com/in/…"/><//><${Field} label="Contact visible par les membres"><input id="pf-contact" value=${f.contact || ''} onInput=${e => set('contact', e.target.value)} placeholder="Email ou téléphone"/><//></div>
-    ${isStudent ? html`<${Field} label="Lien vers ton CV (Google Drive, etc.)"><input id="pf-cv" value=${f.cv_url || ''} onInput=${e => set('cv_url', e.target.value)}/><//>
+    ${isStudent ? html`<div class="grid2"><${Field} label="Lien vers ton CV (Google Drive, etc.)"><input id="pf-cv" value=${f.cv_url || ''} onInput=${e => set('cv_url', e.target.value)}/><//>
+      <${Field} label="Disponibilité"><input id="pf-dispo" maxlength="80" value=${f.disponibilite || ''} onInput=${e => set('disponibilite', e.target.value)} placeholder="Ex. dès février, 6 mois"/><//></div>
       <label class="check"><input id="pf-vit" type="checkbox" checked=${f.vitrine} onChange=${e => set('vitrine', e.target.checked)}/> Apparaître dans la Vitrine des talents quand je cherche (visible par les lauréats)</label>` : html`
       <label class="check"><input id="pf-mentor" type="checkbox" checked=${f.mentor_dispo} onChange=${e => set('mentor_dispo', e.target.checked)}/> Je suis disponible pour du mentorat</label>
       ${f.mentor_dispo ? html`<${Field} label="Sujets sur lesquels je peux aider"><input id="pf-msuj" value=${f.mentor_sujets || ''} onInput=${e => set('mentor_sujets', e.target.value)} placeholder="Stages à l’étranger, entretiens, automobile…"/><//>` : null}
       ${f.role === 'laureat' && !initial?.verified ? html`<p class="small muted">Ton badge « Lauréat vérifié » sera ajouté par l’administration de l’école.</p>` : null}`}
     <div class="row-end"><button class="btn primary" disabled=${!ok}>${onboarding ? 'Rejoindre la communauté' : 'Enregistrer'}</button></div>
   </form>`;
-}
-
-// ---------------------------------------------------------------------------
-// Administration
-// ---------------------------------------------------------------------------
-export function AdminPage(ctx) {
-  const { data, store, act, openProfile } = ctx;
-  const toVerify = data.profiles.filter(p => p.role === 'laureat' && !p.verified);
-  const stale = data.placements.filter(p => p.status === 'en_attente').sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-  const recent = [...data.offers].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 10);
-  return html`<section class="page">
-    <header class="page-head"><div><p class="eyebrow">Réservé à l’administration</p><h1>Administration</h1></div></header>
-    <div class="panel"><div class="section-head"><h2>Lauréats à vérifier</h2><span class="count">${toVerify.length}</span></div>
-      <p class="muted small">Vérifie que la personne est bien diplômée de l’ENSAM Meknès (promo, filière), puis valide. Le badge rassure les étudiants.</p>
-      <ul class="people-list">${toVerify.map(p => html`<li><${Person} p=${p} onOpen=${openProfile} sub=${`${p.filiere} · Promo ${p.promo}${p.entreprise ? ' · ' + p.entreprise : ''}`}/><span class="spacer"></span><button class="btn small primary" onClick=${() => act(async () => { await store.update('profiles', p.id, { verified: true }); toast('Lauréat vérifié.'); })}><${Icon} name="shield" size=${15}/> Vérifier</button></li>`)}</ul>
-      ${!toVerify.length ? html`<p class="muted">Tout est à jour.</p>` : null}</div>
-    <div class="panel"><div class="section-head"><h2>Recrutements en attente de l’étudiant</h2><span class="count">${stale.length}</span></div>
-      <p class="muted small">Le lauréat a déclaré ces recrutements. Si l’étudiant ne confirme pas, l’administration peut le faire après vérification.</p>
-      <ul class="people-list">${stale.map(p => { const s = store.byId('profiles', p.student_id), l = store.byId('profiles', p.laureat_id); return html`<li><${Person} p=${s} onOpen=${openProfile} sub=${`${p.entreprise} · déclaré par ${l?.full_name || '?'} · ${timeAgo(p.created_at)}`}/><span class="spacer"></span>
-        <button class="btn small ghost" onClick=${() => act(() => store.update('placements', p.id, { status: 'refuse' }))}>Refuser</button><button class="btn small primary" onClick=${() => act(() => store.update('placements', p.id, { status: 'confirme' }))}>Confirmer</button></li>`; })}</ul></div>
-    <div class="panel"><div class="section-head"><h2>Dernières offres publiées</h2></div>
-      <ul class="people-list">${recent.map(o => html`<li><span><strong>${o.titre}</strong><br/><span class="muted small">${o.entreprise} · ${store.byId('profiles', o.author_id)?.full_name || ''} · ${timeAgo(o.created_at)}</span></span><span class="spacer"></span><button class="btn tiny ghost danger-t" onClick=${() => ctx.confirm('Supprimer cette offre ?', () => act(() => store.remove('offers', o.id)))}>Supprimer</button></li>`)}</ul></div>
-  </section>`;
 }
 
 export { levelOf, LevelChip };

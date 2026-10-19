@@ -150,7 +150,7 @@ export function levelOf(points) {
 // Retourne une Map id -> { points, events[], stats } ; `since` limite aux événements récents.
 export function computeScores(data, since = null) {
   const S = new Map();
-  const get = id => { if (!S.has(id)) S.set(id, { points: 0, events: [], offres: 0, recrutes: 0, etranger: 0, mentorats: 0, mercis: 0, reponses: 0, meilleures: 0, candidatures: 0 }); return S.get(id); };
+  const get = id => { if (!S.has(id)) S.set(id, { points: 0, events: [], offres: 0, recrutes: 0, etranger: 0, mentorats: 0, rapides: 0, mercis: 0, reponses: 0, meilleures: 0, candidatures: 0 }); return S.get(id); };
   const add = (id, pts, label, at) => {
     if (!id) return; if (since && new Date(at) < since) return;
     const s = get(id); s.points += pts; s.events.push({ pts, label, at });
@@ -169,9 +169,12 @@ export function computeScores(data, since = null) {
     }
   }
   for (const m of data.mentorships) {
-    if (m.status === 'acceptee' || m.status === 'terminee') add(m.mentor_id, 10, `Mentorat accepté : ${m.sujet}`, m.created_at);
-    if (m.status === 'terminee') { add(m.mentor_id, 20, `Mentorat terminé : ${m.sujet}`, m.created_at); get(m.mentor_id).mentorats++; }
-    if (m.merci) { add(m.mentor_id, 10, 'Message de remerciement', m.created_at); get(m.mentor_id).mercis++; }
+    if (!m.mentor_id) continue;
+    const at = m.accepted_at || m.created_at;
+    if (m.status === 'acceptee' || m.status === 'terminee') add(m.mentor_id, 10, `Mentorat accepté : ${m.sujet}`, at);
+    if (m.accepted_at && new Date(m.accepted_at) - new Date(m.created_at) < 864e5 && m.status !== 'annulee') get(m.mentor_id).rapides++;
+    if (m.status === 'terminee') { add(m.mentor_id, 20, `Mentorat terminé : ${m.sujet}`, m.rdv_at || at); get(m.mentor_id).mentorats++; }
+    if (m.merci) { add(m.mentor_id, 10, 'Message de remerciement', m.rdv_at || at); get(m.mentor_id).mercis++; }
   }
   const ansAuthor = new Map(data.answers.map(a => [a.id, a.author_id]));
   for (const a of data.answers) { add(a.author_id, 5, 'Réponse dans l’Entraide', a.created_at); get(a.author_id).reponses++; }
@@ -187,13 +190,103 @@ export const BADGES = [
   { id: 'faiseur', nom: 'Faiseur de carrières', desc: '10 étudiants recrutés', test: s => s.recrutes >= 10 },
   { id: 'passeport', nom: 'Passeport', desc: 'A ouvert une porte à l’étranger', test: s => s.etranger >= 1 },
   { id: 'mentor', nom: 'Mentor', desc: '3 mentorats terminés', test: s => s.mentorats >= 3 },
+  { id: 'reactif', nom: 'Toujours là', desc: '3 demandes d’aide acceptées en moins de 24 h', test: s => s.rapides >= 3 },
   { id: 'sage', nom: 'Sage de l’entraide', desc: '3 meilleures réponses', test: s => s.meilleures >= 3 },
   { id: 'aime', nom: 'Aimé de la promo', desc: '5 messages de remerciement', test: s => s.mercis >= 5 },
+  { id: 'top', nom: 'Top contributeur', desc: '300 points d’impact (niveau Or)', test: s => s.points >= 300 },
+  { id: 'mois', nom: 'Lauréat du mois', desc: 'Le plus d’impact sur les 30 derniers jours', test: (s, p, x) => !!p.id && x.star === p.id },
 ];
 
-export function badgesOf(score, profile) {
-  const s = score || { offres: 0, recrutes: 0, etranger: 0, mentorats: 0, meilleures: 0, mercis: 0 };
-  return BADGES.filter(b => b.test(s, profile || {}));
+// `extra.star` : id du lauréat du mois (voir starOfMonth)
+export function badgesOf(score, profile, extra = {}) {
+  const s = score || { points: 0, offres: 0, recrutes: 0, etranger: 0, mentorats: 0, rapides: 0, meilleures: 0, mercis: 0 };
+  return BADGES.filter(b => b.test(s, profile || {}, extra));
+}
+
+// Lauréat qui a eu le plus d'impact sur 30 jours (null si personne n'a de points)
+export function starOfMonth(data, monthScores = computeScores(data, new Date(Date.now() - 30 * 864e5))) {
+  const best = data.profiles.filter(p => p.role === 'laureat').map(p => ({ p, pts: monthScores.get(p.id)?.points || 0 })).sort((a, b) => b.pts - a.pts)[0];
+  return best && best.pts > 0 ? best : null;
+}
+
+// ---------------------------------------------------------------------------
+// Mentorat en 3 étapes : l'étudiant demande (besoin + horaires), un lauréat choisit
+// un horaire, ils se parlent en visio, l'étudiant dit merci.
+// ---------------------------------------------------------------------------
+export const BESOINS = {
+  cv: { label: 'Mon CV', icon: 'file', mots: ['cv', 'candidature', 'lettre'] },
+  stage: { label: 'Stage ou PFE', icon: 'briefcase', mots: ['stage', 'pfe', 'industrie', 'projet'] },
+  entretien: { label: 'Un entretien', icon: 'people', mots: ['entretien', 'recrutement', 'oral'] },
+  etranger: { label: 'Partir à l’étranger', icon: 'globe', mots: ['étranger', 'etranger', 'campus france', 'visa', 'vie', 'international', 'france', 'canada', 'allemagne'] },
+  carriere: { label: 'Mon orientation', icon: 'route', mots: ['carrière', 'carriere', 'orientation', 'salaire', 'emploi', 'reconversion'] },
+};
+export const RDV_MIN = 20; // durée d'un rendez-vous de mentorat
+
+// ouverte : attend un lauréat (à tous) · demande : attend le lauréat choisi · rdv : rendez-vous à venir
+// apres : rendez-vous passé, à clore · terminee · annulee · refusee
+export function mentorState(m, now = new Date()) {
+  if (m.status === 'demande') return m.mentor_id ? 'demande' : 'ouverte';
+  if (m.status === 'acceptee') return m.rdv_at && new Date(m.rdv_at).getTime() + RDV_MIN * 6e4 < now.getTime() ? 'apres' : 'rdv';
+  return m.status;
+}
+export const futureSlots = (m, now = new Date()) => (m.creneaux || []).filter(c => new Date(c) > now).sort();
+
+const norm = t => (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+// Pourquoi ce lauréat est le bon pour cette demande (et l'inverse)
+export function helpMatch(m, laureat, student, now = new Date()) {
+  const why = []; let score = 0;
+  if (student && laureat.filiere === student.filiere) { score += 3; why.push('Même filière'); }
+  const sujets = norm(`${laureat.mentor_sujets || ''} ${laureat.poste || ''} ${(laureat.competences || []).join(' ')}`);
+  const b = BESOINS[m?.besoin];
+  if (b && b.mots.some(w => sujets.includes(norm(w)))) { score += 2; why.push(b.label); }
+  if (m?.besoin === 'etranger' && laureat.pays && laureat.pays !== 'Maroc') { score += 2; why.push(`Vit en ${laureat.pays}`); }
+  if (m && !m.mentor_id) score += Math.min(3, Math.floor((now - new Date(m.created_at)) / 864e5)); // les plus anciennes d'abord
+  return { score, why };
+}
+
+// Demandes que ce lauréat peut prendre : celles qui lui sont adressées, puis les demandes ouvertes qui lui correspondent
+export function requestsFor(data, me, byId, now = new Date()) {
+  return data.mentorships
+    .filter(m => m.status === 'demande' && m.student_id !== me.id && (m.mentor_id === me.id || !m.mentor_id))
+    .map(m => ({ m, ...helpMatch(m, me, byId(m.student_id), now), direct: m.mentor_id === me.id }))
+    .sort((a, b) => b.direct - a.direct || b.score - a.score || new Date(a.m.created_at) - new Date(b.m.created_at));
+}
+
+// Lauréats conseillés pour une demande (ou pour un étudiant, sans demande précise)
+export function mentorsFor(data, student, besoin, scores) {
+  return data.profiles.filter(p => p.role === 'laureat' && p.mentor_dispo && p.id !== student.id)
+    .map(p => ({ p, ...helpMatch({ besoin, mentor_id: p.id }, p, student) }))
+    .sort((a, b) => b.score - a.score || (scores?.get(b.p.id)?.points || 0) - (scores?.get(a.p.id)?.points || 0));
+}
+
+// Offres recommandées : filière, compétences retrouvées dans l'offre, ville, fraîcheur
+export function offerMatch(o, me, now = new Date()) {
+  const why = []; let score = 0;
+  if (o.filieres?.includes(me.filiere)) { score += 3; why.push('Ta filière'); } else if (!o.filieres?.length) score += 1;
+  const txt = norm(`${o.titre} ${o.description}`);
+  for (const c of me.competences || []) if (c.length > 1 && txt.includes(norm(c)) && why.length < 3) { score += 1; why.push(c); }
+  if (me.ville && o.ville && norm(o.ville) === norm(me.ville)) { score += 1; why.push(o.ville); }
+  if (now - new Date(o.created_at) < 7 * 864e5) score += 1;
+  return { score, why };
+}
+
+// Étudiants en recherche qui correspondent à une offre (pour l'inviter à postuler)
+export function talentsFor(data, o, saison, max = 3) {
+  return data.profiles.filter(p => p.role === 'etudiant' && p.vitrine !== false && (o.annees || []).includes(niveauOf(p, saison))
+      && !['trouve', 'validation'].includes(statutOf(data, p, saison).key)
+      && !data.applications.some(a => a.offer_id === o.id && a.student_id === p.id))
+    .map(p => ({ p, ...offerMatch(o, p) })).filter(x => x.score >= 3)
+    .sort((a, b) => b.score - a.score).slice(0, max);
+}
+
+// Ce que l'attestation certifie : uniquement des actions vérifiées par l'autre partie.
+export function attestationStats(data, uid) {
+  return {
+    mentorats: data.mentorships.filter(m => m.mentor_id === uid && m.status === 'terminee').length,
+    recrutes: data.placements.filter(p => p.laureat_id === uid && p.status === 'confirme').length,
+    reponses: data.answers.filter(a => a.author_id === uid).length,
+  };
 }
 
 // ---------------------------------------------------------------------------
