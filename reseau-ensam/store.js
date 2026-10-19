@@ -2,11 +2,14 @@
 import { buildSeed } from './seed.js';
 import { attestationStats } from './logic.js';
 
-export const TABLES = ['profiles', 'offers', 'comments', 'reactions', 'applications', 'placements', 'mentorships', 'questions', 'answers', 'votes', 'shortlists', 'invitations', 'slots', 'kudos', 'attestations'];
-// Tables ajoutées par supabase/mise-a-jour-phase1.sql : tant que la base n'est pas à jour, elles restent vides au lieu de bloquer le site.
-const OPTIONAL = new Set(['shortlists', 'invitations', 'slots', 'kudos', 'attestations']);
+export const TABLES = ['profiles', 'offers', 'comments', 'reactions', 'applications', 'placements', 'mentorships', 'questions', 'answers', 'votes', 'shortlists', 'invitations', 'kudos', 'attestations', 'liens_rdv', 'annonces'];
+// Tables ajoutées par supabase/mise-a-jour.sql : tant que la base n'est pas à jour, elles restent vides au lieu de bloquer le site.
+const OPTIONAL = new Set(['shortlists', 'invitations', 'kudos', 'attestations', 'liens_rdv', 'annonces']);
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
+// Salle de visio Jitsi : gratuite, sans compte pour l'invité, nom impossible à deviner
+export const jitsiLink = () => 'https://meet.jit.si/ReseauENSAM-' + Array.from({ length: 12 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+const demoEmail = p => (p?.full_name || 'membre').toLowerCase().normalize('NFD').replace(/[^a-z ]/g, '').trim().replace(/ +/g, '.') + '@exemple.ma';
 
 function safeGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
 function safeSet(key, v) { try { localStorage.setItem(key, v); } catch { /* stockage indisponible */ } }
@@ -21,7 +24,7 @@ class Base {
 // ---------------------------------------------------------------------------
 // Démo : données d'exemple, gardées dans le navigateur du visiteur
 // ---------------------------------------------------------------------------
-const DEMO_KEY = 'ensam-demo-v6';
+const DEMO_KEY = 'ensam-demo-v7';
 class DemoStore extends Base {
   constructor() { super(); this.mode = 'demo'; }
   async init() {
@@ -41,11 +44,12 @@ class DemoStore extends Base {
     const r = { id: uuid(), created_at: new Date().toISOString(), ...row };
     if (table === 'placements') applyPlacementRules(this, r, null);
     if (table === 'applications') applyApplicationRules(this, r, null);
-    if (table === 'mentorships') { r.status = 'demande'; }
+    if (table === 'mentorships') applyMentorshipRules(this, r, null);
+    if (table === 'liens_rdv') applyLienRules(this, r, null);
+    if (table === 'annonces') { if (this.me?.role !== 'admin') throw new Error('Action non autorisée pour ton compte.'); r.author_id = this.me.id; }
     if (table === 'shortlists') { r.laureat_id = this.me?.id; if (this.data.shortlists.some(x => x.laureat_id === r.laureat_id && x.student_id === r.student_id)) return r; }
     if (table === 'kudos') { r.user_id = this.me?.id; if (this.data.kudos.some(x => x.placement_id === r.placement_id && x.user_id === r.user_id)) return r; }
     if (table === 'invitations') applyInvitationRules(this, r, null);
-    if (table === 'slots') applySlotRules(this, r, null);
     if (table === 'attestations') { if (this.me?.role !== 'laureat') throw new Error('Seul un lauréat peut obtenir une attestation.'); Object.assign(r, { laureat_id: this.me.id, stats: attestationStats(this.data, this.me.id) }); }
     if (table === 'reactions' && this.data.reactions.some(x => x.offer_id === r.offer_id && x.user_id === r.user_id && x.kind === r.kind)) return r;
     if (table === 'votes' && this.data.votes.some(x => x.answer_id === r.answer_id && x.user_id === r.user_id)) return r;
@@ -61,17 +65,30 @@ class DemoStore extends Base {
     if (table === 'placements') applyPlacementRules(this, r, old);
     if (table === 'applications') applyApplicationRules(this, r, old);
     if (table === 'invitations') applyInvitationRules(this, r, old);
-    if (table === 'slots') applySlotRules(this, r, old);
+    if (table === 'mentorships') applyMentorshipRules(this, r, old);
+    if (table === 'liens_rdv') applyLienRules(this, r, old);
+    if (table === 'annonces' && this.me?.role !== 'admin') throw new Error('Action non autorisée pour ton compte.');
     this.data[table] = this.data[table].map(x => x.id === id ? r : x);
     if (table === 'profiles' && id === this.me?.id) this.me = r;
     this.persist(); this.emit();
     return r;
   }
   async remove(table, id) {
+    if (table === 'annonces' && this.me?.role !== 'admin') throw new Error('Action non autorisée pour ton compte.');
     this.data[table] = this.data[table].filter(x => x.id !== id);
     this.persist(); this.emit();
   }
   async signOut() {}
+  // Email de l'étudiant, pour le seul lauréat qui a fixé le rendez-vous (invitation Google Agenda)
+  async emailRdv(id) {
+    const m = this.byId('mentorships', id);
+    return m && m.status === 'acceptee' && m.mentor_id === this.me?.id ? demoEmail(this.byId('profiles', m.student_id)) : null;
+  }
+  async adminComptes() {
+    if (this.me?.role !== 'admin') throw new Error('Réservé à l’administration.');
+    const rows = this.data.profiles.map((p, i) => ({ id: p.id, email: demoEmail(p), created_at: p.created_at, last_sign_in_at: new Date(Date.now() - (i % 9) * 864e5 - 36e5).toISOString(), a_profil: true }));
+    return [{ id: 'sans-profil', email: 'nouveau.compte@exemple.ma', created_at: new Date(Date.now() - 5 * 36e5).toISOString(), last_sign_in_at: null, a_profil: false }, ...rows];
+  }
   async verifyAttestation(id) {
     const a = this.byId('attestations', id); if (!a) return null;
     const p = this.byId('profiles', a.laureat_id);
@@ -127,29 +144,59 @@ function applyInvitationRules(store, r, old) {
   if (!(old.student_id === me?.id && r.status === 'declinee')) r.status = old.status;
 }
 
-// Créneau de 15 min : le lauréat l'ouvre, un étudiant le réserve (un seul), puis remercie.
-function applySlotRules(store, r, old) {
+// Mentorat en 3 étapes : l'étudiant demande avec ses horaires, un lauréat en choisit un (le premier l'emporte),
+// la visio est créée, puis l'étudiant clôt et remercie.
+function applyMentorshipRules(store, r, old) {
   const me = store.me; if (me?.role === 'admin') return;
+  const now = new Date();
+  const clean = c => [...new Set((c || []).filter(x => new Date(x) > now).map(x => new Date(x).toISOString()))].sort().slice(0, 3);
   if (!old) {
-    if (me?.role !== 'laureat') throw new Error('Seul un lauréat peut ouvrir un créneau.');
-    if (new Date(r.starts_at) < new Date()) throw new Error('Choisis un moment à venir.');
-    Object.assign(r, { mentor_id: me.id, student_id: null, sujet: null, merci: null, booked_at: null, status: 'ouvert', duree: 15 });
+    r.student_id = me.id;
+    if (r.mentor_id === me.id) throw new Error('Choisis un autre lauréat que toi.');
+    if (r.mentor_id && store.byId('profiles', r.mentor_id)?.role !== 'laureat') throw new Error('Choisis un lauréat.');
+    r.creneaux = clean(r.creneaux);
+    if (!r.creneaux.length) throw new Error('Propose au moins un horaire à venir.');
+    if (store.data.mentorships.filter(m => m.student_id === me.id && m.status === 'demande').length >= 3) throw new Error('Tu as déjà 3 demandes en attente. Attends une réponse avant d’en envoyer une autre.');
+    Object.assign(r, { mentor_id: r.mentor_id || null, status: 'demande', rdv_at: null, reponse: null, merci: null, note: null, accepted_at: null });
     return;
   }
-  const want = { ...r };
+  const v = { ...r };
   Object.assign(r, old);
-  if (old.mentor_id === me?.id) { r.lieu = want.lieu; r.starts_at = old.student_id ? old.starts_at : want.starts_at; if (want.status === 'annule') r.status = 'annule'; return; }
-  if (!old.student_id && want.student_id === me?.id) {
-    if (old.status === 'annule' || new Date(old.starts_at) < new Date()) throw new Error('Ce créneau n’est plus disponible.');
-    if (me.role !== 'etudiant') throw new Error('Les créneaux express sont réservés aux étudiants.');
-    if (store.data.slots.filter(x => x.student_id === me.id && x.status !== 'annule' && new Date(x.starts_at) > new Date()).length >= 2) throw new Error('Tu as déjà 2 rendez-vous à venir.');
-    r.student_id = me.id; r.sujet = want.sujet; r.booked_at = new Date().toISOString(); return;
+  if (!old.mentor_id && old.status === 'demande' && v.mentor_id === me.id && me.id !== old.student_id) {
+    if (me.role !== 'laureat') throw new Error('Seul un lauréat peut accepter une demande.');
+    r.mentor_id = me.id;
   }
-  if (old.student_id && old.student_id !== me?.id && want.student_id === me?.id) throw new Error('Ce créneau vient d’être réservé par quelqu’un d’autre.');
-  if (old.student_id === me?.id) {
-    if (!want.student_id && new Date(old.starts_at) > new Date()) { r.student_id = null; r.sujet = null; r.booked_at = null; }
-    else { r.merci = want.merci; r.sujet = want.sujet; }
+  if (r.mentor_id === me.id) {
+    r.reponse = v.reponse;
+    if (old.status === 'demande' && !v.mentor_id && old.mentor_id) r.mentor_id = null;
+    else if (v.status === 'acceptee' && ['demande', 'acceptee'].includes(old.status)) {
+      if (!v.rdv_at) throw new Error('Choisis l’horaire du rendez-vous.');
+      if (v.rdv_at !== old.rdv_at && new Date(v.rdv_at) < now) throw new Error('Choisis un moment à venir.');
+      r.status = 'acceptee'; r.rdv_at = v.rdv_at;
+      if (old.status === 'demande') r.accepted_at = now.toISOString();
+      if (!store.byId('liens_rdv', old.id)) store.data.liens_rdv = [{ id: old.id, lien: jitsiLink(), created_at: now.toISOString() }, ...store.data.liens_rdv];
+    } else if (v.status === 'refusee' && old.status === 'demande') r.status = 'refusee';
+    else if (['terminee', 'annulee'].includes(v.status) && old.status === 'acceptee') r.status = v.status;
+    return;
   }
+  if (old.student_id === me.id) {
+    r.merci = v.merci; r.note = v.note;
+    if (old.status === 'demande') {
+      r.besoin = v.besoin; r.sujet = v.sujet; r.message = v.message;
+      if (JSON.stringify(v.creneaux) !== JSON.stringify(old.creneaux)) { r.creneaux = clean(v.creneaux); if (!r.creneaux.length) throw new Error('Propose au moins un horaire à venir.'); }
+      if (v.status === 'annulee') r.status = 'annulee';
+    } else if (old.status === 'acceptee' && ['terminee', 'annulee'].includes(v.status)) r.status = v.status;
+    return;
+  }
+  if (v.mentor_id === me?.id) throw new Error('Un autre lauréat vient de prendre cette demande.');
+}
+
+// Lien de visio : seul le lauréat du rendez-vous le change, et seulement pour un lien https
+function applyLienRules(store, r, old) {
+  if (store.me?.role === 'admin') return;
+  const m = store.byId('mentorships', (old || r).id);
+  if (!m || m.mentor_id !== store.me?.id) throw new Error('Seul le lauréat du rendez-vous peut changer le lien.');
+  if (!/^https:\/\/\S+$/i.test(r.lien || '') || r.lien.length > 300) throw new Error('Le lien doit commencer par https://');
 }
 
 // ---------------------------------------------------------------------------
@@ -215,10 +262,12 @@ class SupabaseStore extends Base {
   }
   async update(table, id, patch) {
     const { data, error } = await this.sb.from(table).update(patch).eq('id', id).select().single();
-    // Aucune ligne modifiée : quelqu'un est passé avant (ex. créneau réservé entre-temps)
-    if (error?.code === 'PGRST116') throw new Error(table === 'slots' ? 'Ce créneau vient d’être réservé par quelqu’un d’autre.' : 'Cette action n’est plus possible. Recharge la page.');
+    // Aucune ligne modifiée : quelqu'un est passé avant (ex. demande prise entre-temps)
+    if (error?.code === 'PGRST116') throw new Error(table === 'mentorships' ? 'Un autre lauréat vient de prendre cette demande.' : 'Cette action n’est plus possible. Recharge la page.');
     if (error) throw new Error(frError(error));
-    this.data[table] = this.data[table].map(x => x.id === id ? data : x);
+    this.data[table] = this.data[table].some(x => x.id === id) ? this.data[table].map(x => x.id === id ? data : x) : [data, ...this.data[table]];
+    // Le lien de visio est créé côté base quand le lauréat accepte
+    if (table === 'mentorships') await this.loadTable('liens_rdv').catch(() => {});
     if (table === 'profiles') this.me = this.byId('profiles', this.userId);
     this.emit(); return data;
   }
@@ -251,6 +300,15 @@ class SupabaseStore extends Base {
     if (error) return null;
     return (Array.isArray(data) ? data[0] : data) || null;
   }
+  async emailRdv(id) {
+    const { data, error } = await this.sb.rpc('email_rdv', { p_id: id });
+    return error ? null : data || null;
+  }
+  async adminComptes() {
+    const { data, error } = await this.sb.rpc('admin_comptes');
+    if (error) throw new Error(frError(error));
+    return data || [];
+  }
 }
 
 function frError(e) {
@@ -262,7 +320,8 @@ function frError(e) {
   if (m.includes('duplicate key') && m.includes('placements')) return 'Une réussite est déjà enregistrée pour cet étudiant cette saison.';
   if (m.includes('duplicate key') && m.includes('applications')) return 'Tu as déjà postulé à cette offre.';
   if (m.includes('duplicate key') && m.includes('invitations')) return 'Cet étudiant est déjà invité sur cette offre.';
-  if (m.includes('could not find the table') || m.includes('does not exist')) return 'Cette fonction arrive bientôt : la base est en cours de mise à jour.';
+  if (m.includes('lien_check')) return 'Le lien doit commencer par https://';
+  if (m.includes('could not find the') || m.includes('does not exist')) return 'Cette fonction arrive bientôt : la base est en cours de mise à jour.';
   if (m.includes('row-level security')) return "Action non autorisée pour ton compte.";
   if (m.includes('rate limit')) return 'Trop de tentatives. Réessaie dans quelques minutes.';
   return e?.message || 'Erreur inconnue.';

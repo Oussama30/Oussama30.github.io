@@ -1,7 +1,8 @@
 // Offres : liste compacte, fiche détaillée, candidature, gestion des candidats par le lauréat.
 import { html, useState, useMemo } from './vendor/preact-htm.js';
 import { Icon, Modal, Field, Empty, Person, Avatar, CompanyLogo, TYPE_ICON, toast } from './ui.js';
-import { TYPES, FILIERES, NIVEAUX, OBJECTIFS, niveauOf, timeAgo, daysUntil, placementOf, fmtDate } from './logic.js';
+import { getLang } from './i18n.js';
+import { TYPES, FILIERES, NIVEAUX, OBJECTIFS, niveauOf, timeAgo, daysUntil, placementOf, offerMatch, talentsFor } from './logic.js';
 
 const ANNEES_OPTS = [[3, '3A'], [4, '4A'], [5, '5A'], [6, 'Jeunes diplômés']];
 export const APP_STATUS = { postule: 'Envoyée', entretien: 'Entretien', retenu: 'Retenu(e)', refuse: 'Pas retenu(e)' };
@@ -16,12 +17,9 @@ export function OffersPage(ctx) {
   const isStudent = me.role === 'etudiant';
   const niveau = niveauOf(me, saison);
   const myTypes = isStudent ? (OBJECTIFS[niveau]?.types || []) : Object.keys(TYPES);
-  const [vue, setVue] = useState(isStudent ? 'pour-moi' : 'toutes');
+  const [vue, setVue] = useState('toutes');
   const [type, setType] = useState('tous');
   const [q, setQ] = useState('');
-  const [more, setMore] = useState(false);
-  const [filiere, setFiliere] = useState('');
-  const [lieu, setLieu] = useState('');
   const [compose, setCompose] = useState(false);
 
   const list = useMemo(() => {
@@ -29,19 +27,15 @@ export function OffersPage(ctx) {
     return data.offers.filter(o => {
       if (vue === 'miennes') { if (o.author_id !== me.id) return false; }
       else if (o.status !== 'ouverte' && vue !== 'sauvees') return false;
-      if (vue === 'pour-moi' && !matchesMe(o, me, saison)) return false;
       if (isStudent && !(o.annees || []).includes(niveau)) return false; // un étudiant ne voit que les offres de son année
       if (vue === 'sauvees' && !data.reactions.some(r => r.offer_id === o.id && r.user_id === me.id && r.kind === 'save')) return false;
       if (type !== 'tous' && o.type !== type) return false;
-      if (filiere && !(o.filieres || []).includes(filiere)) return false;
-      if (lieu === 'maroc' && (o.pays || 'Maroc') !== 'Maroc') return false;
-      if (lieu === 'etranger' && (o.pays || 'Maroc') === 'Maroc') return false;
-      if (qq && !`${o.titre} ${o.entreprise} ${o.ville} ${o.pays}`.toLowerCase().includes(qq)) return false;
+      if (qq && !`${o.titre} ${o.entreprise} ${o.ville} ${o.pays} ${(o.filieres || []).join(' ')}`.toLowerCase().includes(qq)) return false;
       return true;
     }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  }, [data, q, type, filiere, lieu, vue]);
-
-  const vues = isStudent ? [['pour-moi', 'Ma filière'], ['toutes', `Toute la ${NIVEAUX[niveau]?.short || 'promo'}`], ['sauvees', 'Sauvegardées']] : [['toutes', 'Toutes les offres'], ['miennes', 'Mes offres']];
+  }, [data, q, type, vue]);
+  const plain = vue === 'toutes' && type === 'tous' && !q.trim();
+  const chips = [['tous', 'Tout'], ...myTypes.map(k => [k, TYPES[k].label])];
 
   return html`<section class="page">
     <header class="page-head">
@@ -49,26 +43,36 @@ export function OffersPage(ctx) {
       ${!isStudent ? html`<button class="btn primary" onClick=${() => setCompose(true)}><${Icon} name="plus"/> Publier une offre</button>` : null}
     </header>
     <div class="toolbar">
-      <div class="seg" role="group" aria-label="Vue">${vues.map(([k, l]) => html`<button class=${vue === k ? 'on' : ''} onClick=${() => setVue(k)}>${l}</button>`)}</div>
-      <label class="search"><${Icon} name="search" size=${16}/><input id="f-q" placeholder="Entreprise, ville…" value=${q} onInput=${e => setQ(e.target.value)}/></label>
-      <button class=${'btn ghost small' + (more || filiere || lieu ? ' on' : '')} onClick=${() => setMore(!more)} aria-expanded=${more}>Filtres${filiere || lieu ? ` (${[filiere, lieu].filter(Boolean).length})` : ''}</button>
+      <label class="search grow"><${Icon} name="search" size=${16}/><input id="f-q" placeholder="Entreprise, ville, filière…" value=${q} onInput=${e => setQ(e.target.value)}/></label>
+      ${!isStudent ? html`<div class="seg" role="group" aria-label="Vue">${[['toutes', 'Toutes'], ['miennes', 'Mes offres']].map(([k, l]) => html`<button class=${vue === k ? 'on' : ''} onClick=${() => setVue(k)}>${l}</button>`)}</div>` : null}
     </div>
-    ${myTypes.length > 1 ? html`<div class="chips" role="group" aria-label="Type d’offre">
-      ${[['tous', 'Tout'], ...myTypes.map(k => [k, TYPES[k].label])].map(([k, l]) => html`<button class=${'chip t-' + k + (type === k ? ' on' : '')} onClick=${() => setType(k)}>${k !== 'tous' ? html`<${Icon} name=${TYPE_ICON[k]} size=${15}/>` : null}${l}</button>`)}
-    </div>` : null}
-    ${more ? html`<div class="filter-row">
-      <select id="f-fil" value=${filiere} onChange=${e => setFiliere(e.target.value)} aria-label="Filière"><option value="">Toutes filières</option>${FILIERES.map(f => html`<option value=${f}>${f}</option>`)}</select>
-      <select id="f-lieu" value=${lieu} onChange=${e => setLieu(e.target.value)} aria-label="Lieu"><option value="">Maroc et étranger</option><option value="maroc">Maroc</option><option value="etranger">Étranger</option></select>
-    </div>` : null}
+    <div class="chips" role="group" aria-label="Type d’offre">
+      ${chips.length > 2 ? chips.map(([k, l]) => html`<button class=${'chip t-' + k + (type === k ? ' on' : '')} aria-pressed=${type === k} onClick=${() => setType(k)}>${k !== 'tous' ? html`<${Icon} name=${TYPE_ICON[k]} size=${15}/>` : null}${l}</button>`) : null}
+      ${isStudent ? html`<button class=${'chip' + (vue === 'sauvees' ? ' on' : '')} aria-pressed=${vue === 'sauvees'} onClick=${() => setVue(vue === 'sauvees' ? 'toutes' : 'sauvees')}><${Icon} name="bookmark" size=${14}/> Sauvegardées</button>` : null}
+    </div>
+    ${isStudent && plain && list.length > 5 ? html`<${RecoOffers} ctx=${ctx} max=${3} inOffres/>` : null}
+    ${isStudent && plain && list.length > 5 ? html`<div class="section-head"><h2>${NIVEAUX[niveau]?.short ? `Toutes les offres de ${NIVEAUX[niveau].short}` : 'Toutes les offres'}</h2><span class="muted small">${list.length}</span></div>` : null}
     <div class="offer-grid">
-      ${list.length ? list.map(o => html`<${OfferCard} key=${o.id} o=${o} ctx=${ctx} onOpen=${() => openOffer(o.id)}/>`) : html`<${Empty} icon="feed" title=${vue === 'pour-moi' ? 'Aucune offre ouverte pour ton niveau et ta filière' : 'Aucune offre ici'}>${vue === 'pour-moi' ? 'Regarde l’onglet de toute ta promo, ou reviens bientôt : les lauréats publient régulièrement.' : 'Change les filtres.'}<//>`}
+      ${list.length ? list.map(o => html`<${OfferCard} key=${o.id} o=${o} ctx=${ctx} onOpen=${() => openOffer(o.id)}/>`) : html`<${Empty} icon="feed" title=${vue === 'sauvees' ? 'Aucune offre sauvegardée' : 'Aucune offre ici'}>${vue === 'sauvees' ? 'Clique sur le marque-page d’une offre pour la garder ici.' : 'Change la recherche ou reviens bientôt : les lauréats publient régulièrement.'}<//>`}
     </div>
     ${compose ? html`<${OfferComposer} ctx=${ctx} onClose=${() => setCompose(false)}/>` : null}
   </section>`;
 }
 
+// Offres recommandées à un étudiant : sa filière, ses compétences retrouvées dans l'offre, sa ville
+export function RecoOffers({ ctx, max = 3, inOffres = false }) {
+  const { data, me, saison, openOffer, go } = ctx;
+  const n = niveauOf(me, saison);
+  const reco = data.offers.filter(o => o.status === 'ouverte' && (o.annees || []).includes(n) && !data.applications.some(a => a.offer_id === o.id && a.student_id === me.id))
+    .map(o => ({ o, ...offerMatch(o, me) })).sort((a, b) => b.score - a.score || new Date(b.o.created_at) - new Date(a.o.created_at)).slice(0, max);
+  return html`<div class="reco">
+    <div class="section-head"><h2 class="h-ico"><${Icon} name="spark"/> Recommandé pour toi</h2>${inOffres ? null : html`<button class="btn tiny ghost" onClick=${() => go('offres')}>Toutes les offres <${Icon} name="arrow" size=${14}/></button>`}</div>
+    <div class="offer-grid one">${reco.length ? reco.map(({ o, why }) => html`<${OfferCard} key=${o.id} o=${o} ctx=${ctx} why=${why} onOpen=${() => openOffer(o.id)}/>`) : html`<${Empty} icon="feed" title="Pas encore d’offre pour ton niveau">Elles arrivent vite. En attendant, demande un conseil à un lauréat dans Mentorat.<//>`}</div>
+  </div>`;
+}
+
 // Carte compacte : un seul geste, ouvrir la fiche. Seule exception : sauvegarder.
-export function OfferCard({ o, ctx, onOpen }) {
+export function OfferCard({ o, ctx, onOpen, why }) {
   const { data, me, store, act } = ctx;
   const author = store.byId('profiles', o.author_id);
   const saved = data.reactions.find(r => r.offer_id === o.id && r.user_id === me.id && r.kind === 'save');
@@ -76,6 +80,7 @@ export function OfferCard({ o, ctx, onOpen }) {
   const myApp = apps.find(a => a.student_id === me.id);
   const dl = daysUntil(o.deadline);
   const mine = o.author_id === me.id;
+  const canApply = !myApp && !mine && me.role === 'etudiant' && o.status === 'ouverte';
   return html`<article class=${'ocard' + (o.status !== 'ouverte' ? ' closed' : '')}>
     <button class="ocard-main" onClick=${onOpen} aria-label=${`Ouvrir : ${o.titre}`}>
       <${CompanyLogo} name=${o.entreprise}/>
@@ -86,19 +91,21 @@ export function OfferCard({ o, ctx, onOpen }) {
           ${o.cooptation && o.status === 'ouverte' ? html`<span class="tag coopt">Cooptation</span>` : null}</span>
         <strong class="ocard-title">${o.titre}</strong>
         <span class="ocard-meta">${o.entreprise} · ${[o.ville, o.pays !== 'Maroc' ? o.pays : ''].filter(Boolean).join(', ')}</span>
+        ${why?.length ? html`<span class="why">${why.map(w => html`<span class="mini good">${w}</span>`)}</span>` : null}
       </span>
     </button>
     <footer class="ocard-foot">
       ${author ? html`<span class="ocard-author"><${Avatar} p=${author} size=${22}/><span>${author.full_name.split(' ')[0]} · promo ${author.promo}</span></span>` : null}
       <span class="spacer"></span>
-      ${myApp ? html`<span class=${'state-pill a-' + myApp.status}>${APP_STATUS[myApp.status]}</span>` : mine ? html`<span class="muted small">${apps.length} candidat${apps.length > 1 ? 's' : ''}</span>` : html`<span class="muted small">${timeAgo(o.created_at)}</span>`}
+      ${myApp ? html`<span class=${'state-pill a-' + myApp.status}>${APP_STATUS[myApp.status]}</span>` : mine ? html`<span class="muted small">${apps.length} candidat${apps.length > 1 ? 's' : ''}</span>` : canApply ? null : html`<span class="muted small nowrap">${timeAgo(o.created_at)}</span>`}
+      ${canApply ? html`<button class="btn tiny primary" onClick=${() => ctx.openOffer(o.id, true)}>Postuler</button>` : null}
       ${!mine ? html`<button class=${'icon-btn small' + (saved ? ' on' : '')} aria-pressed=${!!saved} aria-label=${saved ? 'Retirer des sauvegardes' : 'Sauvegarder'} onClick=${() => act(() => saved ? store.remove('reactions', saved.id) : store.insert('reactions', { offer_id: o.id, user_id: me.id, kind: 'save' }))}><${Icon} name="bookmark" size=${16}/></button>` : null}
     </footer>
   </article>`;
 }
 
 // Fiche complète d'une offre
-export function OfferDetail({ ctx, id, onClose }) {
+export function OfferDetail({ ctx, id, onClose, apply }) {
   const { data, me, store, act, openProfile } = ctx;
   const o = store.byId('offers', id);
   const mine = o?.author_id === me.id;
@@ -143,7 +150,7 @@ export function OfferDetail({ ctx, id, onClose }) {
         ${o.lien ? html`<p><a href=${o.lien.startsWith('http') ? o.lien : 'https://' + o.lien} target="_blank" rel="noopener"><${Icon} name="link" size=${15}/> Voir l’annonce complète</a></p>` : null}
         ${author && !mine ? html`<div class="author-box"><${Person} p=${author} score=${ctx.scores.get(author.id)} onOpen=${openProfile} size=${40}/>
           <p class="small muted">${o.cooptation ? `${author.full_name.split(' ')[0]} peut recommander directement ton profil en interne.` : `${author.full_name.split(' ')[0]} reçoit ta candidature et te répond ici.`}</p></div>` : null}
-        ${!mine && me.role !== 'admin' ? html`<${ApplyBox} ctx=${ctx} o=${o}/>` : null}
+        ${!mine && me.role !== 'admin' ? html`<${ApplyBox} ctx=${ctx} o=${o} start=${apply}/>` : null}
         ${!mine ? html`<${Questions} ctx=${ctx} o=${o} comments=${comments}/>` : null}` : null}
 
       ${tab === 'questions' && mine ? html`<${Questions} ctx=${ctx} o=${o} comments=${comments}/>` : null}
@@ -152,10 +159,10 @@ export function OfferDetail({ ctx, id, onClose }) {
 }
 
 // Côté étudiant : postuler, puis suivre le statut que le lauréat met à jour
-function ApplyBox({ ctx, o }) {
+function ApplyBox({ ctx, o, start }) {
   const { data, me, store, act, saison } = ctx;
   const app = data.applications.find(a => a.offer_id === o.id && a.student_id === me.id);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!!start);
   const [msg, setMsg] = useState('');
   const pl = placementOf(data, me.id, saison);
   if (app) {
@@ -211,9 +218,27 @@ function Candidates({ ctx, o, apps }) {
         </div>`}
       </div>`;
     }) : html`<${Empty} icon="inbox" title="Pas encore de candidat">Partage l’offre dans les groupes de promo : les étudiants concernés la voient déjà dans « Pour moi ».<//>`}
+    <${Matching} ctx=${ctx} o=${o}/>
     <button class="btn ghost small" onClick=${() => setDeclare(true)}><${Icon} name="plus" size=${15}/> J’ai recruté un étudiant qui n’a pas postulé ici</button>
     ${declare ? html`<${PickStudent} ctx=${ctx} onClose=${() => setDeclare(false)} onPick=${id => { setDeclare(false); recruit(id, null); }}/>` : null}
   </div>`;
+}
+
+// Profils en recherche qui correspondent à l'offre : une invitation à postuler en un clic
+function Matching({ ctx, o }) {
+  const { data, me, saison, store, act, openProfile } = ctx;
+  if (o.status !== 'ouverte') return null;
+  const list = talentsFor(data, o, saison);
+  if (!list.length) return null;
+  const invited = id => data.invitations.some(i => i.offer_id === o.id && i.student_id === id);
+  const invite = p => act(async () => {
+    const msg = getLang() === 'ar' ? `السلام ${p.full_name.split(' ')[0]}، ملفك يهمني لهذا العرض. ترشّح إذا أعجبك!` : `Bonjour ${p.full_name.split(' ')[0]}, ton profil m’intéresse pour cette offre. Postule si ça te parle !`;
+    await store.insert('invitations', { laureat_id: me.id, student_id: p.id, offer_id: o.id, message: msg });
+    toast(`Invitation envoyée à ${p.full_name.split(' ')[0]}.`);
+  });
+  return html`<div class="matching"><p class="small"><${Icon} name="spark" size=${14}/> <strong>Profils qui correspondent à ton offre</strong></p>
+    <ul class="people-list">${list.map(({ p, why }) => html`<li key=${p.id}><${Person} p=${p} onOpen=${openProfile} size=${32}/><span class="why">${why.map(w => html`<span class="mini good">${w}</span>`)}</span><span class="spacer"></span>
+      ${invited(p.id) ? html`<span class="state-pill s-validation">Invité(e)</span>` : html`<button class="btn small" onClick=${() => invite(p)}><${Icon} name="send" size=${14}/> Inviter à postuler</button>`}</li>`)}</ul></div>`;
 }
 
 function PickStudent({ ctx, onClose, onPick }) {

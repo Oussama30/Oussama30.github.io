@@ -1,14 +1,13 @@
-// Ce que les lauréats y gagnent : vivier de talents (shortlist, invitations), entretiens express
-// de 15 minutes, attestation vérifiable, et fil des réussites à partager sur LinkedIn.
+// Ce que les lauréats y gagnent : vivier de talents (shortlist, invitations), attestation vérifiable,
+// et fil des réussites à partager sur LinkedIn.
 import { html, useState, useEffect } from './vendor/preact-htm.js';
 import { Icon, Modal, Field, Empty, Person, Avatar, RoleLine, BrandLogo, toast } from './ui.js';
-import { FILIERES, FOUND, niveauOf, statutOf, timeAgo, slotState, attestationStats } from './logic.js';
+import { FILIERES, FOUND, niveauOf, statutOf, timeAgo, attestationStats } from './logic.js';
 import { OfferComposer, matchesMe } from './offers.js';
 import { getLang } from './i18n.js';
 
 const firstName = p => (p?.full_name || '').split(' ')[0];
 const href = u => (u.startsWith('http') ? u : 'https://' + u);
-const byStart = (a, b) => new Date(a.starts_at) - new Date(b.starts_at);
 
 async function copyText(txt, done = 'Copié.') {
   try { await navigator.clipboard.writeText(txt); toast(done); } catch { toast('Copie impossible ici : sélectionne le texte et copie-le.', 'err'); }
@@ -109,134 +108,12 @@ function InviteModal({ ctx, student, onClose }) {
 }
 
 // ---------------------------------------------------------------------------
-// Entretiens express de 15 minutes
-// ---------------------------------------------------------------------------
-const JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
-const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-const LIEUX = ['Google Meet', 'Appel téléphonique', 'WhatsApp', 'Sur place à l’école'];
-const pad = n => String(n).padStart(2, '0');
-
-export function slotWhen(iso, now = new Date()) {
-  const d = new Date(iso);
-  const day0 = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const diff = Math.round((day0(d) - day0(now)) / 864e5);
-  return { diff, day: diff === 0 ? 'Aujourd’hui' : diff === 1 ? 'Demain' : diff === -1 ? 'Hier' : JOURS[d.getDay()], date: `${d.getDate()} ${MOIS[d.getMonth()]}`, time: `${pad(d.getHours())}:${pad(d.getMinutes())}` };
-}
-
-export function SlotDate({ iso }) {
-  const w = slotWhen(iso);
-  return html`<span class=${'slot-date' + (w.diff === 0 ? ' today' : '')}><span class="sd-day">${w.day}</span><span class="sd-date">${w.date}</span><span class="sd-time mono">${w.time}</span></span>`;
-}
-
-const localDay = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
-// Côté lauréat : ouvrir des créneaux, voir qui a réservé
-export function ExpressMentor({ ctx }) {
-  const { data, me, store, act, openProfile } = ctx;
-  const mine = data.slots.filter(s => s.mentor_id === me.id);
-  const upcoming = mine.filter(s => ['libre', 'reserve'].includes(slotState(s))).sort(byStart);
-  const done = mine.filter(s => slotState(s) === 'fait').sort((a, b) => byStart(b, a));
-  const [f, setF] = useState(() => ({ date: localDay(new Date(Date.now() + 2 * 864e5)), time: '18:30', lieu: 'Google Meet' }));
-  const add = e => {
-    e.preventDefault();
-    const starts = new Date(`${f.date}T${f.time}`);
-    if (!(starts > new Date())) { toast('Choisis un moment à venir.', 'err'); return; }
-    act(async () => { await store.insert('slots', { mentor_id: me.id, starts_at: starts.toISOString(), lieu: f.lieu.trim() || 'Google Meet', duree: 15 }); toast('Créneau ouvert. Les étudiants peuvent le réserver.'); });
-  };
-  return html`<div class="express">
-    <div class="express-intro"><span class="obj-ico"><${Icon} name="clock" size=${22}/></span><div><strong>Entretiens express de 15 minutes</strong>
-      <p class="small muted">Deux créneaux par mois suffisent. Un étudiant réserve, tu reçois une notification, et chaque entretien réalisé rapporte 10 points.</p></div></div>
-    <form class="slot-form" onSubmit=${add}>
-      <${Field} label="Jour"><input id="sl-date" type="date" required min=${localDay(new Date())} value=${f.date} onInput=${e => setF({ ...f, date: e.target.value })}/><//>
-      <${Field} label="Heure"><input id="sl-time" type="time" required step="900" value=${f.time} onInput=${e => setF({ ...f, time: e.target.value })}/><//>
-      <${Field} label="Comment ?"><input id="sl-lieu" list="sl-lieux" maxlength="120" value=${f.lieu} onInput=${e => setF({ ...f, lieu: e.target.value })}/><datalist id="sl-lieux">${LIEUX.map(l => html`<option value=${l}></option>`)}</datalist><//>
-      <button class="btn primary"><${Icon} name="plus" size=${16}/> Ouvrir ce créneau</button>
-    </form>
-    <h3 class="sub-title">À venir <span class="count">${upcoming.length}</span></h3>
-    ${upcoming.length ? html`<ul class="slot-list">${upcoming.map(s => {
-      const st = store.byId('profiles', s.student_id);
-      return html`<li class="slot-row" key=${s.id}><${SlotDate} iso=${s.starts_at}/>
-        <span class="slot-main">${st ? html`<${Person} p=${st} onOpen=${openProfile} size=${30}/><span class="small">${s.sujet}</span>` : html`<span class="state-pill s-libre">Libre</span>`}
-          <span class="small muted"><${Icon} name="pin" size=${13}/> ${s.lieu}</span></span>
-        ${st ? html`<button class="btn tiny ghost" onClick=${() => ctx.confirm('Annuler ce rendez-vous ? L’étudiant sera prévenu.', () => act(() => store.update('slots', s.id, { status: 'annule' })), 'Annuler le rendez-vous')}>Annuler</button>`
-          : html`<button class="icon-btn small" aria-label="Supprimer ce créneau" onClick=${() => act(() => store.remove('slots', s.id))}><${Icon} name="trash" size=${14}/></button>`}
-      </li>`;
-    })}</ul>` : html`<p class="muted small">Aucun créneau à venir. Ouvre-en un juste au-dessus.</p>`}
-    ${done.length ? html`<h3 class="sub-title">Réalisés <span class="count">${done.length}</span></h3>
-      <ul class="slot-list">${done.slice(0, 6).map(s => { const st = store.byId('profiles', s.student_id); return html`<li class="slot-row past" key=${s.id}><${SlotDate} iso=${s.starts_at}/>
-        <span class="slot-main"><${Person} p=${st} onOpen=${openProfile} size=${30}/><span class="small">${s.sujet}</span>
-          ${s.merci ? html`<span class="small merci-inline"><${Icon} name="heart" size=${14}/> ${s.merci}</span>` : null}</span>
-        <span class="mono pts small">+10</span></li>`; })}</ul>` : null}
-  </div>`;
-}
-
-// Côté étudiant : les prochains créneaux libres, réservables tout de suite
-export function ExpressStrip({ ctx, fil }) {
-  const { data, me, store, openProfile } = ctx;
-  const [book, setBook] = useState(null);
-  if (me.role !== 'etudiant') return null;
-  const free = data.slots.filter(s => slotState(s) === 'libre' && s.mentor_id !== me.id)
-    .map(s => ({ s, m: store.byId('profiles', s.mentor_id) })).filter(x => x.m && (!fil || x.m.filiere === fil))
-    .sort((a, b) => byStart(a.s, b.s)).slice(0, 6);
-  return html`<div class="express-strip">
-    <div class="section-head"><h2 class="h-ico"><${Icon} name="clock"/> 15 minutes avec un lauréat</h2><span class="muted small">Réserve un créneau, sans attendre de réponse</span></div>
-    ${free.length ? html`<div class="slot-cards">${free.map(({ s, m }) => html`<div class="slot-card" key=${s.id}>
-      <${SlotDate} iso=${s.starts_at}/><${Person} p=${m} onOpen=${openProfile} size=${32}/>
-      <span class="small muted"><${Icon} name="pin" size=${13}/> ${s.lieu}</span>
-      <button class="btn small primary" onClick=${() => setBook({ s, m })}>Réserver</button></div>`)}</div>`
-      : html`<p class="muted small">${fil ? 'Pas de créneau libre dans cette filière pour l’instant.' : 'Pas de créneau libre pour l’instant.'} Tu peux envoyer une demande de mentorat à un lauréat ci-dessous.</p>`}
-    ${book ? html`<${BookSlot} ctx=${ctx} s=${book.s} m=${book.m} onClose=${() => setBook(null)}/>` : null}
-  </div>`;
-}
-
-function BookSlot({ ctx, s, m, onClose }) {
-  const { data, store, me, act, scores, go } = ctx;
-  const [sujet, setSujet] = useState('');
-  const held = data.slots.filter(x => x.student_id === me.id && slotState(x) === 'reserve').length;
-  const submit = e => {
-    e.preventDefault();
-    act(async () => { await store.update('slots', s.id, { student_id: me.id, sujet: sujet.trim() }); toast('C’est réservé ! Le lauréat est prévenu.', 'win'); onClose(); go('reseau/mentorat/rdv'); });
-  };
-  return html`<${Modal} title="Réserver 15 minutes" onClose=${onClose}>
-    <form class="form" onSubmit=${submit}>
-      <div class="book-head"><${Avatar} p=${m} size=${44}/><div><strong>${m.full_name}</strong><${RoleLine} p=${m} score=${scores.get(m.id)}/></div></div>
-      <p class="book-when"><${SlotDate} iso=${s.starts_at}/><span class="small muted"><${Icon} name="pin" size=${13}/> ${s.lieu}</span></p>
-      <${Field} label="De quoi veux-tu parler ?" hint="Une phrase suffit, pour que le lauréat se prépare."><input id="bk-sujet" required maxlength="140" placeholder="Ex. Choisir entre deux sujets de PFE" value=${sujet} onInput=${e => setSujet(e.target.value)}/><//>
-      ${held >= 2 ? html`<p class="small warn-t">Tu as déjà 2 rendez-vous à venir. Laisse la place aux autres, puis reviens après.</p>` : null}
-      <div class="row-end"><button type="button" class="btn ghost" onClick=${onClose}>Annuler</button><button class="btn primary" disabled=${sujet.trim().length < 3 || held >= 2}>Réserver</button></div>
-    </form>
-  <//>`;
-}
-
-// Côté étudiant : ses rendez-vous, puis un merci après l'échange
-export function MyBookings({ ctx }) {
-  const rows = ctx.data.slots.filter(s => s.student_id === ctx.me.id).sort((a, b) => byStart(b, a));
-  if (!rows.length) return null;
-  return html`<div class="bookings"><h3 class="sub-title">Mes rendez-vous de 15 min</h3>
-    <ul class="slot-list">${rows.slice(0, 8).map(s => html`<${BookingRow} key=${s.id} s=${s} ctx=${ctx}/>`)}</ul></div>`;
-}
-
-function BookingRow({ s, ctx }) {
-  const { store, act, openProfile } = ctx;
-  const st = slotState(s); const m = store.byId('profiles', s.mentor_id);
-  const [merci, setMerci] = useState('');
-  return html`<li class=${'slot-row' + (st === 'fait' ? ' past' : '')}><${SlotDate} iso=${s.starts_at}/>
-    <span class="slot-main"><${Person} p=${m} onOpen=${openProfile} size=${30}/><span class="small">${s.sujet}</span><span class="small muted"><${Icon} name="pin" size=${13}/> ${s.lieu}</span>
-      ${st === 'fait' && s.merci ? html`<span class="small merci-inline"><${Icon} name="heart" size=${14}/> ${s.merci}</span>` : null}
-      ${st === 'fait' && !s.merci ? html`<form class="comment-form" onSubmit=${e => { e.preventDefault(); act(async () => { await store.update('slots', s.id, { merci: merci.trim() }); toast('Merci envoyé !'); }); }}>
-        <input id=${'smerci-' + s.id} maxlength="800" placeholder="Un mot de remerciement pour le lauréat…" value=${merci} onInput=${e => setMerci(e.target.value)}/><button class="btn small primary" disabled=${!merci.trim()}>Remercier</button></form>` : null}</span>
-    ${st === 'reserve' ? html`<button class="btn tiny ghost" onClick=${() => ctx.confirm('Annuler ce rendez-vous ? Le créneau redevient libre pour les autres.', () => act(() => store.update('slots', s.id, { student_id: null, sujet: null })), 'Annuler le rendez-vous')}>Annuler</button>`
-      : st === 'annule' ? html`<span class="state-pill m-refusee">Annulé</span>` : st === 'fait' ? html`<span class="state-pill m-terminee">Réalisé</span>` : null}
-  </li>`;
-}
-
-// ---------------------------------------------------------------------------
 // Attestation de contribution : imprimable, ajoutable sur LinkedIn, vérifiable par lien
 // ---------------------------------------------------------------------------
 export const codeOf = id => String(id).replace(/[^0-9a-z]/gi, '').slice(0, 8).toUpperCase().replace(/^(.{4})/, '$1-');
 export const verifyUrl = id => `${location.origin}${location.pathname}#verifier/${id}`;
 const fmtLong = iso => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-const STAT_KEYS = ['mentorats', 'express', 'recrutes', 'reponses'];
+const STAT_KEYS = ['mentorats', 'recrutes', 'reponses'];
 
 function linkedinCertUrl(a) {
   const d = new Date(a.created_at); const enc = encodeURIComponent;
@@ -255,7 +132,6 @@ export function Certificate({ p, a, code, url }) {
   const s = a.stats || {};
   const facts = [
     [s.mentorats, 'mentorat terminé', 'mentorats terminés'],
-    [s.express, 'entretien express de 15 minutes', 'entretiens express de 15 minutes'],
     [s.recrutes, 'étudiant recruté et confirmé', 'étudiants recrutés et confirmés'],
     [s.reponses, 'réponse dans l’Entraide', 'réponses dans l’Entraide'],
   ].filter(f => f[0] > 0);
@@ -290,8 +166,8 @@ function AttestationModal({ ctx, onClose }) {
   const now = attestationStats(data, me.id);
   const last = data.attestations.filter(a => a.laureat_id === me.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
   const current = last && STAT_KEYS.every(k => (last.stats?.[k] || 0) === now[k]) ? last : null;
-  if (!now.mentorats && !now.express && !now.recrutes) return html`<${Modal} title="Attestation de contribution" onClose=${onClose}>
-    <${Empty} icon="award" title="Bientôt prête">Ton attestation sera disponible après ton premier mentorat terminé, entretien express réalisé ou recrutement confirmé.<//><//>`;
+  if (!now.mentorats && !now.recrutes) return html`<${Modal} title="Attestation de contribution" onClose=${onClose}>
+    <${Empty} icon="award" title="Bientôt prête">Ton attestation sera disponible après ton premier mentorat terminé ou recrutement confirmé.<//><//>`;
   const shown = current || { stats: now, created_at: new Date().toISOString() };
   return html`<${Modal} title="Attestation de contribution" onClose=${onClose} wide>
     <${Certificate} p=${me} a=${shown} code=${current ? codeOf(current.id) : null} url=${current ? verifyUrl(current.id) : null}/>

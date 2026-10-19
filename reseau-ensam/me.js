@@ -1,9 +1,10 @@
 // « Mon parcours » (étudiants) et « Mon espace » (lauréats).
 import { html, useState } from './vendor/preact-htm.js';
 import { Icon, Modal, Field, Empty, Person, Bar, toast, LevelChip, CompanyLogo, TYPE_ICON, Num } from './ui.js';
-import { OBJECTIFS, NIVEAUX, TYPES, niveauOf, statutOf, typeForNiveau, seasonLabel, timeAgo, levelOf, BADGES, badgesOf, BAREME, computeScores, NIVEAUX_IMPACT, slotState } from './logic.js';
+import { OBJECTIFS, NIVEAUX, TYPES, niveauOf, statutOf, typeForNiveau, seasonLabel, timeAgo, levelOf, BADGES, badgesOf, BAREME, computeScores, NIVEAUX_IMPACT, mentorState } from './logic.js';
 import { APP_STATUS, OfferComposer } from './offers.js';
-import { AttestationCard, ShareModal, SlotDate } from './growth.js';
+import { AttestationCard, ShareModal } from './growth.js';
+import { SlotDate } from './mentorat.js';
 
 // Étapes vues par l'étudiant : il postule, le lauréat fait avancer, l'étudiant confirme.
 const JOURNEY = [['send', 'Je postule'], ['people', 'Entretien'], ['briefcase', 'Recruté(e)'], ['check', 'Confirmé']];
@@ -168,7 +169,7 @@ export function EspacePage(ctx) {
   const [bareme, setBareme] = useState(false);
   const [compose, setCompose] = useState(false);
   const [share, setShare] = useState(null);
-  const rdv = data.slots.filter(x => x.mentor_id === me.id && slotState(x) === 'reserve').sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+  const rdv = data.mentorships.filter(m => m.mentor_id === me.id && mentorState(m) === 'rdv').sort((a, b) => new Date(a.rdv_at) - new Date(b.rdv_at));
   const recrues = helped.filter(p => p.saison === ctx.saison).sort((a, b) => new Date(b.confirmed_at || b.created_at) - new Date(a.confirmed_at || a.created_at));
 
   return html`<section class="page">
@@ -202,8 +203,8 @@ export function EspacePage(ctx) {
         <${Person} p=${st} onOpen=${openProfile} size=${36}/><span class="app-txt right"><span class="muted small">${p.entreprise} · ${timeAgo(p.created_at)}</span></span>
         <button class="btn small ghost" onClick=${() => ctx.confirm('Annuler cette déclaration de recrutement ?', () => act(() => store.remove('placements', p.id)), 'Annuler la déclaration')}>Annuler</button></li>`; })}</ul></div>` : null}
 
-    ${rdv.length ? html`<div class="panel"><div class="section-head"><h2 class="h-ico"><${Icon} name="clock"/> Mes prochains entretiens de 15 min <span class="count">${rdv.length}</span></h2><button class="btn tiny ghost" onClick=${() => ctx.go('reseau/mentorat/rdv')}>Mes créneaux <${Icon} name="arrow" size=${14}/></button></div>
-      <ul class="slot-list">${rdv.slice(0, 3).map(x => html`<li class="slot-row" key=${x.id}><${SlotDate} iso=${x.starts_at}/><span class="slot-main"><${Person} p=${store.byId('profiles', x.student_id)} onOpen=${openProfile} size=${30}/><span class="small">${x.sujet}</span></span></li>`)}</ul></div>` : null}
+    ${rdv.length ? html`<div class="panel"><div class="section-head"><h2 class="h-ico"><${Icon} name="video"/> Mes prochains rendez-vous <span class="count">${rdv.length}</span></h2><button class="btn tiny ghost" onClick=${() => ctx.go('mentorat')}>Mentorat <${Icon} name="arrow" size=${14}/></button></div>
+      <ul class="slot-list">${rdv.slice(0, 3).map(m => html`<li class="slot-row" key=${m.id}><${SlotDate} iso=${m.rdv_at}/><span class="slot-main"><${Person} p=${store.byId('profiles', m.student_id)} onOpen=${openProfile} size=${30}/><span class="small" dir="auto">${m.sujet}</span></span></li>`)}</ul></div>` : null}
 
     ${recrues.length ? html`<div class="panel"><div class="section-head"><h2 class="h-ico"><${Icon} name="briefcase"/> Recrutés grâce à toi cette saison <span class="count">${recrues.length}</span></h2></div>
       <ul class="app-list flat">${recrues.slice(0, 5).map(p => html`<li class="app-row" key=${p.id}><${Person} p=${store.byId('profiles', p.student_id)} onOpen=${openProfile} size=${36}/><span class="app-txt right"><span class="muted small">${p.entreprise} · ${TYPES[p.type]?.label}</span></span>
