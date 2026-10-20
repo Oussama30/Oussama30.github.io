@@ -5,7 +5,7 @@ import { MODULE, SITE } from './banc.mjs';
 const N = await import(MODULE);
 const logic = await import('../../src/logic.js');
 
-const RDV = '2026-10-21T17:30:00Z';   // mercredi 21 octobre, 18:30 à Casablanca (UTC+1)
+const RDV = '2026-10-21T17:30:00Z';   // mercredi 21 octobre, 17:30 au Maroc (GMT depuis le 20 septembre 2026)
 const DONNEES = {
   mentorat_demande: { nom: 'Salma Idrissi', sujet: 'Relire mon CV' },
   mentorat_accepte: { nom: 'Youssef Alami', sujet: 'Relire mon CV', rdv_at: RDV },
@@ -50,14 +50,14 @@ test('chaque type de notification existe en français et en arabe', () => {
 
 test('textes français exacts', () => {
   const t = (k, d = DONNEES[k]) => N.texteNotif(k, d, 'fr', SITE);
-  assert.deepEqual([t('mentorat_accepte').title, t('mentorat_accepte').body], ['Rendez-vous fixé', 'Youssef Alami a accepté : Relire mon CV, mercredi 21 octobre à 18:30']);
-  assert.equal(t('mentorat_deplace').body, 'Youssef Alami propose mercredi 21 octobre à 18:30 : Relire mon CV');
+  assert.deepEqual([t('mentorat_accepte').title, t('mentorat_accepte').body], ['Rendez-vous fixé', 'Youssef Alami a accepté : Relire mon CV, mercredi 21 octobre à 17:30']);
+  assert.equal(t('mentorat_deplace').body, 'Youssef Alami propose mercredi 21 octobre à 17:30 : Relire mon CV');
   assert.equal(t('mentorat_demande').body, 'Salma Idrissi te demande de l’aide : Relire mon CV');
   assert.equal(t('candidature_statut').body, 'Ta candidature « Stage maintenance prédictive » avance : entretien.');
   assert.deepEqual([t('candidature_statut', { titre: 'X', statut: 'retenu' }).title, t('candidature_statut', { titre: 'X', statut: 'retenu' }).body], ['Bonne nouvelle !', 'Tu es retenu(e) pour « X ».']);
   assert.equal(t('cafe').title, 'Café ENSAM à Casablanca');
-  assert.equal(t('cafe').body, 'mercredi 21 octobre à 18:30 · Café Bianca, Maârif. Inscris-toi en un clic.');
-  assert.equal(t('rappel_rdv').body, 'Avec Youssef Alami à 18:30 : Relire mon CV');
+  assert.equal(t('cafe').body, 'mercredi 21 octobre à 17:30 · Café Bianca, Maârif. Inscris-toi en un clic.');
+  assert.equal(t('rappel_rdv').body, 'Avec Youssef Alami à 17:30 : Relire mon CV');
   assert.equal(t('recrutement_confirme').body, 'Salma Idrissi a confirmé son recrutement chez OCP. +50 points');
   assert.equal(t('test').body, 'Tu recevras ici les nouvelles importantes du Réseau ENSAM.');
 });
@@ -67,10 +67,10 @@ test('textes arabes : date à l’heure du Maroc, chiffres latins', () => {
   assert.equal(n.title, 'تم تحديد الموعد');
   assert.match(n.body, /الأربعاء/);
   assert.match(n.body, /21 أكتوبر/);
-  assert.match(n.body, /على الساعة 18:30/);
+  assert.match(n.body, /على الساعة 17:30/);
   assert.match(n.body, /Youssef Alami/);
   // Contenu des membres isolé (FSI … PDI) dans les textes arabes
-  assert.equal(N.texteNotif('rappel_rdv', DONNEES.rappel_rdv, 'ar', SITE).body, 'مع \u2068Youssef Alami\u2069 على الساعة 18:30: \u2068Relire mon CV\u2069');
+  assert.equal(N.texteNotif('rappel_rdv', DONNEES.rappel_rdv, 'ar', SITE).body, 'مع \u2068Youssef Alami\u2069 على الساعة 17:30: \u2068Relire mon CV\u2069');
   assert.doesNotMatch(N.texteNotif('rappel_rdv', DONNEES.rappel_rdv, 'fr', SITE).body, /[\u2068\u2069]/);
 });
 
@@ -100,6 +100,14 @@ test('saison à l’heure de Casablanca (septembre → août)', () => {
   assert.equal(N.saisonDe(new Date('2026-08-31T23:30:00Z')), 2026);  // 1er septembre 00:30
   assert.equal(N.saisonDe(new Date('2026-10-20T09:00:00Z')), 2026);
   assert.equal(N.saisonDe(new Date('2027-02-01T09:00:00Z')), 2026);
+});
+
+test('heure du Maroc : UTC+1 jusqu’au 20 septembre 2026, puis GMT pour de bon', () => {
+  assert.equal(N.quand('2026-09-01T17:30:00Z', 'fr').heure, '18:30');
+  assert.equal(N.quand('2026-09-20T00:30:00Z', 'fr').heure, '01:30');
+  assert.equal(N.quand('2026-09-20T02:00:00Z', 'fr').heure, '02:00');
+  assert.equal(N.quand('2027-07-01T17:30:00Z', 'fr').heure, '17:30');
+  assert.equal(N.quand('2026-10-21T23:30:00Z', 'fr').date, 'mercredi 21 octobre');
 });
 
 test('niveau : même règle que niveauOf de logic.js', () => {

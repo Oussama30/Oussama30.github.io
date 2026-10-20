@@ -167,17 +167,25 @@ const prenomDe = (nom: string): string => txt(nom).split(' ')[0] || '';
 // ---------------------------------------------------------------------
 type Langue = 'fr' | 'ar';
 const langueDe = (l: unknown): Langue => (l === 'ar' ? 'ar' : 'fr');
+// Le Maroc est revenu à l'heure GMT (UTC+0), pour de bon, le dimanche 20 septembre 2026. Si la base des
+// fuseaux du serveur est plus ancienne (elle donnerait encore UTC+1), on applique nous-mêmes la nouvelle règle.
+const RETOUR_GMT = Date.UTC(2026, 8, 20, 1);
+let fuseauxAJour: boolean | undefined;
+function zoneDe(d: Date): string {
+  fuseauxAJour ??= new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hourCycle: 'h23' }).format(new Date(Date.UTC(2026, 9, 21, 12))) === '12';
+  return !fuseauxAJour && d.getTime() >= RETOUR_GMT ? 'UTC' : TZ;
+}
 const formats = new Map<string, Intl.DateTimeFormat>();
-function format(locale: string, o: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
-  const k = locale + JSON.stringify(o);
+function format(locale: string, o: Intl.DateTimeFormatOptions, d: Date): Intl.DateTimeFormat {
+  const z = zoneDe(d), k = z + locale + JSON.stringify(o);
   let f = formats.get(k);
-  if (!f) { f = new Intl.DateTimeFormat(locale, { timeZone: TZ, numberingSystem: 'latn', ...o }); formats.set(k, f); }
+  if (!f) { f = new Intl.DateTimeFormat(locale, { timeZone: z, numberingSystem: 'latn', ...o }); formats.set(k, f); }
   return f;
 }
 
 // Une saison = une année universitaire, de septembre à août (2026 = 2026-2027)
 export function saisonDe(now: Date): number {
-  const p = format('en-US', { year: 'numeric', month: 'numeric' }).formatToParts(now);
+  const p = format('en-US', { year: 'numeric', month: 'numeric' }, now).formatToParts(now);
   const an = Number(p.find(x => x.type === 'year')?.value), mois = Number(p.find(x => x.type === 'month')?.value);
   return mois >= 9 ? an : an - 1;
 }
@@ -198,8 +206,8 @@ export function quand(iso: unknown, langue: Langue): { date: string; heure: stri
   if (isNaN(d.getTime())) return null;
   const loc = langue === 'ar' ? 'ar-MA' : 'fr-FR';
   return {
-    date: format(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(d),
-    heure: format(loc, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d),
+    date: format(loc, { weekday: 'long', day: 'numeric', month: 'long' }, d).format(d),
+    heure: format(loc, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, d).format(d),
   };
 }
 

@@ -107,7 +107,7 @@ test('email français : objet, structure, échappement, désabonnement, version 
   // aucune image : le logo est la photo du compte expéditeur, pas une image dans l'email
   assert.doesNotMatch(m.html, /<img/i);
   assert.match(m.html, /Stage énergie solaire &lt;PV&gt; &amp; stockage/);
-  assert.match(m.html, /mardi 20 octobre|jeudi 22 octobre à 18:30/);
+  assert.match(m.html, /mardi 20 octobre|jeudi 22 octobre à 17:30/);
   assert.match(m.html, new RegExp(`href="${SITE}#parcours"`));   // À faire : d'abord la confirmation
   for (const route of ['offres', 'reseau/entraide', 'reseau/groupes']) assert.ok(m.html.includes(`href="${SITE}#${route}"`), route);
   assert.equal(m.desabo, `${SITE}#desabo/${TOKEN}`);

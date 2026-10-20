@@ -16,8 +16,8 @@ export function jeu(now) {
   const t = now.getTime(), J = 864e5;
   const il = j => new Date(t - j * J).toISOString();
   const dans = j => new Date(t + j * J).toISOString();
-  // Jour J à 17:30 UTC (18:30 à Casablanca)
-  const a1830 = j => { const d = new Date(t + j * J); d.setUTCHours(17, 30, 0, 0); return d.toISOString(); };
+  // Jour J à 17:30 UTC, soit 17:30 au Maroc (GMT depuis le 20 septembre 2026)
+  const a1730 = j => { const d = new Date(t + j * J); d.setUTCHours(17, 30, 0, 0); return d.toISOString(); };
   const S = saisonDe(now), promo = n => S + 6 - n;   // promo d'un étudiant de niveau n
   const GI = 'Génie Industriel', GM = 'Génie Mécanique';
   const P = (id, full_name, role, filiere, pr, x = {}) => ({
@@ -66,9 +66,9 @@ export function jeu(now) {
     id: uid(400 + n), student_id, mentor_id, sujet, status, rdv_at: null, merci: null, created_at: il(5), besoin: 'cv', creneaux: [], ...x,
   });
   const mentorships = [
-    M(1, ID.salma, ID.nadia, 'Préparer mon entretien chez Renault', 'acceptee', { rdv_at: a1830(2) }),
+    M(1, ID.salma, ID.nadia, 'Préparer mon entretien chez Renault', 'acceptee', { rdv_at: a1730(2) }),
     M(2, ID.salma, ID.youssef, 'Relire mon CV', 'acceptee', { rdv_at: il(3) }),
-    M(3, ID.salma, ID.nadia, 'Choisir entre deux offres', 'acceptee', { rdv_at: a1830(10) }),
+    M(3, ID.salma, ID.nadia, 'Choisir entre deux offres', 'acceptee', { rdv_at: a1730(10) }),
     M(4, ID.imane, ID.youssef, 'Relire mon CV avant le forum', 'demande'),
     M(5, ID.amine, null, 'Choisir mon stage de 3A', 'demande', { created_at: il(4) }),
     M(6, ID.omar, null, 'Préparer un entretien technique', 'demande', { created_at: il(2) }),
@@ -90,12 +90,12 @@ export function jeu(now) {
   const parrainages = [{ id: uid(700), filleul_id: ID.amine, parrain_id: ID.youssef, saison: S, created_at: il(2) }];
   const C = (n, organisateur_id, ville, lieu, date_at, x = {}) => ({ id: uid(800 + n), organisateur_id, ville, pays: 'Maroc', lieu, date_at, annule: false, places: 20, ...x });
   const cafes = [
-    C(1, ID.nadia, 'Casablanca  ', 'Café Bianca, Maârif', a1830(5)),
-    C(2, ID.nadia, 'Casablanca', 'Annulé', a1830(4), { annule: true }),
-    C(3, ID.nadia, 'Casablanca', 'Trop tard', a1830(20)),
-    C(4, ID.nadia, 'Rabat', 'Agdal', a1830(3)),
-    C(5, ID.youssef, 'Casablanca', 'Morocco Mall, terrasse', a1830(6)),
-    C(6, ID.youssef, 'Meknès', 'Place El Hedim', a1830(4)),
+    C(1, ID.nadia, 'Casablanca  ', 'Café Bianca, Maârif', a1730(5)),
+    C(2, ID.nadia, 'Casablanca', 'Annulé', a1730(4), { annule: true }),
+    C(3, ID.nadia, 'Casablanca', 'Trop tard', a1730(20)),
+    C(4, ID.nadia, 'Rabat', 'Agdal', a1730(3)),
+    C(5, ID.youssef, 'Casablanca', 'Morocco Mall, terrasse', a1730(6)),
+    C(6, ID.youssef, 'Meknès', 'Place El Hedim', a1730(4)),
   ];
   const PL = (n, student_id, laureat_id, status, x = {}) => ({
     id: uid(1000 + n), student_id, laureat_id, offer_id: null, saison: S, niveau: 4, type: 'stage', entreprise: 'OCP', ville: null, pays: 'Maroc',

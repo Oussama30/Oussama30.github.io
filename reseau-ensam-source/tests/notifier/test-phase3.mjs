@@ -32,7 +32,7 @@ test('notifications Phase 3 : textes fr / ar, liens', () => {
   assert.equal(t('verifier_pair', { nom: 'Rachid', promo: '20x6' }).body, 'Rachid vient de rejoindre le réseau. Confirme-le si tu le connais.');
   const e = t('evenement', { titre: 'Forum ENSAM Entreprises', debut: '2026-11-12T09:00:00Z', lieu: 'Amphi A' });
   assert.equal(e.title, 'À l’agenda : Forum ENSAM Entreprises');
-  assert.match(e.body, /^jeudi 12 novembre à 10:00 · Amphi A$/);
+  assert.match(e.body, /^jeudi 12 novembre à 09:00 · Amphi A$/);
   assert.equal(e.url, `${SITE}#reseau/agenda`);
   assert.equal(t('evenement', { titre: 'Atelier' }).body, 'Nouvel événement de l’école.');
   assert.equal(t('evenement_annule', { titre: 'Atelier CV' }).body, 'Atelier CV');
