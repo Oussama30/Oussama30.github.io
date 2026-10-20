@@ -1,15 +1,16 @@
 // =====================================================================
 //  Fonction Supabase « notifier » : notifications sur le téléphone (Web Push)
-//  et résumé hebdomadaire par email (Brevo), pour le Réseau ENSAM Meknès.
+//  et résumé hebdomadaire par email (Gmail, sinon Brevo), pour le Réseau ENSAM Meknès.
 //  À coller tel quel : Supabase > Edge Functions > Deploy a new function >
-//  Via editor, nom « notifier ». Aucun import : fetch, WebCrypto et Deno.
+//  Via editor, nom « notifier ». Aucun import : fetch, WebCrypto et Deno (TLS).
 //
 //  Appel : POST, corps JSON { job } avec
 //    cle    : clé publique VAPID, pour s'abonner depuis le site (public)
 //    test   : notification d'essai sur les téléphones du membre connecté
 //    push   : envoie les notifications en attente (appelé par la base)
 //    resume : résumé de la semaine par email (appelé chaque matin par la base)
-//  push et resume exigent l'en-tête x-notifier = app_secrets.notifier_secret.
+//    essai_email : le résumé des administrateurs, tout de suite (pour vérifier l'envoi)
+//  push, resume et essai_email exigent l'en-tête x-notifier = app_secrets.notifier_secret.
 // =====================================================================
 
 const TZ = 'Africa/Casablanca';
@@ -27,7 +28,10 @@ type Json = any;
 // ---------------------------------------------------------------------
 // Réglages (secrets de la fonction)
 // ---------------------------------------------------------------------
-export type Env = { url: string; cle: string; brevo: string; expediteur: string; nomExpediteur: string; site: string };
+export type Env = {
+  url: string; cle: string; brevo: string; expediteur: string; nomExpediteur: string; site: string;
+  gmail: string; gmailMdp: string;
+};
 
 function variable(nom: string): string {
   try { if (typeof Deno !== 'undefined') return (Deno.env.get(nom) || '').trim(); } catch { /* accès refusé */ }
@@ -57,6 +61,9 @@ export function lireEnv(): Env {
     expediteur: variable('SENDER_EMAIL'),
     nomExpediteur: variable('SENDER_NAME') || NOM_DEFAUT,
     site: normaliserSite(variable('SITE_URL')),
+    gmail: variable('GMAIL_USER'),
+    // Google affiche le mot de passe d'application en 4 groupes : les espaces ne comptent pas
+    gmailMdp: variable('GMAIL_APP_PASSWORD').replace(/\s+/g, ''),
   };
 }
 
@@ -618,14 +625,18 @@ function offresPour(d: Donnees, p: Profil, niveau: number, audiences: string[]) 
 }
 
 // Résumé d'un membre ; null s'il n'y a rien à lui dire cette semaine
-export function resumeDe(p: Profil, d: Donnees): Resume | null {
-  const nom = (id: string | null | undefined) => txt(id ? d.profils.get(id)?.full_name : '');
-  const r: Resume = {
+export function resumeVide(p: Profil): Resume {
+  return {
     role: p.role === 'admin' ? 'admin' : p.role === 'laureat' ? 'laureat' : 'etudiant', prenom: prenomDe(p.full_name),
     aConfirmer: [], invitations: [], candidatures: 0, demandes: [], rdv: [], aClore: [], questions: [], relances: [],
     offres: { total: 0, liste: [] }, reponses: [], parrain: '', talents: { total: 0, liste: [] }, ouvertes: { total: 0, sujets: [] },
     impact: { mercis: 0, recrutements: 0, citation: null }, filleuls: [], cafes: [], admin: { nonVerifies: 0, nouveaux: 0, enAttente: 0 },
   };
+}
+
+export function resumeDe(p: Profil, d: Donnees): Resume | null {
+  const nom = (id: string | null | undefined) => txt(id ? d.profils.get(id)?.full_name : '');
+  const r = resumeVide(p);
 
   if (r.role === 'admin') {
     for (const x of d.profils.values()) {
@@ -1178,7 +1189,223 @@ async function jobTest(env: Env, req: Request): Promise<Response> {
   return json({ sent: b.sent });
 }
 
-async function envoyerEmail(env: Env, a: string, m: Courriel): Promise<boolean> {
+// ---------------------------------------------------------------------
+// Email par Gmail : SMTP sur le port 465 (TLS direct ; Supabase bloque 25 et 587).
+// L'expéditeur est le compte Gmail lui-même, donc sa photo de profil s'affiche.
+// ---------------------------------------------------------------------
+const GMAIL_HOTE = 'smtp.gmail.com';
+const GMAIL_PORT = 465;
+const PAR_CONNEXION = 40;      // messages avant de rouvrir la connexion
+const ATTENTE_SMTP = 20000;
+
+export type Conn = { read(p: Uint8Array): Promise<number | null>; write(p: Uint8Array): Promise<number>; close(): void };
+// Remplaçable par les tests
+export const tls = {
+  connecter: (hote: string, port: number): Promise<Conn> => Deno.connectTls({ hostname: hote, port }),
+};
+
+function b64(u: Uint8Array): string {
+  let s = '';
+  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+const b64Lignes = (t: string): string => (b64(enc.encode(t)).match(/.{1,76}/g) || []).join('\r\n');
+
+// En-tête lisible par tous les clients : ASCII tel quel, sinon mots encodés UTF-8 de 45 octets au plus
+export function enteteMot(t: string): string {
+  const v = t.replace(/[\r\n]+/g, ' ');
+  if (/^[\x20-\x7e]*$/.test(v) && v.length <= 900) return v;
+  const mots: string[] = [];
+  let cur: number[] = [];
+  for (const c of Array.from(v)) {
+    const o = enc.encode(c);
+    if (cur.length + o.length > 45) { mots.push(b64(new Uint8Array(cur))); cur = []; }
+    cur.push(...o);
+  }
+  if (cur.length) mots.push(b64(new Uint8Array(cur)));
+  return mots.map(m => `=?UTF-8?B?${m}?=`).join('\r\n ');
+}
+
+const adresseSure = (a: string): boolean => /^[^\s<>()",;:@\\]+@[^\s<>()",;:@\\]+\.[^\s<>()",;:@\\]+$/.test(a);
+
+export function messageMime(de: { nom: string; email: string }, a: string, m: Courriel, date = new Date(), id = crypto.randomUUID()): string {
+  const frontiere = 'ensam-' + id.replace(/-/g, '');
+  const domaine = de.email.split('@')[1] || 'localhost';
+  const lignes = [
+    `From: ${enteteMot(de.nom)} <${de.email}>`,
+    `To: <${a}>`,
+    `Subject: ${enteteMot(m.sujet)}`,
+    `Date: ${date.toUTCString().replace(/GMT$/, '+0000')}`,
+    `Message-ID: <${id}@${domaine}>`,
+    `List-Unsubscribe: <${m.desabo}>`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${frontiere}"`,
+    '',
+    `--${frontiere}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    b64Lignes(m.texte),
+    `--${frontiere}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    b64Lignes(m.html),
+    `--${frontiere}--`,
+    '',
+  ];
+  return lignes.join('\r\n');
+}
+
+type ReponseSmtp = { code: number; texte: string };
+class ErreurSmtp extends Error {
+  code: number;
+  constructor(code: number, texte: string) { super(`${code} ${texte}`.slice(0, 300)); this.code = code; }
+}
+
+class ClientSmtp {
+  private tampon = '';
+  private dec = new TextDecoder();
+  private conn: Conn;
+  envoyes = 0;
+  private constructor(conn: Conn) { this.conn = conn; }
+
+  static async ouvrir(user: string, mdp: string): Promise<ClientSmtp> {
+    const c = new ClientSmtp(await tls.connecter(GMAIL_HOTE, GMAIL_PORT));
+    try {
+      await c.attendre([220]);
+      await c.commande('EHLO reseau-ensam.supabase.co', [250]);
+      await c.commande('AUTH PLAIN ' + b64(enc.encode(`\0${user}\0${mdp}`)), [235]);
+      return c;
+    } catch (e) {
+      c.fermer();
+      throw e;
+    }
+  }
+
+  private async lire(): Promise<ReponseSmtp> {
+    const fin = Date.now() + ATTENTE_SMTP;
+    const morceau = new Uint8Array(4096);
+    for (;;) {
+      // Réponse complète : dernière ligne « NNN texte » (les précédentes sont « NNN-texte »)
+      const lignes = this.tampon.split('\r\n');
+      for (let i = 0; i < lignes.length - 1; i++) {
+        if (/^\d{3}(?: |$)/.test(lignes[i])) {
+          this.tampon = lignes.slice(i + 1).join('\r\n');
+          return { code: Number(lignes[i].slice(0, 3)), texte: lignes.slice(0, i + 1).map(l => l.slice(4)).join(' ') };
+        }
+      }
+      const reste = fin - Date.now();
+      if (reste <= 0) throw new Error('SMTP : pas de réponse');
+      let minuteur = 0;
+      const n = await Promise.race([
+        this.conn.read(morceau),
+        new Promise<never>((_, non) => { minuteur = setTimeout(() => non(new Error('SMTP : pas de réponse')), reste); }),
+      ]).finally(() => clearTimeout(minuteur));
+      if (n === null) throw new Error('SMTP : connexion fermée');
+      this.tampon += this.dec.decode(morceau.subarray(0, n), { stream: true });
+    }
+  }
+
+  private async ecrire(t: string): Promise<void> {
+    let o = enc.encode(t);
+    while (o.length) o = o.subarray(await this.conn.write(o));
+  }
+
+  private async attendre(codes: number[]): Promise<ReponseSmtp> {
+    const r = await this.lire();
+    if (!codes.includes(r.code)) throw new ErreurSmtp(r.code, r.texte);
+    return r;
+  }
+
+  async commande(ligne: string, codes: number[]): Promise<ReponseSmtp> {
+    await this.ecrire(ligne + '\r\n');
+    return this.attendre(codes);
+  }
+
+  // Un refus du destinataire laisse la connexion utilisable (RSET) ; une panne la ferme
+  async envoyer(de: string, a: string, donnees: string): Promise<void> {
+    try {
+      await this.commande(`MAIL FROM:<${de}>`, [250]);
+      await this.commande(`RCPT TO:<${a}>`, [250, 251]);
+      await this.commande('DATA', [354]);
+    } catch (e) {
+      if (e instanceof ErreurSmtp) await this.commande('RSET', [250]);
+      throw e;
+    }
+    // Transparence : un point en début de ligne est doublé
+    await this.ecrire(donnees.replace(/\r?\n/g, '\r\n').replace(/^\./gm, '..').replace(/(\r\n)?$/, '\r\n') + '.\r\n');
+    await this.attendre([250]);
+    this.envoyes++;
+  }
+
+  async quitter(): Promise<void> {
+    try { await this.commande('QUIT', [221]); } catch { /* déjà fermée */ }
+    this.fermer();
+  }
+
+  fermer(): void {
+    try { this.conn.close(); } catch { /* déjà fermée */ }
+  }
+}
+
+// Quelques connexions partagées par les envois parallèles. Si Gmail refuse le compte
+// (mot de passe) ou la limite du jour est atteinte, plus rien ne part par Gmail.
+export class PosteGmail {
+  private libres: ClientSmtp[] = [];
+  private user: string;
+  private mdp: string;
+  casse = '';
+  constructor(user: string, mdp: string) { this.user = user; this.mdp = mdp; }
+
+  private bloquant(e: unknown): boolean {
+    if (!(e instanceof ErreurSmtp)) return false;
+    return e.code === 535 || e.code === 534 || /5\.4\.5|4\.7\.0|limit/i.test(e.message);
+  }
+
+  async envoyer(de: { nom: string; email: string }, a: string, m: Courriel): Promise<boolean> {
+    if (this.casse) return false;
+    if (!adresseSure(a)) { console.error('notifier : adresse email invalide'); return false; }
+    const donnees = messageMime(de, a, m);
+    for (let essai = 0; essai < 2; essai++) {
+      const reprise = this.libres.pop();
+      let c: ClientSmtp | undefined = reprise;
+      try {
+        if (!c) c = await ClientSmtp.ouvrir(this.user, this.mdp);
+        await c.envoyer(this.user, a, donnees);
+        if (c.envoyes >= PAR_CONNEXION) await c.quitter(); else this.libres.push(c);
+        return true;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (this.bloquant(e)) {
+          this.casse = msg;
+          c?.fermer();
+          console.error('notifier : Gmail refuse les envois', msg);
+          return false;
+        }
+        if (e instanceof ErreurSmtp && e.code >= 500) {
+          // destinataire refusé : la connexion reste bonne
+          if (c) this.libres.push(c);
+          console.error('notifier : Gmail a refusé un email', msg);
+          return false;
+        }
+        c?.fermer();
+        // Une connexion reprise a pu être coupée par Gmail entre deux envois : un seul nouvel essai
+        if (reprise && essai === 0) continue;
+        console.error('notifier : Gmail injoignable', msg);
+        return false;
+      }
+    }
+    return false;
+  }
+
+  async fermer(): Promise<void> {
+    const l = this.libres.splice(0);
+    await Promise.all(l.map(c => c.quitter()));
+  }
+}
+
+async function envoyerBrevo(env: Env, a: string, m: Courriel): Promise<boolean> {
   try {
     const r = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -1199,29 +1426,79 @@ async function envoyerEmail(env: Env, a: string, m: Courriel): Promise<boolean> 
   }
 }
 
+// Gmail d'abord ; Brevo prend le relais si Gmail refuse le compte ou la limite du jour est atteinte
+function facteur(env: Env) {
+  const brevo = !!(env.brevo && env.expediteur);
+  const poste = env.gmail && env.gmailMdp ? new PosteGmail(env.gmail, env.gmailMdp) : null;
+  return {
+    pret: !!poste || brevo,
+    paralleles: poste ? 3 : 5,
+    async envoyer(a: string, m: Courriel): Promise<boolean> {
+      if (poste && !poste.casse) {
+        const ok = await poste.envoyer({ nom: env.nomExpediteur, email: env.gmail }, a, m);
+        if (ok || !poste.casse || !brevo) return ok;
+      }
+      return brevo ? envoyerBrevo(env, a, m) : false;
+    },
+    fermer: async () => { if (poste) await poste.fermer(); },
+    via: () => (!poste ? 'brevo' : poste.casse && brevo ? 'gmail+brevo' : 'gmail'),
+  };
+}
+
+// Essai : le résumé de la semaine des administrateurs, envoyé tout de suite (rien n'est marqué)
+async function jobEssaiEmail(env: Env): Promise<Response> {
+  const f = facteur(env);
+  if (!f.pret) return json({ skipped: 'email' });
+  const admins = ((await db(env, 'profiles?select=id,langue&role=eq.admin')) || []) as { id: string; langue: string }[];
+  const b = { sent: 0, errors: 0, via: f.via() };
+  if (!admins.length) return json(b);
+  const date = new Date();
+  const ids = admins.map(x => x.id);
+  const [brut, etats] = await Promise.all([
+    chargerDonnees(env, ids, date),
+    parIds<{ user_id: string; token: string }>(env, 'notif_etat', 'select=user_id,token', 'user_id', ids),
+  ]);
+  const d = indexer(brut, date);
+  for (const x of admins) {
+    const p = d.profils.get(x.id);
+    const r = await fetch(`${env.url}/auth/v1/admin/users/${x.id}`, { headers: { apikey: env.cle, Authorization: `Bearer ${env.cle}` } });
+    const email = r.ok ? ((await r.json()) as { email?: string }).email : (await r.body?.cancel(), '');
+    if (!p || !email) { b.errors++; continue; }
+    const token = etats.find(e => e.user_id === x.id)?.token || '';
+    const m = rendreResume(resumeDe(p, d) || resumeVide(p), langueDe(x.langue), env.site, token);
+    if (await f.envoyer(email, m)) b.sent++; else b.errors++;
+  }
+  await f.fermer();
+  b.via = f.via();
+  return json(b);
+}
+
 async function jobResume(env: Env): Promise<Response> {
-  if (!env.brevo || !env.expediteur) return json({ skipped: 'brevo' });
+  const f = facteur(env);
+  if (!f.pret) return json({ skipped: 'email' });
   const date = new Date();
   const dest = ((await rpc(env, 'destinataires_resume', { p_max: 250 })) || []) as { id: string; email: string; langue: string; token: string }[];
-  const b = { sent: 0, empty: 0, errors: 0 };
+  const b: { sent: number; empty: number; errors: number; via?: string } = { sent: 0, empty: 0, errors: 0 };
   if (!dest.length) return json(b);
   const d = indexer(await chargerDonnees(env, dest.map(x => x.id), date), date);
   const traites: string[] = [];
   const limite = Date.now() + 100_000;   // marge sur les 150 s : le reste partira demain
-  await parallele(dest, 5, async x => {
+  await parallele(dest, f.paralleles, async x => {
     if (Date.now() > limite) return;
     try {
       const p = d.profils.get(x.id);
       const r = p ? resumeDe(p, d) : null;
       if (!r) { b.empty++; traites.push(x.id); return; }
       if (!x.email || !x.token) { b.errors++; return; }
-      if (await envoyerEmail(env, x.email, rendreResume(r, langueDe(x.langue), env.site, x.token))) { b.sent++; traites.push(x.id); }
+      if (await f.envoyer(x.email, rendreResume(r, langueDe(x.langue), env.site, x.token))) { b.sent++; traites.push(x.id); }
       else b.errors++;
     } catch (e) {
       b.errors++;
       console.error('notifier : résumé impossible', e instanceof Error ? e.message : String(e));
     }
   });
+  await f.fermer();
+  b.via = f.via();
   // Chacun n'est examiné qu'une fois par semaine (envoyé ou vide)
   const ids = traites.filter(estUuid);
   for (let i = 0; i < ids.length; i += MORCEAU) {
@@ -1240,7 +1517,7 @@ export async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') return json({ error: 'Méthode non autorisée' }, 405);
   let job: unknown;
   try { job = (await req.json())?.job; } catch { return json({ error: 'Requête invalide' }, 400); }
-  if (job !== 'cle' && job !== 'test' && job !== 'push' && job !== 'resume') return json({ error: 'Tâche inconnue' }, 400);
+  if (job !== 'cle' && job !== 'test' && job !== 'push' && job !== 'resume' && job !== 'essai_email') return json({ error: 'Tâche inconnue' }, 400);
   const env = lireEnv();
   if (!env.url || !env.cle) {
     console.error('notifier : SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY manquant');
@@ -1250,6 +1527,7 @@ export async function handler(req: Request): Promise<Response> {
     if (job === 'cle') return await jobCle(env);
     if (job === 'test') return await jobTest(env, req);
     if (!(await appelAutorise(env, req))) return refus();
+    if (job === 'essai_email') return await jobEssaiEmail(env);
     return job === 'push' ? await jobPush(env) : await jobResume(env);
   } catch (e) {
     console.error(`notifier : échec de « ${job} »`, e instanceof Error ? e.message : String(e));
