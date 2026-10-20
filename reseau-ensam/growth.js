@@ -5,9 +5,9 @@ import { Icon, Modal, Field, Empty, Person, Avatar, RoleLine, BrandLogo, toast }
 import { FILIERES, FOUND, niveauOf, statutOf, timeAgo, attestationStats } from './logic.js';
 import { OfferComposer, matchesMe } from './offers.js';
 import { getLang } from './i18n.js';
+import { CvButton } from './cv.js';
 
 const firstName = p => (p?.full_name || '').split(' ')[0];
-const href = u => (u.startsWith('http') ? u : 'https://' + u);
 
 async function copyText(txt, done = 'Copié.') {
   try { await navigator.clipboard.writeText(txt); toast(done); } catch { toast('Copie impossible ici : sélectionne le texte et copie-le.', 'err'); }
@@ -29,9 +29,9 @@ export function TalentPool({ ctx }) {
   const qq = q.trim().toLowerCase();
   const searching = p => !['trouve', 'validation'].includes(statutOf(data, p, saison).key);
   const list = pool.filter(p => (view === 'shortlist' ? saved.has(p.id) : searching(p)))
-    .filter(p => (!fil || p.filiere === fil) && (!niv || niveauOf(p, saison) === +niv) && (!cv || p.cv_url)
+    .filter(p => (!fil || p.filiere === fil) && (!niv || niveauOf(p, saison) === +niv) && (!cv || p.cv_path || p.cv_url)
       && (!qq || `${p.full_name} ${p.ville || ''} ${p.bio || ''} ${(p.competences || []).join(' ')}`.toLowerCase().includes(qq)))
-    .sort((a, b) => (saved.has(b.id) - saved.has(a.id)) || (!!b.cv_url - !!a.cv_url) || (b.competences?.length || 0) - (a.competences?.length || 0));
+    .sort((a, b) => (saved.has(b.id) - saved.has(a.id)) || (!!(b.cv_path || b.cv_url) - !!(a.cv_path || a.cv_url)) || (b.competences?.length || 0) - (a.competences?.length || 0));
   const toggle = p => act(async () => {
     const s = saved.get(p.id);
     if (s) await store.remove('shortlists', s.id);
@@ -63,7 +63,7 @@ export function TalentPool({ ctx }) {
         ${(p.competences || []).length ? html`<p class="chips-line">${p.competences.slice(0, 6).map(c => html`<span class=${'mini' + (qq && c.toLowerCase().includes(qq) ? ' hit' : '')}>${c}</span>`)}</p>` : null}
         ${view === 'shortlist' && s ? html`<input class="note-in" id=${'note-' + p.id} maxlength="300" placeholder="Note pour moi (visible par moi seul)" value=${s.note || ''} onChange=${e => act(() => store.update('shortlists', s.id, { note: e.target.value.trim() }))}/>` : null}
         <div class="row tcard-foot">
-          ${p.cv_url ? html`<a class="btn tiny ghost" href=${href(p.cv_url)} target="_blank" rel="noopener"><${Icon} name="file" size=${14}/> Voir le CV</a>` : html`<span class="muted small">Pas encore de CV</span>`}
+          ${p.cv_path || p.cv_url ? html`<${CvButton} ctx=${ctx} p=${p} small/>` : html`<span class="muted small">Pas encore de CV</span>`}
           <span class="spacer"></span>
           ${found ? html`<span class=${'state-pill s-' + st.key}>${st.label}</span>` : inv ? html`<span class=${'state-pill ' + inv[0]}>${inv[1]}</span>` : null}
           ${canRecruit && !found ? html`<button class="btn small primary" onClick=${() => setInvite(p)}><${Icon} name="send" size=${15}/> Inviter</button>` : null}

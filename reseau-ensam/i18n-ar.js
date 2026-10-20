@@ -2,15 +2,9 @@
 // Les contenus des membres (offres, messages, noms, entreprises) ne sont pas traduits.
 import { PAYS_AR, canonPays } from './geo.js';
 
-// Accord des noms avec les nombres en arabe : 1, 2, 3 à 10, 11 et plus
-export function arCount(n, [one, two, few, many]) {
-  n = +n;
-  if (n === 0) return `0 ${many}`;
-  if (n === 1) return one;
-  if (n === 2) return two;
-  if (n >= 3 && n <= 10) return `${n} ${few}`;
-  return `${n} ${many}`;
-}
+// Accord des noms avec les nombres en arabe (défini dans i18n.js, gardé ici pour les anciens imports)
+import { arCount } from './i18n.js';
+export { arCount };
 const JOURS = ['يوم واحد', 'يومين', 'أيام', 'يومًا'];
 const HEURES = ['ساعة واحدة', 'ساعتين', 'ساعات', 'ساعة'];
 const MINUTES = ['دقيقة واحدة', 'دقيقتين', 'دقائق', 'دقيقة'];
@@ -36,6 +30,10 @@ export const AR = {
   'Démo avec des données fictives. Essaie le circuit :': 'نسخة تجريبية ببيانات وهمية. جرّب المسار:',
   'postule,': 'تترشح،', '(lauréat) la marque « Recruté(e) », puis Salma confirme. Change de rôle en haut.': '(خريج) يضع لها «تم التوظيف»، ثم تؤكد Salma. غيّر الدور من الأعلى.',
   'Étudiante 5A · Salma': 'طالبة 5A · Salma', 'Nouvel étudiant 3A · Amine': 'طالب جديد 3A · Amine', 'Lauréat actif · Youssef': 'خريج نشيط · Youssef', 'Nouvelle lauréate · Nadia': 'خريجة جديدة · Nadia', 'Admin école': 'إدارة المدرسة',
+  // Phase 3 (accueil, notifications, thème)
+  'Dépose ton CV en PDF': 'ضع سيرتك الذاتية بصيغة PDF', 'Il sera joint à chaque candidature, et un lauréat peut le relire pour toi.': 'ستُرفق بكل ترشيح، ويمكن لخريج أن يراجعها لك.',
+  'Passer en mode clair': 'التبديل إلى الوضع الفاتح', 'Passer en mode sombre': 'التبديل إلى الوضع الداكن', 'Mode clair': 'الوضع الفاتح', 'Mode sombre': 'الوضع الداكن',
+  'Thème automatique (comme l’appareil)': 'مظهر تلقائي (حسب الجهاز)',
   'Chargement du réseau…': 'جارٍ تحميل الشبكة…',
 
   // Référentiels
@@ -684,4 +682,24 @@ export const AR_PATTERNS = [
   [/^Inscrit il y a (\d+) (min|h|j)$/, (n, u) => `سُجّل ${ago(n, u)}`],
   [/^Vu il y a (\d+) (min|h|j)$/, (n, u) => `آخر ظهور ${ago(n, u)}`],
   [/^Inscrit (\d{1,2}) (janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc)\.? (\d{4})$/, (j, m, y) => `سُجّل ${j} ${MOIS[m]} ${y}`],
+  // Phase 3 : notifications et accueil
+  [/^Jeune lauréate (\d{4}) · (.+)$/, (y, n) => `خريجة دفعة ${y} · ${n}`],
+  [/^(.+) aimerait avoir tes coordonnées\.$/, (n) => `يرغب ${n} في معلومات الاتصال بك.`],
+  [/^(.+) a accepté : ses coordonnées sont sur son profil\.$/, (n) => `وافق ${n}: معلومات الاتصال به في ملفه.`],
+  [/^(.+) a relu ton CV\. Lis ses conseils et dis merci\.$/, (n) => `راجع ${n} سيرتك الذاتية. اطّلع على نصائحه وقل شكرًا.`],
+  [/^(.+) relit ton CV\.$/, (n) => `يراجع ${n} سيرتك الذاتية.`],
+  [/^(.+) te demande de relire son CV\.$/, (n) => `يطلب منك ${n} مراجعة سيرته الذاتية.`],
+  [/^(.+) te remercie pour la relecture de son CV\.$/, (n) => `يشكرك ${n} على مراجعة سيرته الذاتية.`],
+  [/^(\d+) CV attend(?:ent)? une relecture\.$/, (n) => `${arCount(n, ['سيرة ذاتية واحدة تنتظر', 'سيرتان ذاتيتان تنتظران', 'سير ذاتية تنتظر', 'سيرة ذاتية تنتظر'])} المراجعة.`],
+  [/^(\d+) lauréats de ta promo attendent ta vérification\.$/, (n) => `${arCount(n, LAU)} من دفعتك في انتظار تأكيدك.`],
+  [/^(.+) \(promo (\d{4})\) attend ta vérification\.$/, (n, y) => `${n} (دفعة ${y}) في انتظار تأكيدك.`],
+  [/^(.+) a confirmé que tu es de la promo (\d{4})\. Encore un lauréat et ton badge arrive\.$/, (n, y) => `أكّد ${n} أنك من دفعة ${y}. تأكيد واحد آخر وتصلك الشارة.`],
+  [/^(.+) a confirmé que tu es de la promo (\d{4})\.$/, (n, y) => `أكّد ${n} أنك من دفعة ${y}.`],
+  [/^(.+) : c’est aujourd’hui\.$/, (t) => `${t}: اليوم.`],
+  [/^(.+) : c’est demain\.$/, (t) => `${t}: غدًا.`],
+  [/^(Forum|Conférence|Portes ouvertes|Atelier|Soutenances|Événement) à l’agenda de l’école : (.+), (lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche) (\d{1,2}) (janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\.$/,
+    (ty, t, j, d, m) => `${{ Forum: 'منتدى', Conférence: 'محاضرة', 'Portes ouvertes': 'أبواب مفتوحة', Atelier: 'ورشة', Soutenances: 'مناقشات', Événement: 'نشاط' }[ty]} في أجندة المدرسة: ${t}، ${{ lundi: 'الاثنين', mardi: 'الثلاثاء', mercredi: 'الأربعاء', jeudi: 'الخميس', vendredi: 'الجمعة', samedi: 'السبت', dimanche: 'الأحد' }[j]} ${d} ${{ janvier: 'يناير', février: 'فبراير', mars: 'مارس', avril: 'أبريل', mai: 'ماي', juin: 'يونيو', juillet: 'يوليوز', août: 'غشت', septembre: 'شتنبر', octobre: 'أكتوبر', novembre: 'نونبر', décembre: 'دجنبر' }[m]}.`],
+  [/^Enquête (6|12) mois après le diplôme : 2 minutes pour aider l’école et les promos suivantes\.$/, (v) => `استمارة الإدماج ${v === '12' ? 'بعد 12 شهرًا' : 'بعد 6 أشهر'} من التخرج: دقيقتان لمساعدة المدرسة والدفعات القادمة.`],
+  [/^(\d+) signalements? à traiter\.$/, (n) => `${arCount(n, ['تبليغ واحد', 'تبليغان', 'تبليغات', 'تبليغًا'])} في انتظار المعالجة.`],
+  [/^Étudiant\(e\) : (inscris-toi|de préférence) avec ton email de l’école \((.+)\)\. Ton compte est alors vérifié tout de suite\.$/, (m, d) => m === 'inscris-toi' ? `طالب(ة): سجّل ببريد المدرسة (${d}). يُوثَّق حسابك فورًا.` : `طالب(ة): يُفضَّل التسجيل ببريد المدرسة (${d}). يُوثَّق حسابك فورًا.`],
 ].filter(([, f]) => f);

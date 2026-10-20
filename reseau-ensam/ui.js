@@ -65,6 +65,14 @@ const ICONS = {
   share: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
   clap: '<path d="M3.5 20.5 8 8l8 8z"/><path d="M6.2 13l4.8 4.8M14 3.5l.6 2.2M20.5 10l-2.2-.6M18.5 4.5 16 7M12 2.5c.8 1.5.6 3-.5 4M21.5 12c-1.5-.8-3-.6-4 .5"/>',
+  flag: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+  lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
+  eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
 };
 
 export function Modal({ title, onClose, children, wide }) {
@@ -196,3 +204,11 @@ export function CompanyLogo({ name = '', size = 44 }) {
 }
 
 export const TYPE_ICON = { stage: 'wrench', pfe: 'cap', etranger: 'globe', emploi: 'briefcase' };
+
+// Styles propres à un module : ajoutés une seule fois dans la page, au premier rendu
+const styled = new Set();
+export function injectCSS(id, css) {
+  if (styled.has(id) || typeof document === 'undefined') return;
+  styled.add(id);
+  const s = document.createElement('style'); s.dataset.module = id; s.textContent = css; document.head.appendChild(s);
+}

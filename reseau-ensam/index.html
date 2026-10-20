@@ -13,10 +13,13 @@
 <title>Réseau ENSAM Meknès</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="description" content="Plateforme des lauréats et étudiants de l'ENSAM Meknès : offres de stages, PFE et emplois, mentorat, entraide et suivi de placement.">
+<script>/* Thème choisi (clair ou sombre), appliqué avant l'affichage pour éviter un flash */try{var t=localStorage.getItem('ensam-theme');if(t==='light'||t==='dark'){document.documentElement.dataset.theme=t;document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.content=t==='dark'?'#0B1320':'#1670A8'})}}catch(e){}</script>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2264%22%20height%3D%2264%22%20viewBox%3D%220%200%20512%20512%22%20style%3D%22--lg-o%3A%23F7A11A%3B--lg-b%3A%234FA9E6%3B--lg-k%3A%23FFFFFF%3B--lg-in%3Atransparent%3B--lg-cap%3A%23FFFFFF%3B--lg-cap2%3A%23DCE6F3%3B--lg-bg%3A%231D3150%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22lg-tuile%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%2327497A%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%2316253F%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%22512%22%20height%3D%22512%22%20rx%3D%22116%22%20fill%3D%22url(%23lg-tuile)%22%2F%3E%3Cg%3E%3Cpath%20d%3D%22M225.8%20104.9L233.6%2071.3L278.4%2071.3L286.2%20104.9L321.5%20116.4L347.6%2093.8L383.8%20120.1L370.4%20151.9L392.2%20182.0L426.6%20179.0L440.4%20221.6L410.9%20239.4L410.9%20276.6L440.4%20294.4L426.6%20337.0L392.2%20334.0L370.4%20364.1L383.8%20395.9L347.6%20422.2L321.5%20399.6L286.2%20411.1L278.4%20444.7L233.6%20444.7L225.8%20411.1L190.5%20399.6L164.4%20422.2L128.2%20395.9L141.6%20364.1L119.8%20334.0L85.4%20337.0L71.6%20294.4L101.1%20276.6L101.1%20239.4L71.6%20221.6L85.4%20179.0L119.8%20182.0L141.6%20151.9L128.2%20120.1L164.4%2093.8L190.5%20116.4ZM378%20258A122%20122%200%201%200%20134%20258A122%20122%200%201%200%20378%20258Z%22%20fill-rule%3D%22evenodd%22%20style%3D%22fill%3Avar(--lg-o%2C%23F39200)%22%2F%3E%3Ccircle%20cx%3D%22256%22%20cy%3D%22258%22%20r%3D%22122%22%20style%3D%22fill%3Avar(--lg-in%2C%231F3354)%22%2F%3E%3Cpath%20d%3D%22M256%20190%20358%20232%20256%20274%20154%20232Z%22%20style%3D%22fill%3Avar(--lg-cap%2C%23FFFFFF)%22%2F%3E%3Cpath%20d%3D%22M198%20252V294Q256%20326%20314%20294V252L256%20276Z%22%20style%3D%22fill%3Avar(--lg-cap2%2C%23E3EAF4)%22%2F%3E%3Cpath%20d%3D%22M256%20232%20338%20250V302%22%20fill%3D%22none%22%20stroke-width%3D%229%22%20stroke-linecap%3D%22round%22%20style%3D%22stroke%3Avar(--lg-b%2C%234FA9E6)%22%2F%3E%3Ccircle%20cx%3D%22338%22%20cy%3D%22308%22%20r%3D%2212%22%20style%3D%22fill%3Avar(--lg-b%2C%234FA9E6)%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,750&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<!-- Polices chargées sans bloquer l’affichage (3G) : le texte s’affiche tout de suite avec la police du système -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,750&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,750&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap"></noscript>
 <style>
 /* Mise en page : rail de navigation (ordinateur) / barre d'onglets en bas (téléphone),
    contenu en colonne de lecture large. Identité : couleurs de l'ENSAM Meknès, bleu (actions), orange (impact), bleu nuit. */
@@ -507,7 +510,9 @@ button.app-row:hover { border-color: var(--ink-2); }
 /* Réseau */
 .sub-page { display: flex; flex-direction: column; gap: .9rem; }
 .sub-page > .search { flex: none; }
-.icon-tabs { display: grid; grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)); gap: .5rem; }
+.icon-tabs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(76px, 1fr); gap: .5rem; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; }
+.icon-tabs::-webkit-scrollbar { display: none; }
+.icon-tabs button { scroll-snap-align: start; }
 .icon-tabs button { position: relative; display: flex; flex-direction: column; align-items: center; gap: .3rem; padding: .7rem .3rem; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-weight: 600; font-size: .86rem; cursor: pointer; }
 .icon-tabs button:hover { border-color: var(--ink-2); }
 .icon-tabs button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
@@ -590,7 +595,7 @@ button.panel:hover, button.impact-strip:hover, button.objective:hover { border-c
   .two-col { grid-template-columns: minmax(0, 1fr); }
   .page-head .btn.primary { width: 100%; }
   .bottom-nav a { font-size: .7rem; }
-  .icon-tabs { gap: .3rem; }
+  .icon-tabs { gap: .3rem; grid-auto-columns: minmax(62px, 1fr); }
   .icon-tabs button { padding: .55rem .1rem; font-size: .72rem; border-radius: 10px; }
   .offer-grid, .offer-grid.one { grid-template-columns: minmax(0, 1fr); }
   .guide-steps { grid-template-columns: minmax(0, 1fr); }
@@ -633,6 +638,8 @@ button.panel:hover, button.impact-strip:hover, button.objective:hover { border-c
 [dir="rtl"] .ico-arrow, [dir="rtl"] .ico-send, [dir="rtl"] .ico-logout { transform: scaleX(-1); }
 @media (max-width: 760px) { .bell-pop { position: fixed; inset-inline: 16px; top: calc(env(safe-area-inset-top, 0px) + 62px); width: auto; } }
 @media (max-width: 760px) { .lang-btn .lang-long { display: none; } .lang-btn > span:first-of-type { display: inline; } .lang-btn { padding: 0 .55rem; } }
+.menu-pop .menu-theme { display: none; }
+@media (max-width: 480px) { .top .theme-btn { display: none; } .menu-pop .menu-theme { display: flex; } }
 /* ===== Thème ENSAM Meknès : emblème, ciel et porte de l'école, mouvement ===== */
 .brand-logo { --lg-o: #F7A11A; --lg-b: #4FA9E6; --lg-k: #FFFFFF; --lg-in: transparent; --lg-cap: #FFFFFF; --lg-cap2: #DCE6F3; --lg-bg: #1D3150; }
 .brand-logo.draw .lg-glyph { transform-box: view-box; transform-origin: 256px 258px; animation: lg-in .9s var(--ease) .1s backwards; }
@@ -1046,6 +1053,7 @@ button.panel:hover, button.impact-strip:hover, button.objective:hover { border-c
 .group-follow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: .4rem; }
 .group-follow li { display: flex; align-items: center; gap: .5rem; padding: .5rem .7rem; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .group-follow li .small { white-space: nowrap; }
+.group-follow li .linkish { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: start; }
 .wall { display: flex; flex-direction: column; gap: .7rem; }
 .wall .comment { padding: .7rem .8rem; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
 
@@ -1166,10 +1174,41 @@ button.panel:hover, button.impact-strip:hover, button.objective:hover { border-c
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
 </style>
+<link rel="modulepreload" href="i18n.js">
+<link rel="modulepreload" href="vendor/preact-htm.js">
+<link rel="modulepreload" href="store.js">
+<link rel="modulepreload" href="logic.js">
+<link rel="modulepreload" href="ui.js">
+<link rel="modulepreload" href="scene.js">
+<link rel="modulepreload" href="logo.js">
+<link rel="modulepreload" href="offers.js">
+<link rel="modulepreload" href="recrutement.js">
+<link rel="modulepreload" href="parse-offre.js">
+<link rel="modulepreload" href="geo.js">
+<link rel="modulepreload" href="cv.js">
+<link rel="modulepreload" href="confiance.js">
+<link rel="modulepreload" href="entreprises.js">
+<link rel="modulepreload" href="pro.js">
+<link rel="modulepreload" href="me.js">
+<link rel="modulepreload" href="growth.js">
+<link rel="modulepreload" href="saison.js">
+<link rel="modulepreload" href="mentorat.js">
+<link rel="modulepreload" href="dashboard.js">
+<link rel="modulepreload" href="enquete.js">
+<link rel="modulepreload" href="community.js">
+<link rel="modulepreload" href="groupes.js">
+<link rel="modulepreload" href="etranger.js">
+<link rel="modulepreload" href="agenda.js">
+<link rel="modulepreload" href="admin.js">
+<link rel="modulepreload" href="privacy.js">
+<link rel="modulepreload" href="pwa.js">
+<link rel="preload" href="vendor/supabase.js" as="script">
 </head>
 <body>
 <div id="app"><div class="boot"><svg class="brand-logo boot-logo" width="72" height="72" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lg-tuile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#27497A"/><stop offset="1" stop-color="#16253F"/></linearGradient></defs><rect width="512" height="512" rx="116" fill="url(#lg-tuile)"/><g class="lg-glyph"><path d="M225.8 104.9L233.6 71.3L278.4 71.3L286.2 104.9L321.5 116.4L347.6 93.8L383.8 120.1L370.4 151.9L392.2 182.0L426.6 179.0L440.4 221.6L410.9 239.4L410.9 276.6L440.4 294.4L426.6 337.0L392.2 334.0L370.4 364.1L383.8 395.9L347.6 422.2L321.5 399.6L286.2 411.1L278.4 444.7L233.6 444.7L225.8 411.1L190.5 399.6L164.4 422.2L128.2 395.9L141.6 364.1L119.8 334.0L85.4 337.0L71.6 294.4L101.1 276.6L101.1 239.4L71.6 221.6L85.4 179.0L119.8 182.0L141.6 151.9L128.2 120.1L164.4 93.8L190.5 116.4ZM378 258A122 122 0 1 0 134 258A122 122 0 1 0 378 258Z" fill-rule="evenodd" style="fill:var(--lg-o,#F39200)"/><circle cx="256" cy="258" r="122" style="fill:var(--lg-in,#1F3354)"/><path d="M256 190 358 232 256 274 154 232Z" style="fill:var(--lg-cap,#FFFFFF)"/><path d="M198 252V294Q256 326 314 294V252L256 276Z" style="fill:var(--lg-cap2,#E3EAF4)"/><path d="M256 232 338 250V302" fill="none" stroke-width="9" stroke-linecap="round" style="stroke:var(--lg-b,#4FA9E6)"/><circle cx="338" cy="308" r="12" style="fill:var(--lg-b,#4FA9E6)"/></g></svg><p>Chargement du réseau…</p></div></div>
 <script src="config.js"></script>
-<script type="module" src="app.js"></script>
+<script>/* Si les fichiers gardés sur le téléphone sont abîmés ou d'une autre version, on les oublie et on recharge (une fois) */
+function ensamReprise(){try{if(sessionStorage.getItem('ensam-reprise')||!('serviceWorker' in navigator))return;sessionStorage.setItem('ensam-reprise','1');Promise.all([caches.keys().then(function(k){return Promise.all(k.map(function(x){return caches.delete(x)}))}),navigator.serviceWorker.getRegistrations().then(function(r){return Promise.all(r.map(function(x){return x.unregister()}))})]).then(function(){location.reload()})}catch(e){}}</script>
+<script type="module" src="app.js" onerror="ensamReprise()"></script>
 </body>
 </html>

@@ -13,8 +13,29 @@ if (typeof window !== 'undefined') {
 
 export const swReady = (() => {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator) || !document.querySelector('link[rel="manifest"]')) return Promise.resolve(null);
-  return navigator.serviceWorker.register('sw.js').then(() => navigator.serviceWorker.ready).catch(() => null);
+  return navigator.serviceWorker.register('sw.js').then(reg => { suivreMisesAJour(reg); return navigator.serviceWorker.ready; }).catch(() => null);
 })();
+
+// Nouvelle version du site : le téléphone la télécharge en arrière-plan, puis elle prend la main
+// quand la page est cachée (ou tout de suite si la page vient de s'ouvrir), et la page se recharge
+// sans que personne ne le voie. Jamais au milieu de ce que le membre est en train de faire.
+function suivreMisesAJour(reg) {
+  const debut = Date.now();
+  const avait = !!navigator.serviceWorker.controller;
+  const appliquer = w => {
+    if (!w || !avait) return;
+    if (Date.now() - debut < 5000 || document.visibilityState === 'hidden') w.postMessage('nouvelle-version');
+    else document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') w.postMessage('nouvelle-version'); }, { once: true });
+  };
+  if (reg.waiting) appliquer(reg.waiting);
+  reg.addEventListener('updatefound', () => { const w = reg.installing; w?.addEventListener('statechange', () => { if (w.state === 'installed') appliquer(w); }); });
+  let fait = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (fait || !avait) return;
+    fait = true;
+    if (document.visibilityState === 'hidden' || Date.now() - debut < 8000) location.reload();
+  });
+}
 
 const isStandalone = () => matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);

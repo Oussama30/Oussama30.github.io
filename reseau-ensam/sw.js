@@ -1,31 +1,57 @@
-// Service worker du Réseau ENSAM : l'application s'ouvre même sans réseau (dernière version vue),
-// et affiche les notifications envoyées par la fonction « notifier ».
-const CACHE = 'ensam-v2';
+// Service worker du Réseau ENSAM : l'application s'ouvre depuis le téléphone, même sans réseau
+// ou en 3G, et affiche les notifications envoyées par la fonction « notifier ».
+// build.sh (outils/precharger.mjs) remplace la version et la liste des fichiers du site.
+const VERSION = '2f61500072f0';
+const FICHIERS = ["./","admin.js","agenda.js","app.js","community.js","confiance.js","config.js","cv.js","dashboard.js","enquete.js","entreprises.js","etranger.js","geo.js","groupes.js","growth.js","i18n-ar.js","i18n.js","logic.js","logo.js","me.js","mentorat.js","offers.js","parse-offre.js","privacy.js","pro.js","pwa.js","pwa/badge-96.png","pwa/icon-192.png","pwa/manifest.webmanifest","recrutement.js","saison.js","scene.js","store.js","ui.js","vendor/591.supabase.js","vendor/preact-htm.js","vendor/supabase.js"];
+const CACHE = 'ensam-' + VERSION;
 
-self.addEventListener('install', () => self.skipWaiting());
+// Chaque version du site est gardée en entier, d'un coup : une page n'utilise jamais un mélange
+// d'anciens et de nouveaux fichiers. La nouvelle version prend la main quand la page est cachée.
+self.addEventListener('install', e => e.waitUntil((async () => {
+  if (!FICHIERS.length) return self.skipWaiting();
+  const c = await caches.open(CACHE);
+  // no-cache : le navigateur revalide ce qu'il vient de télécharger (réponse 304, presque rien en 3G)
+  await c.addAll(FICHIERS.map(f => new Request(f, { cache: 'no-cache' })));
+})()));
 self.addEventListener('activate', e => e.waitUntil((async () => {
   for (const k of await caches.keys()) if (k !== CACHE) await caches.delete(k);
   await self.clients.claim();
 })()));
+self.addEventListener('message', e => { if (e.data === 'nouvelle-version') self.skipWaiting(); });
 
-// Réseau d'abord (toujours la dernière version du site), copie locale si la connexion manque.
-// Seuls les fichiers du site sont concernés : la base Supabase n'est jamais mise en cache.
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
-  e.respondWith((async () => {
-    try {
-      const res = await fetch(req);
-      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {}); }
-      return res;
-    } catch {
-      const hit = await caches.match(req, { ignoreSearch: true });
-      if (hit) return hit;
-      if (req.mode === 'navigate') return (await caches.match('./')) || (await caches.match('index.html')) || Response.error();
-      return Response.error();
-    }
-  })());
+  e.respondWith(FICHIERS.length ? depuisCache(req) : reseauDabord(req));
 });
+
+// Version construite : la copie gardée d'abord (immédiat), le réseau pour le reste (carte, images)
+async function depuisCache(req) {
+  const c = await caches.open(CACHE);
+  const hit = await c.match(req.mode === 'navigate' ? './' : req, { ignoreSearch: true });
+  if (hit) return hit;
+  try {
+    const res = await fetch(req);
+    if (res.ok && res.type === 'basic') c.put(req, res.clone()).catch(() => {});
+    return res;
+  } catch {
+    return (req.mode === 'navigate' && await c.match('./')) || Response.error();
+  }
+}
+
+// Sans liste (développement) : réseau d'abord, copie locale si la connexion manque
+async function reseauDabord(req) {
+  try {
+    const res = await fetch(req);
+    if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {}); }
+    return res;
+  } catch {
+    const hit = await caches.match(req, { ignoreSearch: true });
+    if (hit) return hit;
+    if (req.mode === 'navigate') return (await caches.match('./')) || (await caches.match('index.html')) || Response.error();
+    return Response.error();
+  }
+}
 
 self.addEventListener('push', e => {
   let d = {};

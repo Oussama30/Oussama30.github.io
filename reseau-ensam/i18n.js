@@ -2,15 +2,33 @@
 // des éléments au moment du rendu, ce qui évite de toucher chaque écran. Les contenus écrits par
 // les membres (offres, messages, noms) restent tels quels.
 import { options } from './vendor/preact-htm.js';
-import { AR, AR_PATTERNS } from './i18n-ar.js';
+
+// Le dictionnaire arabe (le plus gros fichier du site) n'est chargé que pour l'arabe : plus rapide en 3G
+let AR = {}; let AR_PATTERNS = []; let arPret = null;
+export function chargerAR() {
+  return arPret ||= import('./i18n-ar.js').then(m => { AR = m.AR; AR_PATTERNS = m.AR_PATTERNS; memo.clear(); }, e => { arPret = null; throw e; });
+}
+
+// Accord des noms avec les nombres en arabe : 1, 2, 3 à 10, 11 et plus
+export function arCount(n, [one, two, few, many]) {
+  n = +n;
+  if (n === 0) return `0 ${many}`;
+  if (n === 1) return one;
+  if (n === 2) return two;
+  if (n >= 3 && n <= 10) return `${n} ${few}`;
+  return `${n} ${many}`;
+}
 
 const KEY = 'ensam-lang';
 let lang = 'fr';
 try { lang = localStorage.getItem(KEY) === 'ar' ? 'ar' : 'fr'; } catch { /* stockage indisponible */ }
 
 export const getLang = () => lang;
-export function setLang(l) {
-  lang = l === 'ar' ? 'ar' : 'fr';
+// Passe à l'arabe une fois le dictionnaire chargé (sinon l'écran basculerait à droite encore en français)
+export async function setLang(l) {
+  const v = l === 'ar' ? 'ar' : 'fr';
+  if (v === 'ar') await chargerAR();
+  lang = v;
   try { localStorage.setItem(KEY, lang); } catch { /* stockage indisponible */ }
   applyDir();
 }
@@ -35,9 +53,14 @@ function isolate(out, groups) {
   return out;
 }
 
+// Traductions apportées par un module (ex. cv.js) : addAR({ 'Texte français': 'نص عربي' }, [[/^motif$/, fn]])
+const EXTRA = {}; const EXTRA_PATTERNS = [];
+export function addAR(dict = {}, patterns = []) { Object.assign(EXTRA, dict); EXTRA_PATTERNS.push(...patterns); memo.clear(); }
+
 function lookup(core) {
+  if (EXTRA[core] !== undefined) return EXTRA[core];
   if (AR[core] !== undefined) return AR[core];
-  for (const [re, fn] of AR_PATTERNS) { const m = core.match(re); if (m) return isolate(dateFix(typeof fn === 'function' ? fn(...m.slice(1)) : core.replace(re, fn)), m.slice(1)); }
+  for (const [re, fn] of [...EXTRA_PATTERNS, ...AR_PATTERNS]) { const m = core.match(re); if (m) return isolate(dateFix(typeof fn === 'function' ? fn(...m.slice(1)) : core.replace(re, fn)), m.slice(1)); }
   const d = dateFix(core);
   if (d !== core && !/[a-zà-ÿ]/i.test(d)) return d;
   if (MONTHS[core] || SHORT_MONTHS[core.replace('.', '')]) return MONTHS[core] || SHORT_MONTHS[core.replace('.', '')];

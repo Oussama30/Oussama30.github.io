@@ -4,6 +4,9 @@ import { Icon, Modal, Field, Empty, Person, Avatar, CompanyLogo, TYPE_ICON, toas
 import { getLang } from './i18n.js';
 import { TYPES, FILIERES, NIVEAUX, OBJECTIFS, niveauOf, timeAgo, daysUntil, placementOf, offerMatch, talentsFor } from './logic.js';
 import { RelanceBanner, BanqueSujets, PasteOffer } from './recrutement.js';
+import { CvButton } from './cv.js';
+import { SignalerBtn } from './confiance.js';
+import { EntrepriseResume } from './entreprises.js';
 
 const ANNEES_OPTS = [[3, '3A'], [4, '4A'], [5, '5A'], [6, 'Jeunes diplômés']];
 export const APP_STATUS = { postule: 'Envoyée', entretien: 'Entretien', retenu: 'Retenu(e)', refuse: 'Pas retenu(e)' };
@@ -151,6 +154,7 @@ export function OfferDetail({ ctx, id, onClose, apply }) {
         <button class="logo-btn" aria-label=${`Page entreprise : ${o.entreprise}`} onClick=${() => { onClose(); ctx.openEntreprise?.(o.entreprise); }}><${CompanyLogo} name=${o.entreprise} size=${56}/></button>
         <div class="detail-title"><span class=${'tag t-' + o.type}><${Icon} name=${TYPE_ICON[o.type]} size=${13}/>${TYPES[o.type]?.label}</span>${o.status !== 'ouverte' ? html` <span class="tag done">${o.status === 'pourvue' ? 'Pourvue' : 'Fermée'}</span>` : null}
           <h2>${o.titre}</h2><p class="muted small">Publiée ${timeAgo(o.created_at)}</p></div>
+        ${!mine && !isAdmin ? html`<${SignalerBtn} ctx=${ctx} type="offre" id=${o.id} small/>` : null}
         ${(mine || isAdmin) ? html`<div class="menu-wrap"><button class="icon-btn" aria-label="Gérer l’offre" aria-expanded=${menu} onClick=${() => setMenu(!menu)}><${Icon} name="more"/></button>
           ${menu ? html`<div class="menu-pop">
             ${mine ? html`<button onClick=${() => { setMenu(false); setEdit(true); }}><${Icon} name="edit" size=${16}/> Modifier</button>` : null}
@@ -165,11 +169,12 @@ export function OfferDetail({ ctx, id, onClose, apply }) {
 
       ${tab === 'offre' ? html`
         <dl class="facts">${facts.map(([k, v, i]) => html`<div><dt><${Icon} name=${i} size=${15}/> ${k}</dt><dd>${v}</dd></div>`)}</dl>
+        <${EntrepriseResume} ctx=${ctx} entreprise=${o.entreprise} onOpen=${onClose}/>
         <div class="prose"><p>${o.description}</p></div>
         ${o.lien ? html`<p><a href=${o.lien.startsWith('http') ? o.lien : 'https://' + o.lien} target="_blank" rel="noopener"><${Icon} name="link" size=${15}/> Voir l’annonce complète</a></p>` : null}
         ${author && !mine ? html`<div class="author-box"><${Person} p=${author} score=${ctx.scores.get(author.id)} onOpen=${openProfile} size=${40}/>
           <p class="small muted">${o.cooptation ? `${author.full_name.split(' ')[0]} peut recommander directement ton profil en interne.` : `${author.full_name.split(' ')[0]} reçoit ta candidature et te répond ici.`}</p></div>` : null}
-        ${!mine && (me.role === 'etudiant' ? !forLaureats(o) : me.role === 'laureat' && forLaureats(o)) ? html`<${ApplyBox} ctx=${ctx} o=${o} start=${apply}/>` : null}
+        ${!mine && (me.role === 'etudiant' ? !forLaureats(o) : me.role === 'laureat' && forLaureats(o)) ? html`<${ApplyBox} ctx=${ctx} o=${o} start=${apply} onClose=${onClose}/>` : null}
         ${!mine ? html`<${Questions} ctx=${ctx} o=${o} comments=${comments}/>` : null}` : null}
 
       ${tab === 'questions' && mine ? html`<${Questions} ctx=${ctx} o=${o} comments=${comments}/>` : null}
@@ -178,7 +183,7 @@ export function OfferDetail({ ctx, id, onClose, apply }) {
 }
 
 // Côté étudiant : postuler, puis suivre le statut que le lauréat met à jour
-function ApplyBox({ ctx, o, start }) {
+function ApplyBox({ ctx, o, start, onClose }) {
   const { data, me, store, act, saison } = ctx;
   const app = data.applications.find(a => a.offer_id === o.id && a.student_id === me.id);
   const [open, setOpen] = useState(!!start);
@@ -201,10 +206,14 @@ function ApplyBox({ ctx, o, start }) {
   const invite = inv ? html`<div class="invite-note"><${Icon} name="send" size=${16}/><div><p><strong>${store.byId('profiles', inv.laureat_id)?.full_name || 'Un lauréat'}</strong> t’a invité(e) à postuler.</p>
     ${inv.message ? html`<p class="quote small">${inv.message}</p>` : null}
     <button class="linkish small" onClick=${() => act(async () => { await store.update('invitations', inv.id, { status: 'declinee' }); toast('C’est noté, merci d’avoir répondu.'); })}>Pas intéressé(e)</button></div></div>` : null;
-  if (!open) return html`${invite}<div class="apply-box cta"><div><strong>Intéressé(e) ?</strong><p class="small muted">Le lauréat verra ton profil${me.cv_url ? ' et ton CV' : ''}.</p></div><button class="btn primary" onClick=${() => setOpen(true)}><${Icon} name="send" size=${16}/> Postuler</button></div>`;
+  const hasCv = !!(me.cv_path || me.cv_url);
+  const auteur = store.byId('profiles', o.author_id);
+  if (!open) return html`${invite}<div class="apply-box cta"><div><strong>Intéressé(e) ?</strong><p class="small muted">${hasCv ? 'Le lauréat verra ton profil et ton CV.' : 'Le lauréat verra ton profil.'}</p></div><button class="btn primary" onClick=${() => setOpen(true)}><${Icon} name="send" size=${16}/> Postuler</button></div>`;
   return html`<form class="apply-box form" onSubmit=${e => { e.preventDefault(); act(async () => { await store.insert('applications', { student_id: me.id, offer_id: o.id, entreprise: o.entreprise, titre: o.titre, message: msg.trim(), status: 'postule' }); toast('Candidature envoyée à ' + (store.byId('profiles', o.author_id)?.full_name || 'au lauréat') + '.'); }); }}>
     <${Field} label="Message au lauréat" hint="Deux ou trois phrases : qui tu es, pourquoi cette offre."><textarea id="ap-msg" rows="3" maxlength="1500" value=${msg} onInput=${e => setMsg(e.target.value)} placeholder=${me.role === 'laureat' ? 'Bonjour, promo 2018, six ans en méthodes…' : 'Bonjour, je suis en 5A Génie Industriel…'}></textarea><//>
-    ${me.role === 'laureat' ? null : !me.cv_url ? html`<p class="small warn-t"><${Icon} name="file" size=${14}/> Ajoute le lien de ton CV dans ton profil pour qu’il soit joint automatiquement.</p>` : html`<p class="small muted"><${Icon} name="file" size=${14}/> Ton CV sera joint.</p>`}
+    ${me.role === 'laureat' && !hasCv ? null : !hasCv ? html`<p class="small warn-t apply-cv"><${Icon} name="file" size=${14}/> <span>Ajoute ton CV en PDF dans ton profil : le lauréat le verra avec ta candidature.</span> <button type="button" class="btn tiny" onClick=${() => { onClose?.(); ctx.go('profil'); }}><${Icon} name="upload" size=${13}/> Ajouter mon CV</button></p>`
+      : me.cv_path ? html`<p class="small muted apply-cv"><${Icon} name="lock" size=${14}/> <span>${auteur ? `Ton CV PDF sera visible par ${auteur.full_name.split(' ')[0]}, l’auteur de l’offre.` : 'Ton CV PDF sera visible par l’auteur de l’offre.'}</span> <${CvButton} ctx=${ctx} p=${me} small/></p>`
+      : html`<p class="small muted apply-cv"><${Icon} name="file" size=${14}/> Le lien vers ton CV sera joint.</p>`}
     <div class="row-end"><button type="button" class="btn ghost" onClick=${() => setOpen(false)}>Annuler</button><button class="btn primary">Envoyer ma candidature</button></div>
   </form>`;
 }
@@ -230,7 +239,7 @@ function Candidates({ ctx, o, apps }) {
       return html`<div class="cand" key=${a.id}>
         <div class="cand-head"><${Person} p=${st} onOpen=${openProfile} size=${36}/><span class="spacer"></span>${(data.invitations || []).some(i => i.offer_id === o.id && i.student_id === a.student_id) ? html`<span class="mini good">Invité(e) par toi</span>` : null}<span class="muted small">${timeAgo(a.created_at)}</span></div>
         ${a.message ? html`<p class="quote">${a.message}</p>` : null}
-        ${st?.cv_url ? html`<a class="small" href=${st.cv_url.startsWith('http') ? st.cv_url : 'https://' + st.cv_url} target="_blank" rel="noopener"><${Icon} name="file" size=${14}/> Voir le CV</a>` : null}
+        ${st && (st.cv_path || st.cv_url) ? html`<div class="row"><${CvButton} ctx=${ctx} p=${st} small/></div>` : null}
         ${pl ? html`<p class=${'state-pill ' + (pl.status === 'confirme' ? 's-trouve' : 's-validation')}>${pl.status === 'confirme' ? 'Recrutement confirmé par l’étudiant' : 'Recruté(e) · attend sa confirmation'}</p>` : html`
         <div class="seg small-seg" role="group" aria-label="Statut de la candidature">
           ${[['postule', 'Reçue'], ['entretien', 'Entretien'], ...(entre ? [['retenu', 'Retenu(e)']] : []), ['refuse', 'Pas retenu(e)']].map(([k, l]) => html`<button class=${a.status === k ? 'on' : ''} onClick=${() => act(() => store.update('applications', a.id, { status: k }))}>${l}</button>`)}
@@ -282,7 +291,7 @@ function Questions({ ctx, o, comments }) {
     ${sorted.map(c => { const a = store.byId('profiles', c.author_id); return html`<div class="comment" key=${c.id}>
       <${Avatar} p=${a} size=${28}/>
       <div class="comment-body"><button class="linkish" onClick=${() => openProfile(a)}>${a?.full_name || 'Membre'}</button>${a?.id === o.author_id ? html` <span class="mini">Auteur de l’offre</span>` : null} <span class="muted small">${timeAgo(c.created_at)}</span><p>${c.body}</p></div>
-      ${(c.author_id === me.id || me.role === 'admin') ? html`<button class="icon-btn small" aria-label="Supprimer" onClick=${() => act(() => store.remove('comments', c.id))}><${Icon} name="x" size=${14}/></button>` : null}
+      ${(c.author_id === me.id || me.role === 'admin') ? html`<button class="icon-btn small" aria-label="Supprimer" onClick=${() => act(() => store.remove('comments', c.id))}><${Icon} name="x" size=${14}/></button>` : html`<${SignalerBtn} ctx=${ctx} type="commentaire" id=${c.id} small/>`}
     </div>`; })}
     <form class="comment-form" onSubmit=${e => { e.preventDefault(); if (!txt.trim()) return; act(async () => { await store.insert('comments', { offer_id: o.id, author_id: me.id, body: txt.trim() }); setTxt(''); }); }}>
       <input id=${'c-' + o.id} placeholder=${o.author_id === me.id ? 'Répondre…' : 'Une question sur l’offre ? Tout le monde verra la réponse.'} value=${txt} onInput=${e => setTxt(e.target.value)} maxlength="1500"/>
