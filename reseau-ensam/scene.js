@@ -2,12 +2,7 @@
 // Dessin original en SVG. Les couleurs viennent du CSS (.sky, thème clair ou sombre) et le mouvement
 // aussi (nuages, oiseaux, arbres, étudiants qui marchent vers la porte), coupé si l'appareil le demande.
 
-// Emblème de la plateforme d'après l'identité de l'école : deux A (orange et bleu), le losange, la crémaillère.
-export const EMBLEM = '<path class="em-a1" d="M6 45 19.5 18 33 45Z" pathLength="1"/>'
-  + '<path class="em-a2" d="M27 45 42.5 14 58 45Z" pathLength="1"/>'
-  + '<path class="em-d" d="M31.25 3.5 34.5 8.5 31.25 13.5 28 8.5Z"/>'
-  + '<path class="em-r" d="M3 58V50.5H9V53.5H13.4V50.5H19.4V53.5H23.8V50.5H29.8V53.5H34.2V50.5H40.2V53.5H44.6V50.5H50.6V53.5H55V50.5H61V58Z"/>'
-  + '<path class="em-g" d="M21 64A11 7 0 0 1 43 64Z"/>';
+import { glyph } from './logo.js';
 
 const r1 = n => Math.round(n * 10) / 10;
 
@@ -104,7 +99,7 @@ ${roundTree(150, 0.95)}${roundTree(710, 1)}${cypress(268, 74)}${cypress(532, 70)
 <g class="lamp"><circle class="lamp-glow" cx="566" cy="220" r="30" fill="url(#ss-lamp)"/><rect class="iron" x="564.5" y="222" width="3" height="78"/><path class="iron" d="M559 222h14l-3-7h-8z"/><rect class="lamp-bulb" x="563" y="216" width="6" height="5" rx="1.5"/></g>
 <g class="sc-gate">
   <polygon class="g-frame" points="400,34 274,206 526,206"/><polygon class="g-in" points="400,66 300,196 500,196"/>
-  <g transform="translate(366.4 118) scale(1.05)">${EMBLEM}</g>
+  <g class="g-logo" transform="translate(356.5 106.1) scale(.17)">${glyph()}</g>
   <rect class="g-pillar" x="306" y="222" width="20" height="78"/><rect class="g-pillar" x="474" y="222" width="20" height="78"/>
   <rect class="g-band" x="288" y="203" width="224" height="21"/><text class="g-txt" x="400" y="218" text-anchor="middle">ENSAM · MEKNÈS</text>
   <g class="sc-leaf l"><rect class="iron" x="326" y="236" width="74" height="3"/><rect class="iron" x="326" y="291" width="74" height="3"/>${bars(326)}</g>
