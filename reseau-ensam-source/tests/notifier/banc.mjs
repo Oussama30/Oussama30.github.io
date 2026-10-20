@@ -1,5 +1,6 @@
 // Banc d'essai : faux Supabase (PostgREST + Auth), faux services de push, faux Brevo.
 import nodeCrypto from 'node:crypto';
+import fs from 'node:fs';
 
 export const MODULE = process.env.NOTIFIER_TS || new URL('../../supabase/functions/notifier/index.ts', import.meta.url).pathname;
 export const URL_PROJET = 'https://projet-test.supabase.co';
@@ -8,6 +9,26 @@ export const SITE = 'https://oussama30.github.io/reseau-ensam/';
 
 export const uid = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const pause = ms => new Promise(r => setTimeout(r, ms));
+
+// Colonnes de chaque table, lues dans schema.sql : comme le vrai PostgREST, le faux refuse une colonne
+// qui n'existe pas (erreur 42703), dans select, order ou un filtre.
+const SCHEMA = fs.readFileSync(new URL('../../supabase/schema.sql', import.meta.url), 'utf8');
+export const COLONNES = {};
+for (const [, t, corps] of SCHEMA.matchAll(/create table if not exists public\.(\w+)\s*\(([\s\S]*?)\n\);/g)) {
+  COLONNES[t] = new Set(corps.split('\n').map(l => /^\s*(\w+)\s/.exec(l)?.[1]).filter(c => c && !/^(constraint|primary|unique|check|foreign)$/i.test(c)));
+}
+for (const [, t, c] of SCHEMA.matchAll(/alter table public\.(\w+)\s+add column if not exists (\w+)/g)) COLONNES[t]?.add(c);
+function colonneInconnue(table, url) {
+  const connues = COLONNES[table];
+  if (!connues) return null;
+  const cols = [];
+  for (const [k, v] of url.searchParams.entries()) {
+    if (k === 'select') { if (v !== '*') cols.push(...v.split(',')); }
+    else if (k === 'order') cols.push(...v.split(',').map(o => o.split('.')[0]));
+    else if (!['limit', 'offset', 'on_conflict', 'or', 'and'].includes(k)) cols.push(k);
+  }
+  return cols.find(c => !connues.has(c)) || null;
+}
 
 export function configurerEnv(extra = {}) {
   for (const k of ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'BREVO_API_KEY', 'SENDER_EMAIL', 'SENDER_NAME', 'SITE_URL', 'GMAIL_USER', 'GMAIL_APP_PASSWORD']) delete process.env[k];
@@ -138,6 +159,8 @@ export class Banc {
     if (chemin.startsWith('rpc/')) return this.rpc(chemin.slice(4), JSON.parse(corps || '{}'));
     const table = this.tables[chemin];
     if (!table) return this.json({ message: 'table inconnue ' + chemin }, 404);
+    const inconnue = colonneInconnue(chemin, url);
+    if (inconnue) return this.json({ code: '42703', message: `column ${chemin}.${inconnue} does not exist` }, 400);
     const p = [...url.searchParams.entries()];
     const filtres = p.filter(([k]) => !['select', 'order', 'limit', 'offset', 'on_conflict'].includes(k));
     const garder = r => filtres.every(([k, v]) => condition(r[k], v));

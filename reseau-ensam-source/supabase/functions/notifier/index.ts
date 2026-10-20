@@ -1743,7 +1743,8 @@ async function jobEssaiEmail(env: Env): Promise<Response> {
   const ids = admins.map(x => x.id);
   const [brut, etats] = await Promise.all([
     chargerDonnees(env, ids, date),
-    parIds<{ user_id: string; token: string }>(env, 'notif_etat', 'select=user_id,token', 'user_id', ids),
+    // notif_etat n'a pas de colonne id : on trie par user_id
+    parIds<{ user_id: string; token: string }>(env, 'notif_etat', 'select=user_id,token&order=user_id', 'user_id', ids),
   ]);
   const d = indexer(brut, date);
   for (const x of admins) {
