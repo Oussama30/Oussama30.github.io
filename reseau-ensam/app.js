@@ -3,17 +3,23 @@ import { getLang, setLang } from './i18n.js';
 import { html, render, useState, useEffect, useMemo, useRef } from './vendor/preact-htm.js';
 import { createStore } from './store.js';
 import { Icon, Field, Empty, Person, Avatar, Bar, Toaster, toast, Confirm, LevelChip, BrandLogo, SchoolScene, Num, useLocal } from './ui.js';
-import { seasonOf, seasonLabel, niveauOf, NIVEAUX, OBJECTIFS, FOUND, statutOf, seasonStats, computeScores, starOfMonth, mentorState, requestsFor, timeAgo, pct } from './logic.js';
+import { seasonOf, seasonLabel, niveauOf, NIVEAUX, OBJECTIFS, FOUND, statutOf, seasonStats, computeScores, starOfMonth, mentorState, requestsFor, timeAgo, pct, routedTo, needsRelance, myGroups, groupKey } from './logic.js';
 import { OffersPage, OfferCard, OfferDetail, OfferComposer, RecoOffers, matchesMe, APP_STATUS } from './offers.js';
 import { ParcoursPage, EspacePage, ConfirmRecruit, Journey, journeyStep } from './me.js';
 import { DashboardPage } from './dashboard.js';
-import { ReseauPage, ProfileModal, ProfileForm } from './community.js';
+import { ReseauPage, ProfileModal, ProfileForm, AskQuestion } from './community.js';
 import { AdminPage, AnnonceBanner } from './admin.js';
 import { MentoratPage, AskHelp, NextRdv, HelpNeeded, slotWhen } from './mentorat.js';
 import { SuccessFeed, VerifyPage } from './growth.js';
+import { PrivacyPage, ConsentModal, MesDonnees, DesaboPage } from './privacy.js';
+import { useInstall, IosInstallHelp } from './pwa.js';
+import { NextCafe } from './groupes.js';
+import { EntrepriseModal } from './pro.js';
+import { DefisPanel, CoupePromos, ParrainCard, DevenirParrain, TonAnnee, TonAnneeStrip } from './saison.js';
+import { AlerteTalents } from './recrutement.js';
 
-const ROUTES = ['accueil', 'offres', 'mentorat', 'parcours', 'espace', 'reseau', 'suivi', 'profil', 'admin', 'verifier'];
-const ALIASES = { impact: 'espace', tableau: 'suivi', communaute: 'reseau', entraide: 'reseau/entraide', 'reseau/mentorat': 'mentorat', 'reseau/mentorat/rdv': 'mentorat' };
+const ROUTES = ['accueil', 'offres', 'mentorat', 'parcours', 'espace', 'reseau', 'suivi', 'profil', 'admin', 'verifier', 'confidentialite', 'desabo'];
+const ALIASES = { impact: 'espace', tableau: 'suivi', communaute: 'reseau', entraide: 'reseau/entraide', groupes: 'reseau/groupes', sujets: 'offres/sujets', 'reseau/mentorat': 'mentorat', 'reseau/mentorat/rdv': 'mentorat' };
 
 function navFor(me) {
   const items = [['accueil', 'Accueil', 'home'], ['offres', 'Offres', 'feed'], ['mentorat', 'Mentorat', 'mentor']];
@@ -24,12 +30,12 @@ function navFor(me) {
   return items;
 }
 
-function readRoute() {
-  let h = decodeURIComponent((location.hash || '').slice(1));
-  h = ALIASES[h] || h;
-  const [base, sub, sub2] = h.split('/');
+const dec = x => { try { return decodeURIComponent(x || ''); } catch { return x || ''; } };
+function parseRoute(r) {
+  const [base, sub, sub2] = (ALIASES[dec(r)] || r).split('/').map(dec);
   return ROUTES.includes(base) ? { base, sub: sub || '', sub2: sub2 || '' } : { base: 'accueil', sub: '', sub2: '' };
 }
+const readRoute = () => parseRoute((location.hash || '').slice(1));
 
 function App({ store }) {
   const [, setTick] = useState(0);
@@ -44,7 +50,12 @@ function App({ store }) {
   useEffect(() => store.on(() => setTick(t => t + 1)), []);
   useEffect(() => { const f = () => setRoute(readRoute()); addEventListener('hashchange', f); return () => removeEventListener('hashchange', f); }, []);
   useEffect(() => { if (!pop) return; const f = e => { if (!e.target.closest('.pop-wrap')) setPop(null); }; document.addEventListener('click', f); return () => document.removeEventListener('click', f); }, [pop]);
-  const go = r => { try { history.replaceState(null, '', '#' + r); } catch { /* cadre */ } const [base, sub, sub2] = r.split('/'); setRoute({ base, sub: sub || '', sub2: sub2 || '' }); setPop(null); window.scrollTo?.(0, 0); };
+  const go = r => { try { history.replaceState(null, '', '#' + r); } catch { /* cadre */ } setRoute(parseRoute(r)); setPop(null); window.scrollTo?.(0, 0); };
+  const [entreprise, setEntreprise] = useState(null);
+  const [askQ, setAskQ] = useState(null);
+  const [annee, setAnnee] = useState(null);
+  const [iosHelp, setIosHelp] = useState(false);
+  const install = useInstall();
 
   const data = store.data;
   const me = store.me;
@@ -70,8 +81,10 @@ function App({ store }) {
   });
 
   const relang = () => setTick(t => t + 1);
-  // Vérification d'une attestation : page publique, sans compte
+  // Pages publiques, sans compte : vérification d'une attestation, désabonnement des emails, confidentialité
   if (route.base === 'verifier') return html`<div class="auth verify-wrap"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><${VerifyPage} store=${store} id=${route.sub}/></div>`;
+  if (route.base === 'desabo') return html`<div class="auth verify-wrap"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><${DesaboPage} store=${store} token=${route.sub}/></div>`;
+  if (route.base === 'confidentialite' && (store.mode !== 'live' || !store.session || !me)) return html`<div class="auth verify-wrap privacy-wrap"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><${PrivacyPage} onBack=${() => { history.back(); setTimeout(() => setRoute(readRoute()), 50); }}/></div>`;
   if (store.mode === 'live' && !store.session) return html`<${AuthScreen} store=${store} relang=${relang}/>`;
   if (store.mode === 'live' && !me) return html`<${Onboarding} store=${store} relang=${relang}/>`;
 
@@ -81,6 +94,10 @@ function App({ store }) {
     openProfile: p => p && setProfile(p),
     openOffer: (id, apply = false) => { setOfferId(id); setApplyNow(apply); setPop(null); },
     confirm: (text, onYes, yes) => setConfirmBox({ text, onYes, yes }),
+    openEntreprise: name => name && setEntreprise(name),
+    askQuestion: initial => setAskQ(initial || {}),
+    askHelp: p => setAskMentor(p),
+    openAnnee: s => setAnnee(s || saison),
   };
   const notifs = buildNotifs(ctx);
   const todo = notifs.filter(n => n.action).length;
@@ -90,6 +107,7 @@ function App({ store }) {
   if (page === 'parcours' && me.role !== 'etudiant') page = me.role === 'laureat' ? 'espace' : 'accueil';
   if (page === 'espace' && me.role !== 'laureat') page = me.role === 'etudiant' ? 'parcours' : 'accueil';
   if (page === 'admin' && me.role !== 'admin') page = 'accueil';
+  const needConsent = store.mode === 'live' && !me.consent_at && !['confidentialite', 'profil'].includes(page);
   const openNotif = n => { setPop(null); if (n.offer) ctx.openOffer(n.offer); else go(n.to); };
   const dotFor = k => ((k === 'parcours' || k === 'espace') && notifs.some(n => n.action && n.mine)) || (k === 'mentorat' && notifs.some(n => n.action && n.to === 'mentorat'));
 
@@ -97,14 +115,14 @@ function App({ store }) {
     <aside class="side">
       <a class="brand" href="#accueil" onClick=${e => { e.preventDefault(); go('accueil'); }}><${BrandLogo} size=${40}/><span class="brand-txt"><strong>Réseau ENSAM</strong><span>Meknès · Lauréats & étudiants</span></span></a>
       <nav class="side-nav">${nav.map(([k, l, i]) => html`<a href=${'#' + k} class=${page === k ? 'on' : ''} onClick=${e => { e.preventDefault(); go(k); }}><span class="nav-ico"><${Icon} name=${i}/></span> ${l}${dotFor(k) ? html`<span class="dotn"></span>` : null}</a>`)}</nav>
-      <div class="side-foot"><span class="mono small muted">Saison ${seasonLabel(saison)}</span></div>
+      <div class="side-foot"><span class="mono small muted">Saison ${seasonLabel(saison)}</span><a class="small muted" href="#confidentialite" onClick=${e => { e.preventDefault(); go('confidentialite'); }}>Confidentialité</a></div>
     </aside>
     <div class="main">
       <header class="top">
         <a class="brand mobile-only" href="#accueil" onClick=${e => { e.preventDefault(); go('accueil'); }}><${BrandLogo} size=${34}/><strong>Réseau ENSAM</strong></a>
         <span class="spacer"></span>
         ${store.mode === 'demo' ? html`<${PersonaSwitch} store=${store} go=${go}/>` : null}
-        <${LangToggle} onChange=${relang}/>
+        <${LangToggle} onChange=${relang} store=${store} me=${me}/>
         <div class="pop-wrap"><button class="icon-btn" aria-label=${`Notifications (${todo} à traiter)`} aria-expanded=${pop === 'bell'} onClick=${() => setPop(pop === 'bell' ? null : 'bell')}><${Icon} name="bell"/>${todo ? html`<span class="badge-n">${todo}</span>` : null}</button>
           ${pop === 'bell' ? html`<div class="bell-pop" role="menu"><h3>Notifications</h3>${notifs.length ? notifs.slice(0, 14).map(n => html`<button class=${'notif' + (n.action ? ' act' : '')} onClick=${() => openNotif(n)}><span class=${'n-ico ' + (n.tone || '')}><${Icon} name=${n.icon} size=${16}/></span><span>${n.text}<span class="muted small">${timeAgo(n.at)}</span></span></button>`) : html`<p class="muted small">Rien de nouveau.</p>`}</div>` : null}
         </div>
@@ -113,6 +131,9 @@ function App({ store }) {
             <div class="menu-who"><strong>${me.full_name}</strong><span class="muted small">${me.role === 'etudiant' ? 'Étudiant(e)' : me.role === 'laureat' ? 'Lauréat(e)' : 'Administration'}</span></div>
             <button onClick=${() => go('profil')}><${Icon} name="user" size=${16}/> Mon profil</button>
             <button onClick=${() => { try { localStorage.removeItem('guide-off-' + me.id); } catch { /* */ } go('accueil'); }}><${Icon} name="route" size=${16}/> Comment ça marche ?</button>
+            ${me.role !== 'admin' ? html`<button onClick=${() => { setPop(null); ctx.openAnnee(); }}><${Icon} name="award" size=${16}/> Ton année dans le réseau</button>` : null}
+            ${install ? html`<button onClick=${() => { setPop(null); install.ios ? setIosHelp(true) : install.prompt(); }}><${Icon} name="download" size=${16}/> Installer l’application</button>` : null}
+            <button onClick=${() => go('confidentialite')}><${Icon} name="shield" size=${16}/> Confidentialité</button>
             ${me.role === 'admin' ? html`<button onClick=${() => go('admin')}><${Icon} name="shield" size=${16}/> Administration</button>` : null}
             ${store.mode === 'live' ? html`<button onClick=${() => store.signOut()}><${Icon} name="logout" size=${16}/> Se déconnecter</button>` : html`<button onClick=${() => { store.reset(); setPop(null); toast('Démo réinitialisée.'); }}><${Icon} name="spark" size=${16}/> Réinitialiser la démo</button>`}
           </div>` : null}
@@ -129,6 +150,7 @@ function App({ store }) {
         ${page === 'suivi' ? html`<${DashboardPage} ...${ctx}/>` : null}
         ${page === 'admin' ? html`<${AdminPage} ...${ctx}/>` : null}
         ${page === 'profil' ? html`<${MyProfile} ctx=${ctx}/>` : null}
+        ${page === 'confidentialite' ? html`<${PrivacyPage}/>` : null}
       </main>
     </div>
     <nav class="bottom-nav">${nav.map(([k, l, i]) => html`<a href=${'#' + k} class=${page === k ? 'on' : ''} onClick=${e => { e.preventDefault(); go(k); }}><span class="bn-ico"><${Icon} name=${i}/>${dotFor(k) ? html`<span class="dotn"></span>` : null}</span><span>${{ 'Mon parcours': 'Parcours', 'Mon espace': 'Espace', 'Ma promo': 'Promo' }[l] || l}</span></a>`)}</nav>
@@ -136,14 +158,20 @@ function App({ store }) {
     ${profile ? html`<${ProfileModal} ctx=${ctx} p=${profile} onClose=${() => setProfile(null)} onAskMentor=${p => { setProfile(null); setAskMentor(p); }}/>` : null}
     ${askMentor ? html`<${AskHelp} ctx=${ctx} mentor=${askMentor} onClose=${() => setAskMentor(null)}/>` : null}
     ${confirmBox ? html`<${Confirm} text=${confirmBox.text} onYes=${confirmBox.onYes} onClose=${() => setConfirmBox(null)} yes=${confirmBox.yes || 'Supprimer'}/>` : null}
+    ${entreprise ? html`<${EntrepriseModal} ctx=${ctx} name=${entreprise} key=${entreprise} onClose=${() => setEntreprise(null)}/>` : null}
+    ${askQ ? html`<${AskQuestion} ctx=${ctx} initial=${askQ} onClose=${() => setAskQ(null)} onDone=${id => { setAskQ(null); go('reseau/entraide/' + id); }}/>` : null}
+    ${annee ? html`<${TonAnnee} ctx=${ctx} saison=${annee} onClose=${() => setAnnee(null)}/>` : null}
+    ${iosHelp ? html`<${IosInstallHelp} onClose=${() => setIosHelp(false)}/>` : null}
+    ${needConsent ? html`<${ConsentModal} ctx=${ctx}/>` : null}
     <${Toaster}/>
   </div>`;
 }
 
 // Bouton français / arabe, en haut à côté des notifications
-export function LangToggle({ onChange }) {
+export function LangToggle({ onChange, store, me }) {
   const ar = getLang() === 'ar';
-  return html`<button class="lang-btn" onClick=${() => { setLang(ar ? 'fr' : 'ar'); onChange?.(); }} aria-label=${ar ? 'Passer en français' : 'التبديل إلى العربية'} lang=${ar ? 'fr' : 'ar'}>
+  const save = l => { if (store?.mode === 'live' && me && me.langue !== l && 'langue' in me) store.update('profiles', me.id, { langue: l }).catch(() => {}); };
+  return html`<button class="lang-btn" onClick=${() => { setLang(ar ? 'fr' : 'ar'); save(ar ? 'fr' : 'ar'); onChange?.(); }} aria-label=${ar ? 'Passer en français' : 'التبديل إلى العربية'} lang=${ar ? 'fr' : 'ar'}>
     <${Icon} name="globe" size=${16}/><span>${ar ? 'FR' : 'ع'}</span><span class="lang-long">${ar ? 'Français' : 'العربية'}</span></button>`;
 }
 
@@ -215,7 +243,27 @@ function buildNotifs({ data, me, store, saison }) {
     if (k.length && recent(last, 14)) out.push({ icon: 'clap', tone: 'brass', to: 'accueil', at: last, text: `${k.length} bravo${k.length > 1 ? 's' : ''} pour ta réussite chez ${p.entreprise}` });
   }
   const myQ = new Set(data.questions.filter(q => q.author_id === me.id).map(q => q.id));
-  for (const a of data.answers) if (myQ.has(a.question_id) && a.author_id !== me.id) out.push({ key: 'an' + a.id, tone: 'good', icon: 'qa', to: 'reseau/entraide', at: a.created_at, text: `${name(a.author_id)} a répondu à ta question.` });
+  for (const a of data.answers) if (myQ.has(a.question_id) && a.author_id !== me.id) out.push({ key: 'an' + a.id, tone: 'good', icon: 'qa', to: 'reseau/entraide/' + a.question_id, at: a.created_at, text: `${name(a.author_id)} a répondu à ta question.` });
+  // Questions routées vers ce lauréat (son entreprise ou son pays), sans réponse de sa part
+  if (me.role === 'laureat') for (const q of data.questions) if (routedTo(q, me) && recent(q.created_at, 14) && !data.answers.some(a => a.question_id === q.id && a.author_id === me.id)) {
+    out.push({ key: 'qr' + q.id, action: true, tone: 'accent', icon: 'qa', to: 'reseau/entraide/' + q.id, at: q.created_at, text: `Une question pour toi sur ${q.entreprise || q.pays} : ${q.titre}` });
+  }
+  // Relance douce : mes offres ouvertes sans activité depuis 3 semaines
+  for (const o of data.offers) if (o.author_id === me.id && needsRelance(data, o)) out.push({ key: 'ro' + o.id, action: true, mine: true, icon: 'clock', offer: o.id, at: o.relance_at || o.created_at, text: `Ton offre « ${o.titre} » est-elle toujours ouverte ?` });
+  // Parrainage
+  for (const x of data.parrainages) if (x.saison === saison && recent(x.created_at, 14)) {
+    if (x.parrain_id === me.id) out.push({ key: 'pf' + x.id, tone: 'brass', icon: 'heart', to: 'espace', at: x.created_at, text: `${name(x.filleul_id)} (3A) est ton filleul cette année. Fais-lui signe !` });
+    if (x.filleul_id === me.id) out.push({ key: 'pp' + x.id, tone: 'brass', icon: 'heart', to: 'accueil', at: x.created_at, text: `${name(x.parrain_id)}, lauréat(e) de ta filière, est ton parrain cette année.` });
+  }
+  // Un café ENSAM annoncé dans ma ville ou mon pays
+  const groups = myGroups(data, me).all;
+  for (const c of data.cafes) {
+    const g = groups.includes(groupKey('ville', c.ville)) ? groupKey('ville', c.ville) : groups.includes(groupKey('pays', c.pays)) ? groupKey('pays', c.pays) : null;
+    if (!g || c.annule || c.organisateur_id === me.id || new Date(c.date_at) < Date.now() || !recent(c.created_at, 10)) continue;
+    if (data.cafe_participants.some(x => x.cafe_id === c.id && x.user_id === me.id)) continue;
+    const w = new Date(c.date_at);
+    out.push({ key: 'cf' + c.id, icon: 'clap', tone: 'good', to: 'reseau/groupes/' + encodeURIComponent(g), at: c.created_at, text: `Café ENSAM à ${c.ville} le ${w.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })} : inscris-toi en un clic.` });
+  }
   return out.sort((a, b) => (b.action ? 1 : 0) - (a.action ? 1 : 0) || new Date(b.at) - new Date(a.at));
 }
 
@@ -257,6 +305,7 @@ function Home(ctx) {
     </header>
 
     <${AnnonceBanner} ctx=${ctx}/>
+    <${TonAnneeStrip} ctx=${ctx} onOpen=${ctx.openAnnee}/>
     <${Guide} ctx=${ctx} setCompose=${setCompose}/>
 
     ${isStudent && stu.pl?.status === 'en_attente' ? html`<${ConfirmRecruit} ctx=${ctx} pl=${stu.pl} helper=${helper}/>` : null}
@@ -264,7 +313,9 @@ function Home(ctx) {
     ${actions.length ? html`<div class="callout today"><h2 class="h-ico"><${Icon} name="bell"/> À faire aujourd’hui</h2><ul class="todo">${actions.slice(0, 4).map(a => html`<li><button class="notif act" onClick=${() => openNotif(a)}><span class=${'n-ico ' + (a.tone || '')}><${Icon} name=${a.icon} size=${16}/></span><span>${a.text}</span><${Icon} name="arrow" size=${16}/></button></li>`)}</ul></div>` : null}
 
     <${NextRdv} ctx=${ctx}/>
+    <${ParrainCard} ctx=${ctx}/>
     <${HelpNeeded} ctx=${ctx}/>
+    <${AlerteTalents} ctx=${ctx}/>
 
     ${isStudent && obj ? html`<button class=${'objective compact clickable st-' + stu.key} onClick=${() => go('parcours')}>
       <div class="objective-top"><span class="obj-ico"><${Icon} name="route" size=${22}/></span>
@@ -277,6 +328,7 @@ function Home(ctx) {
       <div class="grow"><strong>Besoin d’un conseil ?</strong><span class="small muted">CV, stage, entretien, étranger : un lauréat te parle 20 minutes en visio.</span></div>
       <button class="btn primary small" onClick=${() => go('mentorat')}>Demander de l’aide</button></div>` : null}
 
+    <${DevenirParrain} ctx=${ctx}/>
     ${me.role === 'laureat' && s ? html`<button class="impact-strip clickable" onClick=${() => go('espace')}><span class="obj-ico brass"><${Icon} name="star" size=${20}/></span><span><b class="mono"><${Num} v=${s.points}/></b> points d’impact</span><${LevelChip} points=${s.points}/><span class="muted small">${s.recrutes} recruté${s.recrutes > 1 ? 's' : ''} grâce à toi</span><span class="spacer"></span><${Icon} name="arrow" size=${18}/></button>` : null}
 
     <div class="home-grid">
@@ -286,11 +338,14 @@ function Home(ctx) {
         <${SuccessFeed} ctx=${ctx}/>
       </div>
       <aside class="home-side">
+        <${DefisPanel} ctx=${ctx}/>
+        <${NextCafe} ctx=${ctx}/>
         <button class="panel pulse clickable" onClick=${() => go('suivi')}>
           <div class="section-head"><h2>${isStudent ? 'Ma promo' : 'L’école en ce moment'}</h2><${Icon} name="arrow" size=${16}/></div>
           ${st.rows.filter(r => !isStudent || r.n === n).map(r => html`<div class="pulse-row"><span class="niv-badge">${NIVEAUX[r.n].short}</span><div class="pulse-bar"><div class="row small"><span>${r.objectif.court}</span><span class="spacer"></span><span class="mono">${isStudent ? `${r.found}/${r.total}` : pct(r.rate)}</span></div><${Bar} value=${r.rate} pace=${isStudent ? undefined : r.elapsed}/></div></div>`)}
           <p class="small muted">${isStudent ? 'Tes camarades qui ont déjà trouvé. Chacun avance à son rythme.' : `${st.viaTotal} réussites vérifiées grâce aux lauréats cette saison.`}</p>
         </button>
+        ${!isStudent ? html`<${CoupePromos} ctx=${ctx} compact/>` : null}
         ${star && star.pts ? html`<div class="panel star">
           <p class="eyebrow"><${Icon} name="trophy" size=${14}/> Lauréat du mois</p>
           <${Person} p=${star.p} score=${scores.get(star.p.id)} onOpen=${openProfile} size=${48}/>
@@ -342,6 +397,7 @@ function MyProfile({ ctx }) {
     <header class="page-head"><div><p class="eyebrow">Visible par les membres connectés</p><h1>Mon profil</h1></div>
       ${store.mode === 'live' ? html`<button class="btn ghost" onClick=${() => store.signOut()}><${Icon} name="logout"/> Se déconnecter</button>` : null}</header>
     <${ProfileForm} ctx=${ctx} initial=${me} key=${me.id}/>
+    <${MesDonnees} ctx=${ctx}/>
   </section>`;
 }
 
@@ -352,12 +408,13 @@ function AuthScreen({ store, relang }) {
   const recovery = /type=recovery/.test(location.hash);
   const [mode, setMode] = useState(recovery ? 'nouveau' : 'connexion');
   const [email, setEmail] = useState(''); const [pw, setPw] = useState('');
+  const [ok, setOk] = useState(false); const [mails, setMails] = useState(true);
   const [msg, setMsg] = useState(null); const [busy, setBusy] = useState(false);
   const run = async fn => { setBusy(true); setMsg(null); try { await fn(); } catch (e) { setMsg({ err: true, t: e.message }); } setBusy(false); };
   const submit = e => {
     e.preventDefault();
     if (mode === 'connexion') run(() => store.signIn(email.trim(), pw));
-    else if (mode === 'inscription') run(async () => { const r = await store.signUp(email.trim(), pw); if (r.needsConfirm) setMsg({ t: 'Compte créé. Ouvre l’email de confirmation reçu, puis reviens te connecter.' }); });
+    else if (mode === 'inscription') run(async () => { const r = await store.signUp(email.trim(), pw, { consent_at: new Date().toISOString(), emails_hebdo: mails, langue: getLang() }); if (r.needsConfirm) setMsg({ t: 'Compte créé. Ouvre l’email de confirmation reçu, puis reviens te connecter.' }); });
     else if (mode === 'oubli') run(async () => { await store.resetPassword(email.trim()); setMsg({ t: 'Si un compte existe, un lien de réinitialisation vient d’être envoyé.' }); });
     else run(async () => { await store.setPassword(pw); setMsg({ t: 'Mot de passe changé.' }); });
   };
@@ -376,8 +433,10 @@ function AuthScreen({ store, relang }) {
       <h2>${{ connexion: 'Se connecter', inscription: 'Créer mon compte', oubli: 'Mot de passe oublié', nouveau: 'Nouveau mot de passe' }[mode]}</h2>
       ${mode !== 'nouveau' ? html`<${Field} label="Email"><input id="au-email" type="email" required autocomplete="email" value=${email} onInput=${e => setEmail(e.target.value)}/><//>` : null}
       ${mode !== 'oubli' ? html`<${Field} label="Mot de passe" hint=${mode === 'connexion' ? '' : '6 caractères minimum'}><input id="au-pw" type="password" required minlength="6" autocomplete=${mode === 'connexion' ? 'current-password' : 'new-password'} value=${pw} onInput=${e => setPw(e.target.value)}/><//>` : null}
+      ${mode === 'inscription' ? html`<label class="check small"><input id="au-ok" type="checkbox" required checked=${ok} onChange=${e => setOk(e.target.checked)}/> <span>J’accepte que mes données servent au réseau (<a href="#confidentialite">Confidentialité</a>)</span></label>
+        <label class="check small"><input id="au-mail" type="checkbox" checked=${mails} onChange=${e => setMails(e.target.checked)}/> Recevoir un résumé par email chaque semaine</label>` : null}
       ${msg ? html`<p class=${'auth-msg' + (msg.err ? ' err' : '')} role="alert">${msg.t}</p>` : null}
-      <button class="btn primary wide" disabled=${busy}>${busy ? '…' : { connexion: 'Se connecter', inscription: 'Créer mon compte', oubli: 'Envoyer le lien', nouveau: 'Enregistrer' }[mode]}</button>
+      <button class="btn primary wide" disabled=${busy || (mode === 'inscription' && !ok)}>${busy ? '…' : { connexion: 'Se connecter', inscription: 'Créer mon compte', oubli: 'Envoyer le lien', nouveau: 'Enregistrer' }[mode]}</button>
       <div class="auth-links">
         ${mode !== 'connexion' ? html`<button type="button" class="linkish" onClick=${() => { setMode('connexion'); setMsg(null); }}>J’ai déjà un compte</button>` : html`<button type="button" class="linkish" onClick=${() => { setMode('inscription'); setMsg(null); }}>Créer un compte</button>`}
         ${mode === 'connexion' ? html`<button type="button" class="linkish" onClick=${() => { setMode('oubli'); setMsg(null); }}>Mot de passe oublié ?</button>` : null}
@@ -389,6 +448,7 @@ function AuthScreen({ store, relang }) {
       <li><span class="sc-ico"><${Icon} name="mentor"/></span> Mentorat et entraide entre générations</li>
       <li><span class="sc-ico"><${Icon} name="chart"/></span> Suivi de chaque promo, de la 3A au premier emploi</li>
     </ul>
+    <p class="small muted center"><a href="#confidentialite">Confidentialité</a></p>
     </div>
   </div>`;
 }

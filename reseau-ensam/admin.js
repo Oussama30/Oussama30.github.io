@@ -3,6 +3,7 @@
 import { html, useState, useEffect } from './vendor/preact-htm.js';
 import { Icon, Field, Person, Num, toast } from './ui.js';
 import { NIVEAUX, niveauOf, timeAgo, mentorState } from './logic.js';
+import { DefisAdmin } from './saison.js';
 
 const ROLES = [['etudiant', 'Étudiant(e)'], ['laureat', 'Lauréat(e)']];
 
@@ -42,6 +43,8 @@ export function AdminPage(ctx) {
     <div class="kpis">${kpis.map(([l, v, sub]) => html`<div class="kpi"><span class="kpi-label">${l}</span><span class="kpi-val mono"><${Num} v=${v}/></span><span class="small muted">${sub}</span></div>`)}</div>
 
     <${AnnonceBox} ctx=${ctx}/>
+    <${DefisAdmin} ctx=${ctx}/>
+    <${ParrainsAdmin} ctx=${ctx}/>
 
     ${toVerify.length ? html`<div class="panel accent-panel"><div class="section-head"><h2 class="h-ico"><${Icon} name="shield"/> Lauréats à vérifier <span class="count">${toVerify.length}</span></h2></div>
       <p class="muted small">Vérifie que la personne est bien diplômée de l’ENSAM Meknès (promo, filière), puis valide. Le badge rassure les étudiants.</p>
@@ -73,6 +76,19 @@ export function AdminPage(ctx) {
         <button class="btn tiny ghost" onClick=${() => act(() => store.update('offers', o.id, { status: o.status === 'ouverte' ? 'fermee' : 'ouverte' }))}>${o.status === 'ouverte' ? 'Masquer' : 'Rouvrir'}</button>
         <button class="btn tiny ghost danger-t" onClick=${() => ctx.confirm('Supprimer cette offre ?', () => act(() => store.remove('offers', o.id)))}>Supprimer</button></li>`)}</ul></div>
   </section>`;
+}
+
+// Parrainage : les 3A sans parrain reçoivent un lauréat volontaire de leur filière (la base le fait aussi chaque matin)
+function ParrainsAdmin({ ctx }) {
+  const { data, store, act, saison } = ctx;
+  const sans = data.profiles.filter(p => p.role === 'etudiant' && niveauOf(p, saison) === 3 && !data.parrainages.some(x => x.filleul_id === p.id && x.saison === saison));
+  const parrains = data.profiles.filter(p => p.role === 'laureat' && p.parrain_dispo).length;
+  const n = data.parrainages.filter(x => x.saison === saison).length;
+  return html`<div class="panel">
+    <div class="section-head"><h2 class="h-ico"><${Icon} name="heart"/> Parrainage des 3A</h2>
+      <button class="btn small" disabled=${!sans.length} onClick=${() => act(async () => { const k = await store.attribuerParrains(); toast(k ? `${k} parrain${k > 1 ? 's' : ''} attribué${k > 1 ? 's' : ''}.` : 'Aucun parrain disponible dans ces filières pour l’instant.'); })}>Attribuer les parrains</button></div>
+    <p class="small muted">${n} filleul${n > 1 ? 's' : ''} cette saison · ${parrains} lauréat${parrains > 1 ? 's' : ''} volontaire${parrains > 1 ? 's' : ''} · ${sans.length} étudiant${sans.length > 1 ? 's' : ''} de 3A sans parrain. Chaque matin, la plateforme attribue aussi les parrains toute seule.</p>
+  </div>`;
 }
 
 // Annonce affichée en haut de l'accueil de tous les membres

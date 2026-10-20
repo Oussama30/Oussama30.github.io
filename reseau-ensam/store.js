@@ -1,10 +1,11 @@
 // Couche de données : même interface en mode démo (navigateur) et en mode réel (Supabase).
 import { buildSeed } from './seed.js';
-import { attestationStats } from './logic.js';
+import { attestationStats, seasonOf, niveauOf } from './logic.js';
 
-export const TABLES = ['profiles', 'offers', 'comments', 'reactions', 'applications', 'placements', 'mentorships', 'questions', 'answers', 'votes', 'shortlists', 'invitations', 'kudos', 'attestations', 'liens_rdv', 'annonces'];
+const PHASE2 = ['groupe_messages', 'groupe_membres', 'cafes', 'cafe_participants', 'startups', 'defis', 'parrainages'];
+export const TABLES = ['profiles', 'offers', 'comments', 'reactions', 'applications', 'placements', 'mentorships', 'questions', 'answers', 'votes', 'shortlists', 'invitations', 'kudos', 'attestations', 'liens_rdv', 'annonces', ...PHASE2];
 // Tables ajoutées par supabase/mise-a-jour.sql : tant que la base n'est pas à jour, elles restent vides au lieu de bloquer le site.
-const OPTIONAL = new Set(['shortlists', 'invitations', 'kudos', 'attestations', 'liens_rdv', 'annonces']);
+const OPTIONAL = new Set(['shortlists', 'invitations', 'kudos', 'attestations', 'liens_rdv', 'annonces', ...PHASE2]);
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
 // Salle de visio Jitsi : gratuite, sans compte pour l'invité, nom impossible à deviner
@@ -24,7 +25,7 @@ class Base {
 // ---------------------------------------------------------------------------
 // Démo : données d'exemple, gardées dans le navigateur du visiteur
 // ---------------------------------------------------------------------------
-const DEMO_KEY = 'ensam-demo-v7';
+const DEMO_KEY = 'ensam-demo-v8';
 class DemoStore extends Base {
   constructor() { super(); this.mode = 'demo'; }
   async init() {
@@ -50,12 +51,15 @@ class DemoStore extends Base {
     if (table === 'shortlists') { r.laureat_id = this.me?.id; if (this.data.shortlists.some(x => x.laureat_id === r.laureat_id && x.student_id === r.student_id)) return r; }
     if (table === 'kudos') { r.user_id = this.me?.id; if (this.data.kudos.some(x => x.placement_id === r.placement_id && x.user_id === r.user_id)) return r; }
     if (table === 'invitations') applyInvitationRules(this, r, null);
+    if (PHASE2.includes(table) && applyPhase2Rules(this, table, r, null) === false) return r;
     if (table === 'attestations') { if (this.me?.role !== 'laureat') throw new Error('Seul un lauréat peut obtenir une attestation.'); Object.assign(r, { laureat_id: this.me.id, stats: attestationStats(this.data, this.me.id) }); }
     if (table === 'reactions' && this.data.reactions.some(x => x.offer_id === r.offer_id && x.user_id === r.user_id && x.kind === r.kind)) return r;
     if (table === 'votes' && this.data.votes.some(x => x.answer_id === r.answer_id && x.user_id === r.user_id)) return r;
     if (table === 'placements' && this.data.placements.some(x => x.student_id === r.student_id && x.saison === r.saison && x.status !== 'refuse')) throw new Error('Une réussite est déjà enregistrée pour cet étudiant cette saison.');
     this.data[table] = [r, ...this.data[table]];
     if (table === 'profiles' && r.id === this.me?.id) this.me = r;
+    if (table === 'cafes') this.data.cafe_participants = [{ id: uuid(), cafe_id: r.id, user_id: r.organisateur_id, created_at: r.created_at }, ...this.data.cafe_participants];
+    if (table === 'profiles') demoParrains(this);
     this.persist(); this.emit();
     return r;
   }
@@ -68,13 +72,20 @@ class DemoStore extends Base {
     if (table === 'mentorships') applyMentorshipRules(this, r, old);
     if (table === 'liens_rdv') applyLienRules(this, r, old);
     if (table === 'annonces' && this.me?.role !== 'admin') throw new Error('Action non autorisée pour ton compte.');
+    if (PHASE2.includes(table)) applyPhase2Rules(this, table, r, old);
     this.data[table] = this.data[table].map(x => x.id === id ? r : x);
     if (table === 'profiles' && id === this.me?.id) this.me = r;
+    if (table === 'profiles' && r.parrain_dispo && !old.parrain_dispo) demoParrains(this);
     this.persist(); this.emit();
     return r;
   }
   async remove(table, id) {
     if (table === 'annonces' && this.me?.role !== 'admin') throw new Error('Action non autorisée pour ton compte.');
+    const row = this.byId(table, id);
+    if (PHASE2.includes(table) && row && this.me?.role !== 'admin') {
+      const own = { groupe_messages: 'author_id', groupe_membres: 'user_id', cafes: 'organisateur_id', cafe_participants: 'user_id', startups: 'fondateur_id' }[table];
+      if (!own || row[own] !== this.me?.id) throw new Error('Action non autorisée pour ton compte.');
+    }
     this.data[table] = this.data[table].filter(x => x.id !== id);
     this.persist(); this.emit();
   }
@@ -89,6 +100,12 @@ class DemoStore extends Base {
     const rows = this.data.profiles.map((p, i) => ({ id: p.id, email: demoEmail(p), created_at: p.created_at, last_sign_in_at: new Date(Date.now() - (i % 9) * 864e5 - 36e5).toISOString(), a_profil: true }));
     return [{ id: 'sans-profil', email: 'nouveau.compte@exemple.ma', created_at: new Date(Date.now() - 5 * 36e5).toISOString(), last_sign_in_at: null, a_profil: false }, ...rows];
   }
+  // Parrain d'un 3A : le lauréat volontaire de sa filière qui a le moins de filleuls (même règle que la base)
+  async monParrain() { demoParrains(this, this.me?.id); this.persist(); this.emit(); }
+  async attribuerParrains() { const n = demoParrains(this); this.persist(); this.emit(); return n; }
+  async supprimerCompte() { throw new Error('En démo, aucun compte n’est supprimé. Sur la vraie plateforme, ton compte et tes données partent tout de suite.'); }
+  async seDesabonner() { return true; }
+  async pushKey() { return null; }
   async verifyAttestation(id) {
     const a = this.byId('attestations', id); if (!a) return null;
     const p = this.byId('profiles', a.laureat_id);
@@ -199,6 +216,61 @@ function applyLienRules(store, r, old) {
   if (!/^https:\/\/\S+$/i.test(r.lien || '') || r.lien.length > 300) throw new Error('Le lien doit commencer par https://');
 }
 
+// Phase 2 : groupes, cafés, startups, défis (mêmes règles que les triggers et RLS de la base)
+function applyPhase2Rules(store, table, r, old) {
+  const me = store.me; const isAdmin = me?.role === 'admin'; const now = new Date();
+  const deny = () => { throw new Error('Action non autorisée pour ton compte.'); };
+  if (table === 'groupe_messages') { if (old) deny(); r.author_id = me.id; return; }
+  if (table === 'groupe_membres') { if (old) deny(); r.user_id = me.id; if (store.data.groupe_membres.some(g => g.groupe === r.groupe && g.user_id === me.id)) return false; return; }
+  if (table === 'defis') { if (!isAdmin) deny(); return; }
+  if (table === 'parrainages') { if (!isAdmin) deny(); return; }
+  if (table === 'startups') {
+    if (old) { if (old.fondateur_id !== me.id && !isAdmin) deny(); r.fondateur_id = old.fondateur_id; return; }
+    if (!['laureat', 'admin'].includes(me?.role)) deny();
+    r.fondateur_id = me.id;
+    if (r.site && !/^https:\/\/\S+$/i.test(r.site)) throw new Error('Le lien doit commencer par https://');
+    return;
+  }
+  if (table === 'cafes') {
+    if (!old) {
+      if (!isAdmin) r.organisateur_id = me.id;
+      if (new Date(r.date_at) < now) throw new Error('Choisis une date à venir.');
+      r.annule = false; return;
+    }
+    if (isAdmin) return;
+    if (old.organisateur_id !== me.id) deny();
+    for (const k of ['organisateur_id', 'ville', 'pays', 'created_at']) r[k] = old[k];
+    if (r.date_at !== old.date_at && new Date(r.date_at) < now) throw new Error('Choisis une date à venir.');
+    return;
+  }
+  if (table === 'cafe_participants') {
+    if (old) deny();
+    if (!isAdmin) r.user_id = me.id;
+    if (store.data.cafe_participants.some(x => x.cafe_id === r.cafe_id && x.user_id === r.user_id)) return false;
+    const c = store.byId('cafes', r.cafe_id);
+    if (!c) throw new Error('Ce café n’existe plus.');
+    if (c.organisateur_id === r.user_id) return;
+    if (c.annule) throw new Error('Ce café est annulé.');
+    if (new Date(c.date_at) < now) throw new Error('Ce café a déjà eu lieu.');
+    if (c.places && store.data.cafe_participants.filter(x => x.cafe_id === c.id).length >= c.places) throw new Error('Ce café est complet.');
+  }
+}
+
+function demoParrains(store, onlyId = null) {
+  const S = seasonOf(); let n = 0;
+  const count = id => store.data.parrainages.filter(x => x.parrain_id === id && x.saison === S).length;
+  const waiting = store.data.profiles.filter(p => p.role === 'etudiant' && niveauOf(p, S) === 3 && (!onlyId || p.id === onlyId)
+    && !store.data.parrainages.some(x => x.filleul_id === p.id && x.saison === S)).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  for (const st of waiting) {
+    const l = store.data.profiles.filter(x => x.role === 'laureat' && x.parrain_dispo && x.filiere === st.filiere && count(x.id) < 3)
+      .sort((a, b) => (b.verified ? 1 : 0) - (a.verified ? 1 : 0) || count(a.id) - count(b.id))[0];
+    if (!l) continue;
+    store.data.parrainages = [{ id: uuid(), filleul_id: st.id, parrain_id: l.id, saison: S, created_at: new Date().toISOString() }, ...store.data.parrainages];
+    n++;
+  }
+  return n;
+}
+
 // ---------------------------------------------------------------------------
 // Réel : Supabase (comptes, base partagée, temps réel)
 // ---------------------------------------------------------------------------
@@ -258,6 +330,8 @@ class SupabaseStore extends Base {
     if (error) throw new Error(frError(error));
     this.data[table] = [data, ...this.data[table].filter(x => x.id !== data.id)];
     if (table === 'profiles') this.me = this.byId('profiles', this.userId);
+    // L'organisateur d'un café y est inscrit d'office par la base
+    if (table === 'cafes') await this.loadTable('cafe_participants').catch(() => {});
     this.emit(); return data;
   }
   async update(table, id, patch) {
@@ -277,8 +351,8 @@ class SupabaseStore extends Base {
     this.data[table] = this.data[table].filter(x => x.id !== id);
     this.emit();
   }
-  async signUp(email, password) {
-    const { data, error } = await this.sb.auth.signUp({ email, password });
+  async signUp(email, password, meta = {}) {
+    const { data, error } = await this.sb.auth.signUp({ email, password, options: { data: meta } });
     if (error) throw new Error(frError(error));
     return { needsConfirm: !data.session };
   }
@@ -309,6 +383,42 @@ class SupabaseStore extends Base {
     if (error) throw new Error(frError(error));
     return data || [];
   }
+  // Phase 2
+  async monParrain() {
+    const { error } = await this.sb.rpc('mon_parrain');
+    if (!error) { await this.loadTable('parrainages'); this.emit(); }
+  }
+  async attribuerParrains() {
+    const { data, error } = await this.sb.rpc('attribuer_parrains');
+    if (error) throw new Error(frError(error));
+    await this.loadTable('parrainages'); this.emit();
+    return data || 0;
+  }
+  async supprimerCompte() {
+    const { error } = await this.sb.rpc('supprimer_mon_compte');
+    if (error) throw new Error(frError(error));
+    await this.sb.auth.signOut().catch(() => {});
+  }
+  async seDesabonner(token) {
+    const { data, error } = await this.sb.rpc('se_desabonner', { p_token: token });
+    return !error && data === true;
+  }
+  // Notifications sur le téléphone : clé publique de la fonction « notifier », abonnement, test
+  async pushKey() {
+    const { data, error } = await this.sb.functions.invoke('notifier', { body: { job: 'cle' } });
+    return error ? null : data?.publicKey || null;
+  }
+  async abonnerPush(sub) {
+    const j = sub.toJSON();
+    const { error } = await this.sb.rpc('abonner_push', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth });
+    if (error) throw new Error(frError(error));
+  }
+  async desabonnerPush(endpoint) { await this.sb.from('push_subscriptions').delete().eq('endpoint', endpoint); }
+  async testPush() {
+    const { data, error } = await this.sb.functions.invoke('notifier', { body: { job: 'test' } });
+    if (error) throw new Error('La fonction de notifications ne répond pas encore.');
+    return data?.sent || 0;
+  }
 }
 
 function frError(e) {
@@ -320,6 +430,8 @@ function frError(e) {
   if (m.includes('duplicate key') && m.includes('placements')) return 'Une réussite est déjà enregistrée pour cet étudiant cette saison.';
   if (m.includes('duplicate key') && m.includes('applications')) return 'Tu as déjà postulé à cette offre.';
   if (m.includes('duplicate key') && m.includes('invitations')) return 'Cet étudiant est déjà invité sur cette offre.';
+  if (m.includes('duplicate key') && (m.includes('cafe_participants') || m.includes('groupe_membres'))) return 'C’est déjà fait.';
+  if (m.includes('startups_site_check')) return 'Le lien doit commencer par https://';
   if (m.includes('lien_check')) return 'Le lien doit commencer par https://';
   if (m.includes('could not find the') || m.includes('does not exist')) return 'Cette fonction arrive bientôt : la base est en cours de mise à jour.';
   if (m.includes('row-level security')) return "Action non autorisée pour ton compte.";
