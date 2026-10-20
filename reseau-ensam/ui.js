@@ -1,7 +1,8 @@
 // Composants partagés de l'interface.
 import { html, useState, useEffect, useRef } from './vendor/preact-htm.js';
 import { initials, levelOf, NIVEAUX, niveauOf, seasonOf } from './logic.js';
-import { EMBLEM, sceneMarkup } from './scene.js';
+import { sceneMarkup } from './scene.js';
+import { glyph, TUILE_DEFS, TUILE } from './logo.js';
 
 export { html };
 
@@ -146,9 +147,10 @@ export function useLocal(key, init) {
   return [v, set];
 }
 
-// Logo de la plateforme : l'emblème aux couleurs de l'école (voir scene.js). « draw » le trace à l'arrivée.
+// Logo de la plateforme : la tuile bleu nuit avec la roue et la toque (voir logo.js). « draw » l'anime à l'arrivée.
+const LOGO_SVG = `${TUILE_DEFS}${TUILE}<g class="lg-glyph">${glyph()}</g>`;
 export function BrandLogo({ size = 38, draw = false }) {
-  return html`<svg class=${'brand-logo' + (draw ? ' draw' : '')} width=${size} height=${size} viewBox="0 0 64 64" aria-hidden="true" dangerouslySetInnerHTML=${{ __html: EMBLEM }}></svg>`;
+  return html`<svg class=${'brand-logo' + (draw ? ' draw' : '')} width=${size} height=${size} viewBox="0 0 512 512" aria-hidden="true" dangerouslySetInnerHTML=${{ __html: LOGO_SVG }}></svg>`;
 }
 
 // L'entrée de l'école dessinée. La porte s'ouvre une seule fois par visite ; les animations
