@@ -148,9 +148,13 @@ export function useLocal(key, init) {
 }
 
 // Logo de la plateforme : la tuile bleu nuit avec la roue et la toque (voir logo.js). « draw » l'anime à l'arrivée.
+// Chaque logo a son propre dégradé : avec un id partagé, la tuile disparaît quand le premier logo
+// de la page est caché (le menu de gauche sur téléphone).
 const LOGO_SVG = `${TUILE_DEFS}${TUILE}<g class="lg-glyph">${glyph()}</g>`;
+let logoN = 0;
 export function BrandLogo({ size = 38, draw = false }) {
-  return html`<svg class=${'brand-logo' + (draw ? ' draw' : '')} width=${size} height=${size} viewBox="0 0 512 512" aria-hidden="true" dangerouslySetInnerHTML=${{ __html: LOGO_SVG }}></svg>`;
+  const [svg] = useState(() => LOGO_SVG.replaceAll('lg-tuile', `lg-tuile-${++logoN}`));
+  return html`<svg class=${'brand-logo' + (draw ? ' draw' : '')} width=${size} height=${size} viewBox="0 0 512 512" aria-hidden="true" dangerouslySetInnerHTML=${{ __html: svg }}></svg>`;
 }
 
 // L'entrée de l'école dessinée. La porte s'ouvre une seule fois par visite ; les animations
