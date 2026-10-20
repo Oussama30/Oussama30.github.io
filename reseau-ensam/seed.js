@@ -299,5 +299,103 @@ export function buildSeed(now = new Date()) {
     for (const uid of who) if (uid !== pl.student_id) kudos.push({ id: id('k'), placement_id: pl.id, user_id: uid, created_at: pl.confirmed_at || pl.created_at });
   }
 
-  return { profiles, offers, comments, reactions, applications, placements, mentorships, questions, answers, votes, shortlists, invitations, kudos, attestations: [], liens_rdv, annonces };
+  // ---------------- Phase 2 : annuaire pro, groupes, cafés, startups, défis, parrainage ----------------
+  // Générateur à part pour ne pas changer les données ci-dessus.
+  const r3 = rng(2027); const pick3 = a => a[Math.floor(r3() * a.length)];
+  const SECT = { 'Renault Group Maroc': 'Automobile', 'Stellantis Kénitra': 'Automobile', 'Lear Corporation': 'Automobile', 'Yazaki Morocco': 'Automobile', Valeo: 'Automobile', Bosch: 'Automobile', 'OCP Group': 'Mines & chimie', 'Safran Nacelles': 'Aéronautique', 'Spirit AeroSystems': 'Aéronautique', 'Airbus Operations': 'Aéronautique', 'Siemens Gamesa': 'Énergie', ONEE: 'Énergie', 'Hydro-Québec': 'Énergie', 'Schneider Electric': 'Énergie', 'Capgemini Engineering': 'Conseil & IT', 'LafargeHolcim Maroc': 'BTP & immobilier', TGCC: 'BTP & immobilier', 'Vinci Construction': 'BTP & immobilier' };
+  for (const p of profiles) {
+    Object.assign(p, { langue: 'fr', emails_hebdo: true, consent_at: p.created_at, parrain_dispo: false });
+    if (p.role === 'laureat' && p.entreprise) p.secteur = SECT[p.entreprise] || 'Industrie';
+  }
+  youssef.parrain_dispo = true;
+  for (const x of seniors) if (x !== youssef && r3() > 0.45) x.parrain_dispo = true;
+  for (const x of jeunes) if (r3() > 0.7) x.parrain_dispo = true;
+  const lau = profiles.filter(p => p.role === 'laureat' && !p._persona);
+  const inCity = v => lau.filter(p => p.ville === v);
+
+  // Deux étudiants inscrits cette semaine (alerte talents des lauréats de Génie Mécanique)
+  for (const [promo, comp, d] of [[S + 2, ['CATIA', 'RDM', 'Usinage'], 2], [S + 1, ['Ansys', 'SolidWorks', 'Python'], 4]]) {
+    const p = mk({ full_name: name(), role: 'etudiant', filiere: 'Génie Mécanique', promo, ville: pick3(['Meknès', 'Fès', 'Tanger']), competences: comp, disponibilite: promo === S + 1 ? 'Dès février, 6 mois' : 'Juillet à septembre', cv_url: 'https://example.com/cv/nouveau-' + d + '.pdf', created_at: daysAgo(d), langue: 'fr', emails_hebdo: true, consent_at: daysAgo(d), parrain_dispo: false });
+    students.push(p);
+  }
+  // Parrains des 3A (Amine, persona 3A, reçoit le sien à sa première visite)
+  const parrainages = [];
+  for (const st of s3) {
+    const cap = x => (x === youssef ? 2 : 3);
+    const l = profiles.filter(x => x.role === 'laureat' && x.parrain_dispo && x.filiere === st.filiere && parrainages.filter(y => y.parrain_id === x.id).length < cap(x))
+      .sort((a, b) => b.verified - a.verified)[0];
+    if (l) parrainages.push({ id: id('pa'), filleul_id: st.id, parrain_id: l.id, saison: S, created_at: daysAgo(30 + Math.floor(r3() * 10)) });
+  }
+
+  // Offres entre lauréats, et une offre de Youssef sans nouvelles depuis un mois (relance douce)
+  const stell = lau.find(p => p.entreprise === 'Stellantis Kénitra') || pick3(lau);
+  const ocp = lau.find(p => p.entreprise === 'OCP Group') || pick3(lau);
+  offers.push({ id: id('o'), author_id: stell.id, audience: 'laureats', type: 'emploi', titre: 'Responsable de production (5 ans d’expérience)', entreprise: 'Stellantis Kénitra', ville: 'Kénitra', pays: 'Maroc', filieres: ['Génie Industriel', 'Génie Mécanique'], annees: [], description: 'Pilotage d’un atelier de 120 personnes, objectifs sécurité, qualité, coûts. Je recommande directement les lauréats intéressés au directeur d’usine.', contact: 'Message via la plateforme', lien: '', deadline: null, cooptation: true, remunere: true, duree: 'CDI', status: 'ouverte', created_at: daysAgo(3) });
+  offers.push({ id: id('o'), author_id: ocp.id, audience: 'laureats', type: 'emploi', titre: 'Chef de projet maintenance (3 à 8 ans)', entreprise: 'OCP Group', ville: 'Jorf Lasfar', pays: 'Maroc', filieres: ['Génie Électromécanique', 'Génie Énergétique'], annees: [], description: 'Projet de fiabilisation des unités d’acide sulfurique. Expérience en maintenance industrielle demandée.', contact: 'Message via la plateforme', lien: '', deadline: null, cooptation: true, remunere: true, duree: 'CDI', status: 'ouverte', created_at: daysAgo(8) });
+  offers.push({ id: id('o'), author_id: youssef.id, audience: 'etudiants', type: 'stage', titre: 'Stage 4A : maintenance des presses', entreprise: 'Renault Group Maroc', ville: 'Tanger', pays: 'Maroc', filieres: ['Génie Mécanique', 'Génie Électromécanique'], annees: [4], description: 'Stage de 2 mois cet été sur la maintenance préventive des presses d’emboutissage.', contact: 'Message via la plateforme', lien: '', deadline: null, cooptation: true, remunere: true, duree: '2 mois', status: 'ouverte', created_at: daysAgo(26) });
+  // Banque de sujets PFE : de vrais problèmes déposés par des lauréats qui encadrent
+  const giEnc = lau.find(p => p.filiere === 'Génie Industriel' && p !== youssef && p !== stell) || pick3(lau);
+  const sujet = (author, titre, ent, ville, fil, desc, ago) => offers.push({ id: id('o'), author_id: author.id, audience: 'etudiants', type: 'pfe', titre, entreprise: ent, ville, pays: 'Maroc', filieres: fil, annees: [5], description: desc, contact: 'Message via la plateforme', lien: '', deadline: null, cooptation: true, remunere: true, duree: '6 mois', status: 'ouverte', created_at: daysAgo(ago, 3) });
+  sujet(giEnc, 'PFE : déployer le Lean sur une ligne de câblage', 'Yazaki Morocco', 'Meknès', ['Génie Industriel'], 'Notre ligne perd 12 % de TRS sur les arrêts courts. Le sujet : cartographie VSM, chantiers SMED et 5S, suivi des gains sur 6 mois. Je t’encadre côté entreprise.', 4);
+  sujet(stell, 'PFE : réduire le temps de changement de série en ferrage', 'Stellantis Kénitra', 'Kénitra', ['Génie Industriel', 'Génie Mécanique'], 'Changement de série de 45 minutes aujourd’hui, objectif 20. Analyse SMED, standardisation et formation des équipes.', 7);
+  sujet(ocp, 'PFE : tableau de bord qualité en temps réel', 'OCP Group', 'Jorf Lasfar', ['Génie Industriel', 'Génie Informatique & IA'], 'Les données qualité sont dans trois fichiers Excel différents. Le sujet : un tableau de bord Power BI branché sur la production, avec alertes.', 11);
+  for (const o of offers) o.audience ||= 'etudiants';
+
+  // Questions routées : vers les lauréats de Renault, et vers ceux qui vivent en France
+  const qR = { id: id('q'), author_id: s4[5].id, categorie: 'Stage', titre: 'Comment se passe le recrutement des stagiaires chez Renault à Tanger ?', body: 'Entretien technique, test, ou seulement le CV ? Je prépare ma candidature pour cet été.', entreprise: 'Renault', pays: null, best_answer_id: null, created_at: daysAgo(1, 5) };
+  const qF = { id: id('q'), author_id: s5[6].id, categorie: 'Étranger & visas', titre: 'Où se loger à Toulouse pour un stage de 6 mois ?', body: 'Résidence, colocation ? Quel budget prévoir ?', entreprise: null, pays: 'France', best_answer_id: null, created_at: daysAgo(3, 2) };
+  questions.push(qR, qF);
+  const enFrance = lau.find(p => p.pays === 'France');
+  if (enFrance) answers.push({ id: id('ans'), question_id: qF.id, author_id: enFrance.id, body: 'Regarde les résidences du CROUS et les colocations près des lignes de métro. Compte 450 à 600 € par mois.', created_at: daysAgo(2, 20) });
+
+  // Groupes par filière, par ville et à l'étranger
+  const groupe_messages = []; const gm = (groupe, author, body, d, h = 10) => groupe_messages.push({ id: id('g'), groupe, author_id: author.id, body, created_at: daysAgo(d, h) });
+  const gi = lau.filter(p => p.filiere === 'Génie Industriel');
+  gm('filiere:genie industriel', gi[0] || youssef, 'Bonjour à tous ! Qui est sur une mission lean en ce moment ? Je cherche des retours sur le déploiement du TPM.', 6);
+  gm('filiere:genie industriel', salma, 'Bonjour, je prépare mon PFE en excellence opérationnelle. Si quelqu’un a un sujet en tête, je suis preneuse !', 3);
+  gm('filiere:genie industriel', gi[1] || youssef, 'Salma, envoie-moi ton CV en message, on ouvre deux sujets en supply chain en février.', 2, 4);
+  gm('filiere:genie mecanique', youssef, 'Rappel aux 3A : les candidatures pour les stages ouvriers d’été commencent maintenant. N’attendez pas avril.', 4);
+  gm('pays:france', enFrance || youssef, 'Pour ceux qui arrivent en France cette année : ouvrez un compte bancaire en ligne avant de partir, ça simplifie tout.', 9);
+  gm('pays:france', salma, 'Merci ! Et pour la CAF, il faut combien de temps ?', 8);
+  gm('pays:france', enFrance || youssef, 'Environ 6 semaines après la demande. Faites-la dès la signature du bail.', 8, 2);
+  const casa = inCity('Casablanca');
+  if (casa[0]) gm('ville:casablanca', casa[0], 'Afterwork ENSAM à Casa le mois prochain ? Je regarde un lieu à Maârif.', 5);
+  if (casa[1]) gm('ville:casablanca', casa[1], 'Partant ! Je ramène deux collègues de la promo 2018.', 5, 6);
+  gm('ville:tanger', youssef, 'Café ENSAM à Tanger bientôt, inscrivez-vous dans l’onglet Groupes.', 2);
+  const groupe_membres = [{ id: id('gmb'), groupe: 'pays:france', user_id: salma.id, created_at: daysAgo(10) }];
+
+  // Cafés ENSAM (dont un à Meknès, la ville de Salma)
+  const cafes = [], cafe_participants = [];
+  const at3 = (days, hh, mm = 0) => { const d = new Date(now); d.setDate(d.getDate() + days); d.setHours(hh, mm, 0, 0); return d.toISOString(); };
+  const cafe = (org, ville, pays, lieu, date_at, message, nb, places = null) => {
+    const c = { id: id('cf'), organisateur_id: org.id, ville, pays, lieu, date_at, message, places, annule: false, created_at: daysAgo(4) };
+    cafes.push(c);
+    const who = [org, ...lau.filter(p => p.ville === ville && p !== org), ...students.filter(p => p.ville === ville)].slice(0, nb);
+    for (const p of who) cafe_participants.push({ id: id('cp'), cafe_id: c.id, user_id: p.id, created_at: daysAgo(3) });
+    return c;
+  };
+  const mek = inCity('Meknès')[0] || youssef;
+  cafe(mek, 'Meknès', 'Maroc', 'Café de la place El Hedim', at3(3, 18, 0), 'Un café entre lauréats et étudiants, juste à côté de l’école. Venez avec vos questions sur les stages !', 6, 15);
+  if (casa[0]) cafe(casa[0], 'Casablanca', 'Maroc', 'Maârif, près du boulevard Al Massira', at3(6, 19, 0), 'Afterwork ENSAM : on se retrouve après le travail, toutes les promos sont les bienvenues.', 8, 25);
+  cafe(youssef, 'Tanger', 'Maroc', 'Café Hafa', at3(10, 18, 30), 'Premier café ENSAM à Tanger. Thé à la menthe et retours d’expérience sur l’automobile.', 5);
+  const pastCafe = { id: id('cf'), organisateur_id: (inCity('Rabat')[0] || youssef).id, ville: 'Rabat', pays: 'Maroc', lieu: 'Agdal', date_at: daysAgo(25, -9), message: '', places: null, annule: false, created_at: daysAgo(40) };
+  cafes.push(pastCafe); cafe_participants.push({ id: id('cp'), cafe_id: pastCafe.id, user_id: pastCafe.organisateur_id, created_at: daysAgo(40) });
+
+  // Startups fondées par des lauréats
+  const founders = lau.filter(p => p.promo < S - 2);
+  const startups = [
+    { nom: 'Atlas Robotics', pitch: 'Cellules robotisées clé en main pour les PME industrielles marocaines : soudage, palettisation, contrôle par vision.', secteur: 'Industrie', ville: 'Casablanca', site: 'https://atlas-robotics.example', recrute: true },
+    { nom: 'Sunwise', pitch: 'Suivi en temps réel des centrales solaires sur téléphone, alertes de panne et rapport mensuel automatique.', secteur: 'Énergie', ville: 'Marrakech', site: 'https://sunwise.example', recrute: false },
+    { nom: 'BatiScan', pitch: 'Métrés et suivi d’avancement de chantier à partir de simples photos, pour les bureaux d’études et les entreprises du BTP.', secteur: 'BTP & immobilier', ville: 'Rabat', site: 'https://batiscan.example', recrute: true },
+  ].map((x, i) => ({ id: id('st'), fondateur_id: (founders[i * 3] || youssef).id, pays: 'Maroc', created_at: daysAgo(20 + i * 15), ...x }));
+
+  // Défis de la saison (lancés par l'administration)
+  const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const defis = [
+    { id: id('df'), titre: `${MOIS[now.getMonth()]} : 10 stages trouvés pour les 4A`, mesure: 'stages', niveau: 4, cible: 10, debut: ymd(new Date(now.getFullYear(), now.getMonth(), 1)), fin: ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0)), created_at: daysAgo(15) },
+    { id: id('df'), titre: 'Cette saison : 40 mentorats terminés', mesure: 'mentorats', niveau: null, cible: 40, debut: ymd(new Date(S, 8, 1)), fin: ymd(new Date(S + 1, 5, 30)), created_at: daysAgo(40) },
+  ];
+
+  return { profiles, offers, comments, reactions, applications, placements, mentorships, questions, answers, votes, shortlists, invitations, kudos, attestations: [], liens_rdv, annonces, groupe_messages, groupe_membres, cafes, cafe_participants, startups, defis, parrainages };
 }

@@ -4,6 +4,8 @@ import { Icon, Modal, Field, Empty, Person, Bar, toast, LevelChip, CompanyLogo, 
 import { OBJECTIFS, NIVEAUX, TYPES, niveauOf, statutOf, typeForNiveau, seasonLabel, timeAgo, levelOf, BADGES, badgesOf, BAREME, computeScores, NIVEAUX_IMPACT, mentorState } from './logic.js';
 import { APP_STATUS, OfferComposer } from './offers.js';
 import { AttestationCard, ShareModal } from './growth.js';
+import { Filleuls, ParrainCard } from './saison.js';
+import { BilanCard } from './recrutement.js';
 import { SlotDate } from './mentorat.js';
 
 // Étapes vues par l'étudiant : il postule, le lauréat fait avancer, l'étudiant confirme.
@@ -38,6 +40,7 @@ export function ParcoursPage(ctx) {
     <header class="page-head"><div><p class="eyebrow">Saison ${seasonLabel(saison)} · ${NIVEAUX[n]?.label}</p><h1>Mon parcours</h1></div></header>
 
     ${pl?.status === 'en_attente' ? html`<${ConfirmRecruit} ctx=${ctx} pl=${pl} helper=${helper}/>` : null}
+    <${ParrainCard} ctx=${ctx}/>
 
     <div class=${'objective st-' + st.key}>
       <div class="objective-top">
@@ -206,6 +209,8 @@ export function EspacePage(ctx) {
     ${rdv.length ? html`<div class="panel"><div class="section-head"><h2 class="h-ico"><${Icon} name="video"/> Mes prochains rendez-vous <span class="count">${rdv.length}</span></h2><button class="btn tiny ghost" onClick=${() => ctx.go('mentorat')}>Mentorat <${Icon} name="arrow" size=${14}/></button></div>
       <ul class="slot-list">${rdv.slice(0, 3).map(m => html`<li class="slot-row" key=${m.id}><${SlotDate} iso=${m.rdv_at}/><span class="slot-main"><${Person} p=${store.byId('profiles', m.student_id)} onOpen=${openProfile} size=${30}/><span class="small" dir="auto">${m.sujet}</span></span></li>`)}</ul></div>` : null}
 
+    <${Filleuls} ctx=${ctx}/>
+
     ${recrues.length ? html`<div class="panel"><div class="section-head"><h2 class="h-ico"><${Icon} name="briefcase"/> Recrutés grâce à toi cette saison <span class="count">${recrues.length}</span></h2></div>
       <ul class="app-list flat">${recrues.slice(0, 5).map(p => html`<li class="app-row" key=${p.id}><${Person} p=${store.byId('profiles', p.student_id)} onOpen=${openProfile} size=${36}/><span class="app-txt right"><span class="muted small">${p.entreprise} · ${TYPES[p.type]?.label}</span></span>
         <button class="icon-btn small" aria-label="Partager sur LinkedIn" title="Partager sur LinkedIn" onClick=${() => setShare(p)}><${Icon} name="share" size=${16}/></button></li>`)}</ul></div>` : null}
@@ -216,13 +221,14 @@ export function EspacePage(ctx) {
       const nRec = data.placements.filter(p => p.offer_id === o.id && p.status === 'confirme').length;
       return html`<li key=${o.id}><button class="app-row clickable" onClick=${() => openOffer(o.id)}>
         <span class=${'type-ico t-' + o.type}><${Icon} name=${TYPE_ICON[o.type]} size=${18}/></span>
-        <span class="app-txt"><strong>${o.titre}</strong><span class="muted small">${o.status === 'ouverte' ? 'Ouverte' : 'Pourvue'} · ${timeAgo(o.created_at)}</span></span>
+        <span class="app-txt"><strong>${o.titre}</strong><span class="muted small">${o.status === 'ouverte' ? 'Ouverte' : o.status === 'pourvue' ? 'Pourvue' : 'Fermée'}${o.audience === 'laureats' ? ' · Entre lauréats' : ''} · ${timeAgo(o.created_at)}</span></span>
         <span class="mini-stats"><span title="Candidats"><${Icon} name="inbox" size=${15}/> ${nApps}</span><span title="Recrutés confirmés"><${Icon} name="check" size=${15}/> ${nRec}</span></span></button></li>`;
     })}</ul>` : html`<${Empty} icon="feed" title="Aucune offre publiée">Une offre partagée = 10 points, et peut-être une carrière lancée.<//>`}
 
     <div class="section-head"><h2>Badges</h2><span class="muted small">${mine.length} sur ${BADGES.length}</span></div>
     <div class="badges">${BADGES.map(b => { const has = mine.some(x => x.id === b.id); return html`<div class=${'badge' + (has ? ' has' : '')} title=${b.desc}><span class="badge-medal"><${Icon} name=${has ? 'star' : 'spark'} size=${20}/></span><strong>${b.nom}</strong><span class="small muted">${b.desc}</span></div>`; })}</div>
     <${AttestationCard} ctx=${ctx}/>
+    <${BilanCard} ctx=${ctx}/>
 
     <div class="two-col">
       <div>

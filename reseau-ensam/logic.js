@@ -304,3 +304,172 @@ export const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('fr-FR', { 
 export function daysUntil(dateStr, now = new Date()) { if (!dateStr) return null; return Math.ceil((new Date(dateStr + 'T23:59:59') - now) / 864e5); }
 export const initials = name => (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
 export const pct = x => `${Math.round(x * 100)}\u202f%`;
+
+// ---------------------------------------------------------------------------
+// Phase 2 : annuaire pro, entreprises, groupes, défis, coupe des promos, relance douce, bilans
+// ---------------------------------------------------------------------------
+export const SECTEURS = ['Automobile', 'Aéronautique', 'Énergie', 'Industrie', 'BTP & immobilier', 'Mines & chimie', 'Conseil & IT', 'Banque & finance', 'Télécoms', 'Agroalimentaire', 'Logistique', 'Enseignement & recherche', 'Fonction publique', 'Startup', 'Autre'];
+
+// Nom d'entreprise comparable (même règle que cle_entreprise dans schema.sql) : « Renault Group Maroc » -> « renault »
+const STOP_ENT = new Set(['group', 'groupe', 'maroc', 'morocco', 'sa', 'sas', 'sarl', 'ltd', 'inc', 'the', 'le', 'la', 'les', 'de', 'du', 'des', 'corporation', 'operations', 'international']);
+export function entKey(name) {
+  const k = norm(name).replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').split(' ').filter(w => w && !STOP_ENT.has(w)).join(' ');
+  return k || null;
+}
+export function sameCompany(a, b) {
+  const x = entKey(a), y = entKey(b);
+  return !!x && !!y && (x === y || x.startsWith(y + ' ') || y.startsWith(x + ' '));
+}
+
+// Groupes : « filiere:genie industriel », « ville:casablanca », « pays:france »
+export const groupKey = (kind, v) => (v && norm(v).trim() ? `${kind}:${norm(v).trim().replace(/\s+/g, ' ')}` : null);
+export function autoGroups(p) {
+  if (!p) return [];
+  return [groupKey('filiere', p.filiere), groupKey('ville', p.ville), p.pays && norm(p.pays) !== 'maroc' ? groupKey('pays', p.pays) : null].filter(Boolean);
+}
+export function myGroups(data, me) {
+  const auto = autoGroups(me);
+  const followed = data.groupe_membres.filter(g => g.user_id === me.id).map(g => g.groupe);
+  return { auto, followed: followed.filter(g => !auto.includes(g)), all: [...new Set([...auto, ...followed])] };
+}
+// Membres d'un groupe : ceux dont le profil correspond, plus ceux qui le suivent
+export function groupMembers(data, key) {
+  const followers = new Set(data.groupe_membres.filter(g => g.groupe === key).map(g => g.user_id));
+  return data.profiles.filter(p => p.role !== 'admin' && (autoGroups(p).includes(key) || followers.has(p.id)));
+}
+// Nom affiché d'un groupe : l'écriture la plus courante parmi ses membres
+export function groupLabel(data, key) {
+  const [kind, v] = key.split(':');
+  const field = { filiere: 'filiere', ville: 'ville', pays: 'pays' }[kind];
+  const counts = new Map();
+  for (const p of data.profiles) if (p[field] && groupKey(kind, p[field]) === key) counts.set(p[field].trim(), (counts.get(p[field].trim()) || 0) + 1);
+  const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  return best || v.replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Défis de saison : progression collective, calculée à partir de ce qui est déjà vérifié sur la plateforme
+export const MESURES = {
+  reussites: { label: 'Réussites', unite: 'réussites' },
+  stages: { label: 'Stages trouvés', unite: 'stages' },
+  pfe: { label: 'PFE trouvés', unite: 'PFE' },
+  etranger: { label: 'Expériences à l’étranger', unite: 'à l’étranger' },
+  emplois: { label: 'Premiers emplois', unite: 'emplois' },
+  mentorats: { label: 'Mentorats terminés', unite: 'mentorats' },
+  offres: { label: 'Offres publiées', unite: 'offres' },
+  reponses: { label: 'Réponses dans l’Entraide', unite: 'réponses' },
+};
+export function defiProgress(data, d) {
+  const a = new Date(d.debut + 'T00:00:00'), b = new Date(d.fin + 'T23:59:59');
+  const inR = iso => { if (!iso) return false; const t = new Date(iso); return t >= a && t <= b; };
+  const pl = data.placements.filter(p => FOUND.has(p.status) && inR(p.confirmed_at || p.created_at) && (!d.niveau || p.niveau === d.niveau));
+  const n = {
+    reussites: () => pl.length,
+    stages: () => pl.filter(p => p.type === 'stage' || p.type === 'etranger').length,
+    pfe: () => pl.filter(p => p.type === 'pfe').length,
+    etranger: () => pl.filter(p => p.type === 'etranger' || (p.pays && p.pays !== 'Maroc')).length,
+    emplois: () => pl.filter(p => p.type === 'emploi').length,
+    mentorats: () => data.mentorships.filter(m => m.status === 'terminee' && inR(m.rdv_at || m.created_at)).length,
+    offres: () => data.offers.filter(o => inR(o.created_at) && (!d.niveau || (o.annees || []).includes(d.niveau))).length,
+    reponses: () => data.answers.filter(x => inR(x.created_at)).length,
+  }[d.mesure]?.() || 0;
+  const now = new Date();
+  return { n, cible: d.cible, ratio: Math.min(1, n / d.cible), elapsed: Math.max(0, Math.min(1, (now - a) / (b - a))), daysLeft: Math.ceil((b - now) / 864e5), done: n >= d.cible };
+}
+export const activeDefis = (data, now = new Date()) => data.defis.filter(d => new Date(d.debut + 'T00:00:00') <= now && new Date(d.fin + 'T23:59:59') >= now);
+
+// Coupe des promos : les points d'impact de la saison, additionnés par promo de lauréats
+export function coupeDesPromos(data, saison, scores = computeScores(data, new Date(saison, 8, 1))) {
+  const m = new Map();
+  for (const p of data.profiles) {
+    if (p.role !== 'laureat') continue;
+    const pts = scores.get(p.id)?.points || 0;
+    const x = m.get(p.promo) || { promo: p.promo, pts: 0, actifs: 0, membres: 0 };
+    x.pts += pts; x.membres++; if (pts > 0) x.actifs++;
+    m.set(p.promo, x);
+  }
+  return [...m.values()].filter(x => x.pts > 0).sort((a, b) => b.pts - a.pts || b.actifs - a.actifs);
+}
+
+// Relance douce : une offre ouverte sans candidature, question ni confirmation depuis 3 semaines
+export const RELANCE_JOURS = 21;
+export function offerLastActivity(data, o) {
+  let t = Math.max(new Date(o.created_at).getTime(), o.verifiee_at ? new Date(o.verifiee_at).getTime() : 0);
+  for (const a of data.applications) if (a.offer_id === o.id) t = Math.max(t, new Date(a.created_at).getTime());
+  for (const c of data.comments) if (c.offer_id === o.id) t = Math.max(t, new Date(c.created_at).getTime());
+  return t;
+}
+export const needsRelance = (data, o, now = Date.now()) => o.status === 'ouverte' && now - offerLastActivity(data, o) > RELANCE_JOURS * 864e5;
+
+// Questions routées : celles qui visent l'entreprise ou le pays d'un lauréat
+export function routedTo(q, p) {
+  if (!p || p.role !== 'laureat' || q.author_id === p.id) return false;
+  if (q.entreprise && sameCompany(q.entreprise, p.entreprise)) return true;
+  return !!(q.pays && p.pays && norm(p.pays) !== 'maroc' && norm(q.pays) === norm(p.pays));
+}
+
+// Alerte talents : étudiants de la filière du lauréat qui cherchent encore, les nouveaux d'abord
+export function alerteTalents(data, me, saison, days = 7) {
+  const since = Date.now() - days * 864e5;
+  const list = data.profiles.filter(p => p.role === 'etudiant' && p.vitrine !== false && p.filiere === me.filiere && [3, 4, 5].includes(niveauOf(p, saison))
+    && !['trouve', 'validation'].includes(statutOf(data, p, saison).key))
+    .map(p => ({ p, nouveau: new Date(p.created_at).getTime() > since }))
+    .sort((a, b) => b.nouveau - a.nouveau || (!!b.p.cv_url - !!a.p.cv_url) || (b.p.competences?.length || 0) - (a.p.competences?.length || 0));
+  return { list, nouveaux: list.filter(x => x.nouveau).length };
+}
+
+// Bilan de cooptation pour la RH : ce que les offres d'un lauréat (ou de son entreprise) ont donné
+export function bilanCooptation(data, me, { since = null, equipe = false } = {}) {
+  const inR = iso => !since || new Date(iso) >= since;
+  const auteurs = new Set([me.id]);
+  if (equipe && me.entreprise) for (const p of data.profiles) if (p.role === 'laureat' && sameCompany(p.entreprise, me.entreprise)) auteurs.add(p.id);
+  const offres = data.offers.filter(o => auteurs.has(o.author_id) && inR(o.created_at));
+  const ids = new Set(offres.map(o => o.id));
+  const apps = data.applications.filter(a => ids.has(a.offer_id));
+  const recrues = data.placements.filter(p => p.status === 'confirme' && auteurs.has(p.laureat_id) && inR(p.confirmed_at || p.created_at));
+  const delais = recrues.map(p => { const o = data.offers.find(x => x.id === p.offer_id); return o ? (new Date(p.confirmed_at || p.created_at) - new Date(o.created_at)) / 864e5 : null; }).filter(x => x !== null && x >= 0);
+  return {
+    offres: offres.length, candidatures: apps.length, entretiens: apps.filter(a => ['entretien', 'retenu'].includes(a.status)).length,
+    recrues, delai: delais.length ? Math.round(delais.reduce((s, x) => s + x, 0) / delais.length) : null,
+    filieres: tallyOf(recrues.map(p => data.profiles.find(x => x.id === p.student_id)?.filiere)),
+    types: tallyOf(recrues.map(p => p.type)), laureats: auteurs.size,
+  };
+}
+function tallyOf(arr) { const m = new Map(); for (const x of arr) if (x) m.set(x, (m.get(x) || 0) + 1); return [...m.entries()].sort((a, b) => b[1] - a[1]); }
+
+// « Ton année dans le réseau » : le bilan personnel d'une saison
+export function tonAnnee(data, me, saison) {
+  const a = new Date(saison, 8, 1), b = new Date(saison + 1, 8, 1);
+  const inS = iso => { if (!iso) return false; const t = new Date(iso); return t >= a && t < b; };
+  if (me.role === 'etudiant') {
+    const apps = data.applications.filter(x => x.student_id === me.id && inS(x.created_at));
+    const ments = data.mentorships.filter(m => m.student_id === me.id && m.status === 'terminee' && inS(m.rdv_at || m.created_at));
+    const qs = data.questions.filter(q => q.author_id === me.id && inS(q.created_at));
+    const qIds = new Set(qs.map(q => q.id));
+    const pl = placementOf(data, me.id, saison);
+    return {
+      role: 'etudiant', candidatures: apps.length, entretiens: apps.filter(x => ['entretien', 'retenu'].includes(x.status)).length,
+      mentorats: ments.length, laureats: new Set(ments.map(m => m.mentor_id)).size, questions: qs.length,
+      reponses: data.answers.filter(x => qIds.has(x.question_id)).length,
+      cafes: data.cafe_participants.filter(c => c.user_id === me.id && inS(data.cafes.find(x => x.id === c.cafe_id)?.date_at)).length,
+      bravos: pl ? data.kudos.filter(k => k.placement_id === pl.id).length : 0,
+      reussite: pl && FOUND.has(pl.status) ? pl : null,
+    };
+  }
+  const s = computeScores(data, a).get(me.id) || { points: 0 };
+  const inSeason = (iso) => inS(iso);
+  const mercis = [
+    ...data.placements.filter(p => p.laureat_id === me.id && p.merci && inSeason(p.confirmed_at || p.created_at)).map(p => p.merci),
+    ...data.mentorships.filter(m => m.mentor_id === me.id && m.merci && inSeason(m.rdv_at || m.created_at)).map(m => m.merci),
+  ];
+  const coupe = coupeDesPromos(data, saison);
+  return {
+    role: 'laureat', points: Math.max(0, s.points - (computeScores(data, b).get(me.id)?.points || 0)),
+    mentorats: data.mentorships.filter(m => m.mentor_id === me.id && m.status === 'terminee' && inSeason(m.rdv_at || m.created_at)).length,
+    recrutes: data.placements.filter(p => p.laureat_id === me.id && p.status === 'confirme' && inSeason(p.confirmed_at || p.created_at)).length,
+    offres: data.offers.filter(o => o.author_id === me.id && inSeason(o.created_at)).length,
+    candidatures: data.applications.filter(x => inSeason(x.created_at) && data.offers.some(o => o.id === x.offer_id && o.author_id === me.id)).length,
+    reponses: data.answers.filter(x => x.author_id === me.id && inSeason(x.created_at)).length,
+    filleuls: data.parrainages.filter(x => x.parrain_id === me.id && x.saison === saison).length,
+    mercis, rangPromo: coupe.findIndex(x => x.promo === me.promo) + 1, promos: coupe.length,
+  };
+}
