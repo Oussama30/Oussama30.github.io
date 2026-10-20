@@ -1025,13 +1025,9 @@ ${s.lignes.map(l => `<p style="margin:0 0 6px;"><span style="color:#F39200;">&#8
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F1F3F6;" dir="${dir}">
 <tr><td align="center" style="padding:24px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#FFFFFF;border-radius:10px;" dir="${dir}">
-<tr><td style="background:#1F3354;padding:16px 28px;border-bottom:4px solid #F39200;border-radius:10px 10px 0 0;text-align:${debut};${police}">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" dir="${dir}"><tr>
-<td style="vertical-align:middle;padding-${ar ? 'left' : 'right'}:12px;"><img src="${esc(site)}img/logo-mail.png" width="52" height="52" alt="" style="display:block;border:0;border-radius:12px;"></td>
-<td style="vertical-align:middle;text-align:${debut};${police}">
+<tr><td style="background:#1F3354;padding:18px 28px;border-bottom:4px solid #F39200;border-radius:10px 10px 0 0;text-align:${debut};${police}">
 <div style="font-size:18px;line-height:24px;font-weight:700;color:#FFFFFF;">${esc(L.marque)}</div>
 <div style="font-size:13px;line-height:18px;color:#C8D3E3;">${esc(L.sousTitre)}</div>
-</td></tr></table>
 </td></tr>
 <tr><td style="padding:24px 28px 14px;text-align:${debut};${police}font-size:15px;line-height:22px;color:#2B2F36;">
 <p style="margin:0 0 6px;font-weight:600;">${esc(salut)}</p>
