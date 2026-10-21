@@ -1,9 +1,9 @@
 // Point d'entrée : coque de l'application, connexion, accueil, notifications.
-import { getLang, setLang } from './i18n.js';
+import { getLang, setLang, chargerAR } from './i18n.js';
 import { html, render, useState, useEffect, useMemo, useRef } from './vendor/preact-htm.js';
 import { createStore } from './store.js';
 import { Icon, Field, Empty, Person, Avatar, Bar, Toaster, toast, Confirm, LevelChip, BrandLogo, SchoolScene, Num, useLocal } from './ui.js';
-import { seasonOf, seasonLabel, niveauOf, NIVEAUX, OBJECTIFS, FOUND, statutOf, seasonStats, computeScores, starOfMonth, mentorState, requestsFor, timeAgo, pct, routedTo, needsRelance, myGroups, groupKey } from './logic.js';
+import { seasonOf, seasonLabel, niveauOf, NIVEAUX, OBJECTIFS, FOUND, statutOf, seasonStats, computeScores, starOfMonth, mentorState, requestsFor, timeAgo, pct, routedTo, needsRelance, myGroups, groupKey, enqueteDue, TYPES_EVENEMENT } from './logic.js';
 import { OffersPage, OfferCard, OfferDetail, OfferComposer, RecoOffers, matchesMe, APP_STATUS } from './offers.js';
 import { ParcoursPage, EspacePage, ConfirmRecruit, Journey, journeyStep } from './me.js';
 import { DashboardPage } from './dashboard.js';
@@ -17,9 +17,14 @@ import { NextCafe } from './groupes.js';
 import { EntrepriseModal } from './pro.js';
 import { DefisPanel, CoupePromos, ParrainCard, DevenirParrain, TonAnnee, TonAnneeStrip } from './saison.js';
 import { AlerteTalents } from './recrutement.js';
+import { CvCard, RelecturesHome } from './cv.js';
+import { NudgeAvis } from './entreprises.js';
+import { ConfianceHome } from './confiance.js';
+import { EnquetePage, EnqueteCard } from './enquete.js';
+import { NextEvent } from './agenda.js';
 
-const ROUTES = ['accueil', 'offres', 'mentorat', 'parcours', 'espace', 'reseau', 'suivi', 'profil', 'admin', 'verifier', 'confidentialite', 'desabo'];
-const ALIASES = { impact: 'espace', tableau: 'suivi', communaute: 'reseau', entraide: 'reseau/entraide', groupes: 'reseau/groupes', sujets: 'offres/sujets', 'reseau/mentorat': 'mentorat', 'reseau/mentorat/rdv': 'mentorat' };
+const ROUTES = ['accueil', 'offres', 'mentorat', 'parcours', 'espace', 'reseau', 'suivi', 'profil', 'admin', 'verifier', 'confidentialite', 'desabo', 'enquete', 'offre'];
+const ALIASES = { impact: 'espace', tableau: 'suivi', communaute: 'reseau', entraide: 'reseau/entraide', groupes: 'reseau/groupes', sujets: 'offres/sujets', 'reseau/mentorat': 'mentorat', 'reseau/mentorat/rdv': 'mentorat', agenda: 'reseau/agenda', entreprises: 'reseau/entreprises', etranger: 'reseau/etranger', relecture: 'mentorat/cv', cv: 'mentorat/cv', moderation: 'admin/moderation' };
 
 function navFor(me) {
   const items = [['accueil', 'Accueil', 'home'], ['offres', 'Offres', 'feed'], ['mentorat', 'Mentorat', 'mentor']];
@@ -56,6 +61,8 @@ function App({ store }) {
   const [annee, setAnnee] = useState(null);
   const [iosHelp, setIosHelp] = useState(false);
   const install = useInstall();
+  // Lien direct vers une offre (alertes par email et notifications) : #offre/<id>
+  useEffect(() => { if (route.base === 'offre' && route.sub) { setOfferId(route.sub); setApplyNow(false); go('offres'); } }, [route.base, route.sub]);
 
   const data = store.data;
   const me = store.me;
@@ -83,7 +90,7 @@ function App({ store }) {
   const relang = () => setTick(t => t + 1);
   // Pages publiques, sans compte : vérification d'une attestation, désabonnement des emails, confidentialité
   if (route.base === 'verifier') return html`<div class="auth verify-wrap"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><${VerifyPage} store=${store} id=${route.sub}/></div>`;
-  if (route.base === 'desabo') return html`<div class="auth verify-wrap"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><${DesaboPage} store=${store} token=${route.sub}/></div>`;
+  if (route.base === 'desabo') return html`<div class="auth verify-wrap"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><${DesaboPage} store=${store} token=${route.sub} quoi=${route.sub2}/></div>`;
   if (route.base === 'confidentialite' && (store.mode !== 'live' || !store.session || !me)) return html`<div class="auth verify-wrap privacy-wrap"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><${PrivacyPage} onBack=${() => { history.back(); setTimeout(() => setRoute(readRoute()), 50); }}/></div>`;
   if (store.mode === 'live' && !store.session) return html`<${AuthScreen} store=${store} relang=${relang}/>`;
   if (store.mode === 'live' && !me) return html`<${Onboarding} store=${store} relang=${relang}/>`;
@@ -103,12 +110,12 @@ function App({ store }) {
   const todo = notifs.filter(n => n.action).length;
   latest.current = { notifs, todo, me };
   const nav = navFor(me);
-  let page = route.base;
+  let page = route.base === 'offre' ? 'offres' : route.base;
   if (page === 'parcours' && me.role !== 'etudiant') page = me.role === 'laureat' ? 'espace' : 'accueil';
   if (page === 'espace' && me.role !== 'laureat') page = me.role === 'etudiant' ? 'parcours' : 'accueil';
   if (page === 'admin' && me.role !== 'admin') page = 'accueil';
   const needConsent = store.mode === 'live' && !me.consent_at && !['confidentialite', 'profil'].includes(page);
-  const openNotif = n => { setPop(null); if (n.offer) ctx.openOffer(n.offer); else go(n.to); };
+  const openNotif = n => { setPop(null); if (n.offer) ctx.openOffer(n.offer); else if (n.profile) { const p = store.byId('profiles', n.profile); if (p) setProfile(p); else go(n.to || 'accueil'); } else go(n.to); };
   const dotFor = k => ((k === 'parcours' || k === 'espace') && notifs.some(n => n.action && n.mine)) || (k === 'mentorat' && notifs.some(n => n.action && n.to === 'mentorat'));
 
   return html`<div class="shell">
@@ -122,6 +129,7 @@ function App({ store }) {
         <a class="brand mobile-only" href="#accueil" onClick=${e => { e.preventDefault(); go('accueil'); }}><${BrandLogo} size=${34}/><strong>Réseau ENSAM</strong></a>
         <span class="spacer"></span>
         ${store.mode === 'demo' ? html`<${PersonaSwitch} store=${store} go=${go}/>` : null}
+        <${ThemeToggle} onChange=${relang}/>
         <${LangToggle} onChange=${relang} store=${store} me=${me}/>
         <div class="pop-wrap"><button class="icon-btn" aria-label=${`Notifications (${todo} à traiter)`} aria-expanded=${pop === 'bell'} onClick=${() => setPop(pop === 'bell' ? null : 'bell')}><${Icon} name="bell"/>${todo ? html`<span class="badge-n">${todo}</span>` : null}</button>
           ${pop === 'bell' ? html`<div class="bell-pop" role="menu"><h3>Notifications</h3>${notifs.length ? notifs.slice(0, 14).map(n => html`<button class=${'notif' + (n.action ? ' act' : '')} onClick=${() => openNotif(n)}><span class=${'n-ico ' + (n.tone || '')}><${Icon} name=${n.icon} size=${16}/></span><span>${n.text}<span class="muted small">${timeAgo(n.at)}</span></span></button>`) : html`<p class="muted small">Rien de nouveau.</p>`}</div>` : null}
@@ -134,8 +142,10 @@ function App({ store }) {
             ${me.role !== 'admin' ? html`<button onClick=${() => { setPop(null); ctx.openAnnee(); }}><${Icon} name="award" size=${16}/> Ton année dans le réseau</button>` : null}
             ${install ? html`<button onClick=${() => { setPop(null); install.ios ? setIosHelp(true) : install.prompt(); }}><${Icon} name="download" size=${16}/> Installer l’application</button>` : null}
             <button onClick=${() => go('confidentialite')}><${Icon} name="shield" size=${16}/> Confidentialité</button>
+            <button class="menu-theme" onClick=${() => { setTheme(themeActuel() === 'dark' ? 'light' : 'dark'); setPop(null); relang(); }}><${Icon} name=${themeActuel() === 'dark' ? 'sun' : 'moon'} size=${16}/> ${themeActuel() === 'dark' ? 'Mode clair' : 'Mode sombre'}</button>
+            ${themeChoisi() ? html`<button onClick=${() => { setTheme(null); setPop(null); relang(); }}><${Icon} name="sun" size=${16}/> Thème automatique (comme l’appareil)</button>` : null}
             ${me.role === 'admin' ? html`<button onClick=${() => go('admin')}><${Icon} name="shield" size=${16}/> Administration</button>` : null}
-            ${store.mode === 'live' ? html`<button onClick=${() => store.signOut()}><${Icon} name="logout" size=${16}/> Se déconnecter</button>` : html`<button onClick=${() => { store.reset(); setPop(null); toast('Démo réinitialisée.'); }}><${Icon} name="spark" size=${16}/> Réinitialiser la démo</button>`}
+            ${store.mode === 'live' ? html`<button onClick=${() => store.signOut()}><${Icon} name="logout" size=${16}/> Se déconnecter</button>` : html`<button onClick=${async () => { setPop(null); await store.reset(); toast('Démo réinitialisée.'); }}><${Icon} name="spark" size=${16}/> Réinitialiser la démo</button>`}
           </div>` : null}
         </div>
       </header>
@@ -151,6 +161,7 @@ function App({ store }) {
         ${page === 'admin' ? html`<${AdminPage} ...${ctx}/>` : null}
         ${page === 'profil' ? html`<${MyProfile} ctx=${ctx}/>` : null}
         ${page === 'confidentialite' ? html`<${PrivacyPage}/>` : null}
+        ${page === 'enquete' ? html`<${EnquetePage} ...${ctx}/>` : null}
       </main>
     </div>
     <nav class="bottom-nav">${nav.map(([k, l, i]) => html`<a href=${'#' + k} class=${page === k ? 'on' : ''} onClick=${e => { e.preventDefault(); go(k); }}><span class="bn-ico"><${Icon} name=${i}/>${dotFor(k) ? html`<span class="dotn"></span>` : null}</span><span>${{ 'Mon parcours': 'Parcours', 'Mon espace': 'Espace', 'Ma promo': 'Promo' }[l] || l}</span></a>`)}</nav>
@@ -167,11 +178,27 @@ function App({ store }) {
   </div>`;
 }
 
+// Thème clair ou sombre : suit l'appareil, sauf si le membre a choisi (gardé dans ce navigateur)
+const THEME_KEY = 'ensam-theme';
+const themeChoisi = () => { try { const t = localStorage.getItem(THEME_KEY); return t === 'light' || t === 'dark' ? t : null; } catch { return null; } };
+const themeActuel = () => themeChoisi() || (matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+function setTheme(t) {
+  try { if (t) localStorage.setItem(THEME_KEY, t); else localStorage.removeItem(THEME_KEY); } catch { /* stockage indisponible */ }
+  const root = document.documentElement;
+  if (t) root.dataset.theme = t; else delete root.dataset.theme;
+  const sombre = themeActuel() === 'dark';
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => { m.content = t ? (sombre ? '#0B1320' : '#1670A8') : (m.media.includes('dark') ? '#0B1320' : '#1670A8'); });
+}
+function ThemeToggle({ onChange }) {
+  const sombre = themeActuel() === 'dark';
+  return html`<button class="icon-btn theme-btn" onClick=${() => { setTheme(sombre ? 'light' : 'dark'); onChange?.(); }} aria-label=${sombre ? 'Passer en mode clair' : 'Passer en mode sombre'} title=${sombre ? 'Mode clair' : 'Mode sombre'}><${Icon} name=${sombre ? 'sun' : 'moon'}/></button>`;
+}
+
 // Bouton français / arabe, en haut à côté des notifications
 export function LangToggle({ onChange, store, me }) {
   const ar = getLang() === 'ar';
   const save = l => { if (store?.mode === 'live' && me && me.langue !== l && 'langue' in me) store.update('profiles', me.id, { langue: l }).catch(() => {}); };
-  return html`<button class="lang-btn" onClick=${() => { setLang(ar ? 'fr' : 'ar'); save(ar ? 'fr' : 'ar'); onChange?.(); }} aria-label=${ar ? 'Passer en français' : 'التبديل إلى العربية'} lang=${ar ? 'fr' : 'ar'}>
+  return html`<button class="lang-btn" onClick=${async () => { try { await setLang(ar ? 'fr' : 'ar'); } catch { toast('Connexion trop lente : réessaie dans un instant.', 'err'); return; } save(ar ? 'fr' : 'ar'); onChange?.(); }} aria-label=${ar ? 'Passer en français' : 'التبديل إلى العربية'} lang=${ar ? 'fr' : 'ar'}>
     <${Icon} name="globe" size=${16}/><span>${ar ? 'FR' : 'ع'}</span><span class="lang-long">${ar ? 'Français' : 'العربية'}</span></button>`;
 }
 
@@ -264,6 +291,48 @@ function buildNotifs({ data, me, store, saison }) {
     const w = new Date(c.date_at);
     out.push({ key: 'cf' + c.id, icon: 'clap', tone: 'good', to: 'reseau/groupes/' + encodeURIComponent(g), at: c.created_at, text: `Café ENSAM à ${c.ville} le ${w.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })} : inscris-toi en un clic.` });
   }
+  // Coordonnées : demandes reçues, puis réponse à mes demandes
+  for (const d of data.demandes_contact || []) {
+    if (d.cible_id === me.id && d.status === 'envoyee') out.push({ key: 'dc' + d.id, action: true, mine: true, tone: 'accent', icon: 'phone', profile: d.demandeur_id, to: 'accueil', at: d.created_at, text: `${name(d.demandeur_id)} aimerait avoir tes coordonnées.` });
+    if (d.demandeur_id === me.id && d.status === 'acceptee' && recent(d.repondu_at || d.created_at, 14)) out.push({ key: 'da' + d.id, tone: 'good', icon: 'phone', profile: d.cible_id, at: d.repondu_at || d.created_at, text: `${name(d.cible_id)} a accepté : ses coordonnées sont sur son profil.` });
+  }
+  // Relecture de CV
+  for (const r of data.relectures_cv || []) {
+    if (r.student_id === me.id && r.status === 'rendue' && !r.merci) out.push({ key: 'rr' + r.id, action: true, mine: true, tone: 'brass', icon: 'check', to: 'mentorat/cv', at: r.rendue_at || r.created_at, text: `${r.reviewer_id ? first(r.reviewer_id) : 'Un lauréat'} a relu ton CV. Lis ses conseils et dis merci.` });
+    if (r.student_id === me.id && r.status === 'en_cours' && recent(r.pris_at || r.created_at, 7)) out.push({ key: 'rp' + r.id, tone: 'good', icon: 'eye', to: 'mentorat/cv', at: r.pris_at || r.created_at, text: `${r.reviewer_id ? name(r.reviewer_id) : 'Un lauréat'} relit ton CV.` });
+    if (r.reviewer_id === me.id && r.status === 'demandee') out.push({ key: 'rd' + r.id, action: true, tone: 'accent', icon: 'eye', to: 'mentorat/cv', at: r.created_at, text: `${name(r.student_id)} te demande de relire son CV.` });
+    if (r.reviewer_id === me.id && r.status === 'rendue' && r.merci && recent(r.rendue_at || r.created_at, 14)) out.push({ key: 'rm' + r.id, tone: 'brass', icon: 'heart', to: 'mentorat/cv', at: r.rendue_at || r.created_at, text: `${first(r.student_id)} te remercie pour la relecture de son CV.` });
+  }
+  if (me.role === 'laureat') {
+    const ouvertes = (data.relectures_cv || []).filter(r => r.status === 'demandee' && !r.reviewer_id && r.student_id !== me.id);
+    if (ouvertes.length) out.push({ key: 'rq' + ouvertes.length, tone: 'accent', icon: 'eye', to: 'mentorat/cv', at: ouvertes.reduce((m, r) => (r.created_at > m ? r.created_at : m), ''), text: `${ouvertes.length} CV attend${ouvertes.length > 1 ? 'ent' : ''} une relecture.` });
+  }
+  // Vérification par deux lauréats de la même promo
+  const pairs = data.verifications_pairs || [];
+  if (me.role === 'laureat' && me.verified) {
+    const attente = data.profiles.filter(p => p.role === 'laureat' && !p.verified && p.promo === me.promo && p.id !== me.id && !pairs.some(v => v.laureat_id === p.id && v.verificateur_id === me.id));
+    if (attente.length) out.push({ key: 'vp' + attente.map(p => p.id).join(''), tone: 'accent', icon: 'shield', to: 'accueil', at: attente.reduce((m, p) => (p.created_at > m ? p.created_at : m), ''), text: attente.length > 1 ? `${attente.length} lauréats de ta promo attendent ta vérification.` : `${attente[0].full_name} (promo ${me.promo}) attend ta vérification.` });
+  }
+  if (me.role === 'laureat') for (const v of pairs) if (v.laureat_id === me.id && recent(v.created_at, 14)) out.push({ key: 'vv' + v.id, tone: 'good', icon: 'shield', profile: v.verificateur_id, at: v.created_at, text: me.verified ? `${name(v.verificateur_id)} a confirmé que tu es de la promo ${me.promo}.` : `${name(v.verificateur_id)} a confirmé que tu es de la promo ${me.promo}. Encore un lauréat et ton badge arrive.` });
+  // Agenda de l'école : nouvel événement, puis rappel la veille et le jour même
+  for (const e of data.evenements || []) {
+    if (e.annule || new Date(e.fin || e.debut) < Date.now()) continue;
+    if (e.public === 'etudiants' && me.role === 'laureat') continue;
+    if (e.public === 'laureats' && me.role === 'etudiant') continue;
+    const inscrit = (data.evenement_participants || []).some(x => x.evenement_id === e.id && x.user_id === me.id);
+    const jours = Math.floor((new Date(e.debut).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 864e5);
+    const quand = new Date(e.debut).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    if (inscrit && jours >= 0 && jours <= 1) out.push({ key: 'ev' + e.id + jours, action: true, tone: 'accent', icon: 'calendar', to: 'reseau/agenda/' + e.id, at: e.created_at, text: `${e.titre} : ${jours === 0 ? 'c’est aujourd’hui' : 'c’est demain'}.` });
+    else if (!inscrit && recent(e.created_at, 10) && e.author_id !== me.id) out.push({ key: 'en' + e.id, tone: 'good', icon: TYPES_EVENEMENT[e.type]?.[1] || 'calendar', to: 'reseau/agenda/' + e.id, at: e.created_at, text: `${TYPES_EVENEMENT[e.type]?.[0] || 'Événement'} à l’agenda de l’école : ${e.titre}, ${quand}.` });
+  }
+  // Enquête d'insertion (6 et 12 mois après le diplôme)
+  const due = enqueteDue(me, data.enquetes_insertion);
+  if (due) out.push({ key: 'eq' + due.vague, action: true, mine: true, tone: 'brass', icon: 'chart', to: 'enquete', at: new Date().toISOString(), text: `Enquête ${due.vague} mois après le diplôme : 2 minutes pour aider l’école et les promos suivantes.` });
+  // Administration : signalements à traiter
+  if (me.role === 'admin') {
+    const sig = (data.signalements || []).filter(x => x.status === 'ouvert');
+    if (sig.length) out.push({ key: 'sg' + sig.length, action: true, tone: 'accent', icon: 'shield', to: 'admin/moderation', at: sig.reduce((m, x) => (x.created_at > m ? x.created_at : m), ''), text: `${sig.length} signalement${sig.length > 1 ? 's' : ''} à traiter.` });
+  }
   return out.sort((a, b) => (b.action ? 1 : 0) - (a.action ? 1 : 0) || new Date(b.at) - new Date(a.at));
 }
 
@@ -277,9 +346,8 @@ function Home(ctx) {
   const first = me.full_name.split(' ')[0];
   const [compose, setCompose] = useState(false);
   const isStudent = me.role === 'etudiant';
-  // Le prochain rendez-vous a sa propre carte ; la confirmation de recrutement aussi
-  // Les demandes d'aide et le prochain rendez-vous ont leur propre bloc juste en dessous
-  const actions = notifs.filter(x => x.action && !x.rdv && !x.key?.startsWith('md') && !(isStudent && x.icon === 'briefcase'));
+  // Les demandes d'aide, le prochain rendez-vous, l'enquête et les demandes de contact ont leur propre carte
+  const actions = notifs.filter(x => x.action && !x.rdv && !/^(md|eq|dc)/.test(x.key || '') && !(isStudent && x.icon === 'briefcase'));
   const latest = data.offers.filter(o => o.status === 'ouverte').sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 4);
   const star = ctx.star;
   const starHelped = star ? data.placements.filter(p => p.laureat_id === star.p.id && p.status === 'confirme').length : 0;
@@ -309,10 +377,13 @@ function Home(ctx) {
     <${Guide} ctx=${ctx} setCompose=${setCompose}/>
 
     ${isStudent && stu.pl?.status === 'en_attente' ? html`<${ConfirmRecruit} ctx=${ctx} pl=${stu.pl} helper=${helper}/>` : null}
+    <${EnqueteCard} ctx=${ctx}/>
 
     ${actions.length ? html`<div class="callout today"><h2 class="h-ico"><${Icon} name="bell"/> À faire aujourd’hui</h2><ul class="todo">${actions.slice(0, 4).map(a => html`<li><button class="notif act" onClick=${() => openNotif(a)}><span class=${'n-ico ' + (a.tone || '')}><${Icon} name=${a.icon} size=${16}/></span><span>${a.text}</span><${Icon} name="arrow" size=${16}/></button></li>`)}</ul></div>` : null}
 
     <${NextRdv} ctx=${ctx}/>
+    <${ConfianceHome} ctx=${ctx}/>
+    <${RelecturesHome} ctx=${ctx}/>
     <${ParrainCard} ctx=${ctx}/>
     <${HelpNeeded} ctx=${ctx}/>
     <${AlerteTalents} ctx=${ctx}/>
@@ -328,6 +399,7 @@ function Home(ctx) {
       <div class="grow"><strong>Besoin d’un conseil ?</strong><span class="small muted">CV, stage, entretien, étranger : un lauréat te parle 20 minutes en visio.</span></div>
       <button class="btn primary small" onClick=${() => go('mentorat')}>Demander de l’aide</button></div>` : null}
 
+    <${NudgeAvis} ctx=${ctx}/>
     <${DevenirParrain} ctx=${ctx}/>
     ${me.role === 'laureat' && s ? html`<button class="impact-strip clickable" onClick=${() => go('espace')}><span class="obj-ico brass"><${Icon} name="star" size=${20}/></span><span><b class="mono"><${Num} v=${s.points}/></b> points d’impact</span><${LevelChip} points=${s.points}/><span class="muted small">${s.recrutes} recruté${s.recrutes > 1 ? 's' : ''} grâce à toi</span><span class="spacer"></span><${Icon} name="arrow" size=${18}/></button>` : null}
 
@@ -338,6 +410,7 @@ function Home(ctx) {
         <${SuccessFeed} ctx=${ctx}/>
       </div>
       <aside class="home-side">
+        <${NextEvent} ctx=${ctx}/>
         <${DefisPanel} ctx=${ctx}/>
         <${NextCafe} ctx=${ctx}/>
         <button class="panel pulse clickable" onClick=${() => go('suivi')}>
@@ -369,7 +442,7 @@ function Guide({ ctx, setCompose }) {
   const myApps = data.applications.filter(a => a.student_id === me.id);
   const myOffers = data.offers.filter(o => o.author_id === me.id);
   const steps = me.role === 'etudiant' ? [
-    ['user', 'Complète ton profil', 'Ajoute le lien de ton CV : il sera joint à chaque candidature.', !!me.cv_url, () => go('profil'), 'Mon profil'],
+    ['user', 'Dépose ton CV en PDF', 'Il sera joint à chaque candidature, et un lauréat peut le relire pour toi.', !!(me.cv_path || me.cv_url), () => go('profil'), 'Mon profil'],
     ['feed', 'Postule à une offre', `Tu ne vois que les offres de ${NIVEAUX[n]?.short || 'ton année'}. Un message de deux phrases suffit.`, myApps.some(a => a.offer_id), () => go('offres'), 'Voir les offres'],
     ['mentor', 'Demande un conseil', 'Un lauréat choisit un de tes horaires et t’appelle 20 minutes en visio.', data.mentorships.some(m => m.student_id === me.id), () => go('mentorat'), 'Mentorat'],
     ['heart', 'Confirme et dis merci', 'Quand il te marque recruté(e), tu confirmes en un clic et tu lui laisses un mot.', data.placements.some(p => p.student_id === me.id && p.status === 'confirme' && p.merci), null, ''],
@@ -396,6 +469,7 @@ function MyProfile({ ctx }) {
   return html`<section class="page narrow">
     <header class="page-head"><div><p class="eyebrow">Visible par les membres connectés</p><h1>Mon profil</h1></div>
       ${store.mode === 'live' ? html`<button class="btn ghost" onClick=${() => store.signOut()}><${Icon} name="logout"/> Se déconnecter</button>` : null}</header>
+    <${CvCard} ctx=${ctx}/>
     <${ProfileForm} ctx=${ctx} initial=${me} key=${me.id}/>
     <${MesDonnees} ctx=${ctx}/>
   </section>`;
@@ -411,6 +485,7 @@ function AuthScreen({ store, relang }) {
   const [ok, setOk] = useState(false); const [mails, setMails] = useState(true);
   const [msg, setMsg] = useState(null); const [busy, setBusy] = useState(false);
   const run = async fn => { setBusy(true); setMsg(null); try { await fn(); } catch (e) { setMsg({ err: true, t: e.message }); } setBusy(false); };
+  const ecole = store.domainesEcole?.() || [];
   const submit = e => {
     e.preventDefault();
     if (mode === 'connexion') run(() => store.signIn(email.trim(), pw));
@@ -431,7 +506,7 @@ function AuthScreen({ store, relang }) {
     <div class="auth-right">
     <form class="auth-card form" onSubmit=${submit}>
       <h2>${{ connexion: 'Se connecter', inscription: 'Créer mon compte', oubli: 'Mot de passe oublié', nouveau: 'Nouveau mot de passe' }[mode]}</h2>
-      ${mode !== 'nouveau' ? html`<${Field} label="Email"><input id="au-email" type="email" required autocomplete="email" value=${email} onInput=${e => setEmail(e.target.value)}/><//>` : null}
+      ${mode !== 'nouveau' ? html`<${Field} label="Email" hint=${mode === 'inscription' && ecole.length ? `Étudiant(e) : ${store.reglages?.email_ecole_obligatoire ? 'inscris-toi' : 'de préférence'} avec ton email de l’école (${ecole.map(d => '@' + d).join(', ')}). Ton compte est alors vérifié tout de suite.` : ''}><input id="au-email" type="email" required autocomplete="email" value=${email} onInput=${e => setEmail(e.target.value)}/><//>` : null}
       ${mode !== 'oubli' ? html`<${Field} label="Mot de passe" hint=${mode === 'connexion' ? '' : '6 caractères minimum'}><input id="au-pw" type="password" required minlength="6" autocomplete=${mode === 'connexion' ? 'current-password' : 'new-password'} value=${pw} onInput=${e => setPw(e.target.value)}/><//>` : null}
       ${mode === 'inscription' ? html`<label class="check small"><input id="au-ok" type="checkbox" required checked=${ok} onChange=${e => setOk(e.target.checked)}/> <span>J’accepte que mes données servent au réseau (<a href="#confidentialite">Confidentialité</a>)</span></label>
         <label class="check small"><input id="au-mail" type="checkbox" checked=${mails} onChange=${e => setMails(e.target.checked)}/> Recevoir un résumé par email chaque semaine</label>` : null}
@@ -468,10 +543,20 @@ function Onboarding({ store, relang }) {
 (async () => {
   const root = document.getElementById('app');
   try {
-    const store = await createStore();
+    // L'arabe se charge en même temps que les données, seulement si c'est la langue choisie
+    const [store] = await Promise.all([createStore(), getLang() === 'ar' ? chargerAR().catch(() => setLang('fr')) : null]);
     root.innerHTML = '';
     render(html`<${App} store=${store}/>`, root);
   } catch (e) {
+    // Fichiers gardés sur le téléphone abîmés ou d'une ancienne version : on les oublie et on recharge, une seule fois
+    try {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller && !sessionStorage.getItem('ensam-reprise')) {
+        sessionStorage.setItem('ensam-reprise', '1');
+        for (const k of await caches.keys()) await caches.delete(k);
+        for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+        return location.reload();
+      }
+    } catch { /* on affiche l'erreur */ }
     root.innerHTML = '';
     render(html`<div class="fatal"><h1>Impossible de charger la plateforme</h1><p>${e.message}</p><p class="muted">Vérifie ta connexion internet puis recharge la page.</p></div>`, root);
   }

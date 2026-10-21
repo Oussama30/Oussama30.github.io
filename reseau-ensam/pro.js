@@ -5,17 +5,21 @@ import { getLang } from './i18n.js';
 import { FILIERES, SECTEURS, TYPES, niveauOf, entKey, sameCompany, seasonLabel } from './logic.js';
 import { coordsOf, canonPays, countryCentroid, PAYS_AR } from './geo.js';
 import { OfferCard, matchesMe } from './offers.js';
+import { EntrepriseResume, QuestionsRecentes } from './entreprises.js';
+import { SignalerBtn } from './confiance.js';
 
-const VUES = [['personnes', 'Personnes', 'people'], ['carte', 'Carte', 'pin'], ['entreprises', 'Entreprises', 'briefcase'], ['startups', 'Startups', 'spark']];
+// Les entreprises ont leur propre onglet (Réseau > Entreprises), avec les avis et les entretiens
+const VUES = [['personnes', 'Personnes', 'people'], ['carte', 'Carte', 'pin'], ['startups', 'Startups', 'spark']];
 const paysLabel = p => (getLang() === 'ar' && PAYS_AR[canonPays(p)]) || canonPays(p);
 
 export function AnnuairePro({ ctx }) {
+  // Ancien lien « Annuaire > Entreprises »
+  useEffect(() => { if (ctx.sub2 === 'entreprises') ctx.go('reseau/entreprises'); }, [ctx.sub2]);
   const vue = VUES.some(([k]) => k === ctx.sub2) ? ctx.sub2 : 'personnes';
   return html`<div class="sub-page">
     <div class="seg" role="tablist" aria-label="Annuaire">${VUES.map(([k, l, i]) => html`<button role="tab" aria-selected=${vue === k} class=${vue === k ? 'on' : ''} onClick=${() => ctx.go('reseau/annuaire' + (k === 'personnes' ? '' : '/' + k))}><${Icon} name=${i} size=${15}/> ${l}</button>`)}</div>
     ${vue === 'personnes' ? html`<${Personnes} ctx=${ctx}/>` : null}
     ${vue === 'carte' ? html`<${Carte} ctx=${ctx}/>` : null}
-    ${vue === 'entreprises' ? html`<${Entreprises} ctx=${ctx}/>` : null}
     ${vue === 'startups' ? html`<${Startups} ctx=${ctx}/>` : null}
   </div>`;
 }
@@ -136,31 +140,12 @@ export function companiesOf(data) {
   return [...m.values()].map(x => ({ ...x, nom: [...x.names.entries()].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)[0][0] }));
 }
 
-function Entreprises({ ctx }) {
-  const { data, me, saison } = ctx;
-  const [q, setQ] = useState('');
-  const all = useMemo(() => companiesOf(data), [data.profiles, data.offers, data.placements]);
-  const open = o => o.status === 'ouverte' && (me.role !== 'etudiant' || matchesMe(o, me, saison));
-  const qq = q.trim().toLowerCase();
-  const list = all.filter(c => !qq || [...c.names.keys()].join(' ').toLowerCase().includes(qq) || c.laureats.some(p => (p.secteur || '').toLowerCase().includes(qq)))
-    .map(c => ({ ...c, ouvertes: c.offres.filter(open).length }))
-    .filter(c => c.laureats.length || c.ouvertes || c.recrues.length)
-    .sort((a, b) => b.laureats.length * 2 + b.ouvertes * 3 + b.recrues.length - (a.laureats.length * 2 + a.ouvertes * 3 + a.recrues.length) || a.nom.localeCompare(b.nom));
-  return html`<div class="sub-page">
-    <label class="search"><${Icon} name="search" size=${16}/><input id="e-q" placeholder="Entreprise ou secteur…" value=${q} onInput=${e => setQ(e.target.value)}/></label>
-    <ul class="ent-list">${list.slice(0, 80).map(c => html`<li key=${c.k}><button class="ent-row clickable" onClick=${() => ctx.openEntreprise(c.nom)}>
-      <${CompanyLogo} name=${c.nom} size=${40}/>
-      <span class="grow"><strong translate="no">${c.nom}</strong><span class="muted small">${[...new Set(c.laureats.map(p => p.secteur).filter(Boolean))].slice(0, 2).join(' · ')}</span></span>
-      <span class="mini-stats"><span title="Lauréats"><${Icon} name="people" size=${15}/> ${c.laureats.length}</span><span title="Offres ouvertes"><${Icon} name="feed" size=${15}/> ${c.ouvertes}</span><span title="Recrues confirmées"><${Icon} name="check" size=${15}/> ${c.recrues.length}</span></span>
-    </button></li>`)}</ul>
-    ${!list.length ? html`<${Empty} icon="briefcase" title="Aucune entreprise trouvée"/>` : null}
-  </div>`;
-}
-
 export function EntrepriseModal({ ctx, name, onClose }) {
   const { data, me, saison, store, openProfile, openOffer } = ctx;
   const c = useMemo(() => companiesOf(data).find(x => sameCompany(x.nom, name) || x.k === entKey(name)), [data, name]);
-  if (!c) return html`<${Modal} title=${name} onClose=${onClose}><p class="muted">Pas encore d’informations sur cette entreprise.</p><//>`;
+  const voirTout = html`<button class="btn small ghost" onClick=${() => { onClose(); ctx.go('reseau/entreprises/' + encodeURIComponent(entKey(name) || name)); }}><${Icon} name="star" size=${15}/> Voir les avis et entretiens</button>`;
+  const avisOuEntretiens = (data.avis_stage || []).some(a => sameCompany(a.entreprise, name)) || (data.entretiens || []).some(e => sameCompany(e.entreprise, name));
+  if (!c) return html`<${Modal} title=${name} onClose=${onClose}>${avisOuEntretiens ? html`<div class="detail"><${EntrepriseResume} ctx=${ctx} entreprise=${name} onOpen=${onClose}/><${QuestionsRecentes} ctx=${ctx} entreprise=${name}/></div>` : html`<p class="muted">Pas encore d’informations sur cette entreprise.</p>`}<//>`;
   const offres = c.offres.filter(o => o.status === 'ouverte' && (me.role !== 'etudiant' || matchesMe(o, me, saison)));
   const villes = [...new Set([...c.laureats.map(p => p.ville), ...c.offres.map(o => o.ville)].filter(Boolean))].slice(0, 4);
   const secteurs = [...new Set(c.laureats.map(p => p.secteur).filter(Boolean))];
@@ -169,6 +154,9 @@ export function EntrepriseModal({ ctx, name, onClose }) {
   return html`<${Modal} title=${c.nom} onClose=${onClose} wide>
     <div class="detail">
       <div class="detail-head"><${CompanyLogo} name=${c.nom} size=${56}/><div class="detail-title"><h2 translate="no">${c.nom}</h2><p class="muted small">${[...secteurs, ...villes].join(' · ')}</p></div></div>
+      <${EntrepriseResume} ctx=${ctx} entreprise=${c.nom} onOpen=${onClose}/>
+      <${QuestionsRecentes} ctx=${ctx} entreprise=${c.nom}/>
+      ${avisOuEntretiens ? html`<div>${voirTout}</div>` : null}
       <div class="profile-stats"><span><b class="mono">${c.laureats.length}</b> lauréat${c.laureats.length > 1 ? 's' : ''}</span><span><b class="mono">${offres.length}</b> offre${offres.length > 1 ? 's' : ''} ouverte${offres.length > 1 ? 's' : ''}</span><span><b class="mono">${c.recrues.length}</b> recrue${c.recrues.length > 1 ? 's' : ''} confirmée${c.recrues.length > 1 ? 's' : ''}</span></div>
       ${c.laureats.length ? html`<h3>Lauréats chez ${c.nom}</h3><ul class="people-list">${c.laureats.map(p => html`<li key=${p.id}><${Person} p=${p} onOpen=${openProfile} size=${32}/><span class="muted small">${p.poste || ''}${p.ville ? ' · ' + p.ville : ''}</span></li>`)}</ul>` : null}
       ${offres.length ? html`<h3>Offres ouvertes</h3><div class="offer-grid one">${offres.map(o => html`<${OfferCard} key=${o.id} o=${o} ctx=${ctx} onOpen=${() => { onClose(); openOffer(o.id); }}/>`)}</div>` : null}
@@ -193,7 +181,7 @@ function Startups({ ctx }) {
     <div class="chips"><button class=${'chip' + (only ? ' on' : '')} aria-pressed=${only} onClick=${() => setOnly(!only)}><${Icon} name="briefcase" size=${14}/> Cherchent des stagiaires</button></div>
     <div class="cards">${list.length ? list.map(s => { const f = store.byId('profiles', s.fondateur_id); return html`<article class="tcard startup" key=${s.id}>
       <div class="tcard-head"><${CompanyLogo} name=${s.nom} size=${44}/><div class="grow"><strong translate="no">${s.nom}</strong><p class="muted small">${[s.secteur, s.ville, s.pays && s.pays !== 'Maroc' ? s.pays : ''].filter(Boolean).join(' · ')}</p></div>
-        ${s.fondateur_id === me.id || me.role === 'admin' ? html`<button class="icon-btn small" aria-label="Modifier" onClick=${() => setForm(s)}><${Icon} name="edit" size=${15}/></button>` : null}</div>
+        ${s.fondateur_id === me.id || me.role === 'admin' ? html`<button class="icon-btn small" aria-label="Modifier" onClick=${() => setForm(s)}><${Icon} name="edit" size=${15}/></button>` : html`<${SignalerBtn} ctx=${ctx} type="startup" id=${s.id} small/>`}</div>
       <p translate="no" dir="auto">${s.pitch}</p>
       ${s.recrute ? html`<span class="tag coopt"><${Icon} name="briefcase" size=${13}/> Cherche des stagiaires</span>` : null}
       <div class="row tcard-foot">${f ? html`<${Person} p=${f} onOpen=${openProfile} size=${28} sub=${'Fondateur · Promo ' + f.promo}/>` : null}<span class="spacer"></span>

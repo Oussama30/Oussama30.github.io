@@ -4,6 +4,7 @@ import { html, useState, useEffect } from './vendor/preact-htm.js';
 import { Icon, Modal, Field, Empty, Person, Avatar, toast } from './ui.js';
 import { BESOINS, RDV_MIN, mentorState, futureSlots, requestsFor, mentorsFor, timeAgo } from './logic.js';
 import { getLang } from './i18n.js';
+import { RelecturesPage } from './cv.js';
 
 const firstName = p => (p?.full_name || '').split(' ')[0];
 const pad = n => String(n).padStart(2, '0');
@@ -292,6 +293,17 @@ export function RequestCard({ ctx, m, side, why = [] }) {
 const ACTIVE = ['rdv', 'apres', 'ouverte', 'demande'];
 const byRdv = (a, b) => new Date(a.rdv_at || a.created_at) - new Date(b.rdv_at || b.created_at);
 
+// Deux volets : les rendez-vous en visio et la relecture de CV
+function MentorSeg({ ctx }) {
+  const { data, me, sub, go } = ctx;
+  const cv = sub === 'cv';
+  const R = data.relectures_cv || [];
+  const aFaire = R.filter(r => (r.reviewer_id === me.id && ['demandee', 'en_cours'].includes(r.status)) || (r.student_id === me.id && r.status === 'rendue' && !r.merci && !r.note)).length;
+  return html`<div class="seg mentor-seg" role="tablist" aria-label="Mentorat">
+    <button role="tab" aria-selected=${!cv} class=${!cv ? 'on' : ''} onClick=${() => go('mentorat')}><${Icon} name="video" size=${15}/> Rendez-vous</button>
+    <button role="tab" aria-selected=${cv} class=${cv ? 'on' : ''} onClick=${() => go('mentorat/cv')}><${Icon} name="file" size=${15}/> Relecture de CV${aFaire ? html` <span class="count">${aFaire}</span>` : null}</button></div>`;
+}
+
 export function MentoratPage(ctx) {
   const { data, me, store, act, scores, openProfile } = ctx;
   const [ask, setAsk] = useState(null); // { mentor, besoin }
@@ -308,11 +320,18 @@ export function MentoratPage(ctx) {
   const busy = new Set(mineActive.map(m => m.mentor_id));
   const reco = me.role === 'etudiant' ? mentorsFor(data, me, '', scores).filter(x => !busy.has(x.p.id)).slice(0, 3) : [];
 
+  if (ctx.sub === 'cv') return html`<section class="page mentorat">
+    <header class="page-head"><div><p class="eyebrow">${me.role === 'admin' ? 'Le suivi des relectures de CV' : isLaureat ? 'Relire le CV d’un étudiant, rubrique par rubrique' : 'Un lauréat relit ton CV et te conseille'}</p><h1>Mentorat</h1></div></header>
+    <${MentorSeg} ctx=${ctx}/>
+    <${RelecturesPage} ctx=${ctx}/>
+  </section>`;
+
   if (me.role === 'admin') {
     const open = data.mentorships.filter(m => m.status === 'demande').sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     const soon = data.mentorships.filter(m => mentorState(m) === 'rdv');
     return html`<section class="page">
       <header class="page-head"><div><p class="eyebrow">${open.length} demande${open.length > 1 ? 's' : ''} en attente · ${soon.length} rendez-vous à venir</p><h1>Mentorat</h1></div></header>
+      <${MentorSeg} ctx=${ctx}/>
       <${HowItWorks} role="etudiant"/>
       <div class="list">${open.length ? open.map(m => html`<${RequestCard} key=${m.id} ctx=${ctx} m=${m} side="admin"/>`) : html`<${Empty} icon="mentor" title="Aucune demande en attente">Toutes les demandes ont trouvé un lauréat.<//>`}</div>
     </section>`;
@@ -321,6 +340,7 @@ export function MentoratPage(ctx) {
   return html`<section class="page mentorat">
     <header class="page-head"><div><p class="eyebrow">${isLaureat ? 'Aider un étudiant, en 20 minutes' : `Un lauréat, ${RDV_MIN} minutes, en visio`}</p><h1>Mentorat</h1></div>
       ${isLaureat ? html`<label class="switch"><input id="mentor-dispo" type="checkbox" checked=${!!me.mentor_dispo} onChange=${e => act(() => store.update('profiles', me.id, { mentor_dispo: e.target.checked }))}/> Disponible pour aider</label>` : null}</header>
+    <${MentorSeg} ctx=${ctx}/>
     <${HowItWorks} role=${isLaureat ? 'laureat' : 'etudiant'}/>
 
     ${!isLaureat ? html`<div class="need-card">

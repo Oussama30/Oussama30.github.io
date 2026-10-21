@@ -3,6 +3,7 @@ import { html, useState } from './vendor/preact-htm.js';
 import { Icon, Modal, Field, Empty, Person, Avatar, toast } from './ui.js';
 import { myGroups, groupMembers, groupLabel, groupKey, autoGroups, timeAgo } from './logic.js';
 import { SlotDate } from './mentorat.js';
+import { SignalerBtn } from './confiance.js';
 
 const KIND = { filiere: ['cap', 'Filière'], ville: ['pin', 'Ville'], pays: ['globe', 'À l’étranger'] };
 const pad = n => String(n).padStart(2, '0');
@@ -105,7 +106,7 @@ function GroupView({ ctx, gkey }) {
     <div class="wall">${msgs.length ? (more ? msgs : msgs.slice(0, 20)).map(m => { const a = store.byId('profiles', m.author_id); return html`<div class="comment" key=${m.id}>
       <${Avatar} p=${a} size=${30}/>
       <div class="comment-body"><button class="linkish" onClick=${() => openProfile(a)}>${a?.full_name || 'Membre'}</button> <span class="muted small">${a?.role === 'laureat' ? `Promo ${a.promo}` : ''} · ${timeAgo(m.created_at)}</span><p translate="no" dir="auto">${m.body}</p></div>
-      ${(m.author_id === me.id || me.role === 'admin') ? html`<button class="icon-btn small" aria-label="Supprimer" onClick=${() => act(() => store.remove('groupe_messages', m.id))}><${Icon} name="x" size=${14}/></button>` : null}
+      ${(m.author_id === me.id || me.role === 'admin') ? html`<button class="icon-btn small" aria-label="Supprimer" onClick=${() => act(() => store.remove('groupe_messages', m.id))}><${Icon} name="x" size=${14}/></button>` : html`<${SignalerBtn} ctx=${ctx} type="message" id=${m.id} small/>`}
     </div>`; }) : html`<p class="muted small">Pas encore de message dans ce groupe.</p>`}</div>
     ${msgs.length > 20 && !more ? html`<button class="btn ghost small" onClick=${() => setMore(true)}>Voir les messages plus anciens</button>` : null}
     ${cafe ? html`<${CafeComposer} ctx=${ctx} onClose=${() => setCafe(false)} preset=${kind === 'ville' ? { ville: label } : { pays: label }}/>` : null}
@@ -148,6 +149,7 @@ export function CafeCard({ ctx, c, showCity }) {
         ${isOrg ? html`<button class="btn tiny ghost danger-t" onClick=${() => ctx.confirm('Annuler ce café ? Les inscrits le verront annulé.', () => act(() => store.update('cafes', c.id, { annule: true })), 'Annuler le café')}>Annuler</button>`
           : html`<button class="btn tiny ghost" onClick=${() => act(() => store.remove('cafe_participants', mineP.id))}>Je ne viens plus</button>`}`
         : full ? html`<span class="tag done">Complet</span>` : html`<button class="btn small primary" onClick=${() => act(async () => { await store.insert('cafe_participants', { cafe_id: c.id, user_id: me.id }); toast('Inscrit(e) ! Ajoute-le à ton agenda.'); })}>Je viens</button>`}
+      ${!isOrg && !c.annule ? html`<${SignalerBtn} ctx=${ctx} type="cafe" id=${c.id} small/>` : null}
     </div>
   </article>`;
 }

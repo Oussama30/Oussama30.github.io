@@ -1,11 +1,20 @@
 // Couche de données : même interface en mode démo (navigateur) et en mode réel (Supabase).
-import { buildSeed } from './seed.js';
-import { attestationStats, seasonOf, niveauOf } from './logic.js';
+// Les données de démonstration (seed.js) ne sont chargées qu'en démo : le site réel n'en a pas besoin
+const chargerSeed = () => import('./seed.js').then(m => m.buildSeed());
+import { attestationStats, seasonOf, niveauOf, sameCompany, entKey, norm, statsInsertion, rapportInsertion, cleNom } from './logic.js';
 
 const PHASE2 = ['groupe_messages', 'groupe_membres', 'cafes', 'cafe_participants', 'startups', 'defis', 'parrainages'];
-export const TABLES = ['profiles', 'offers', 'comments', 'reactions', 'applications', 'placements', 'mentorships', 'questions', 'answers', 'votes', 'shortlists', 'invitations', 'kudos', 'attestations', 'liens_rdv', 'annonces', ...PHASE2];
+const PHASE3 = ['coordonnees', 'demandes_contact', 'relectures_cv', 'relecture_commentaires', 'entretiens', 'avis_stage', 'guide_pays', 'signalements', 'enquetes_insertion', 'verifications_pairs', 'evenements', 'evenement_participants'];
+export const TABLES = ['profiles', 'offers', 'comments', 'reactions', 'applications', 'placements', 'mentorships', 'questions', 'answers', 'votes', 'shortlists', 'invitations', 'kudos', 'attestations', 'liens_rdv', 'annonces', ...PHASE2, ...PHASE3];
 // Tables ajoutées par supabase/mise-a-jour.sql : tant que la base n'est pas à jour, elles restent vides au lieu de bloquer le site.
-const OPTIONAL = new Set(['shortlists', 'invitations', 'kudos', 'attestations', 'liens_rdv', 'annonces', ...PHASE2]);
+const OPTIONAL = new Set(['shortlists', 'invitations', 'kudos', 'attestations', 'liens_rdv', 'annonces', ...PHASE2, ...PHASE3]);
+// Lues par une vue qui masque ce que chacun a choisi de cacher (auteur anonyme, visibilité du profil).
+// Tant que la base n'a pas ces vues, on lit la table elle-même.
+const VUES = { profiles: 'profils', entretiens: 'entretiens_publics', avis_stage: 'avis_publics' };
+export const CV_MAX = 2 * 1024 * 1024;
+// Qui voit quoi sur un profil : tous | laureats | contacts (personnes acceptées). Le CV est réservé aux lauréats par défaut.
+export const VIS_DEFAUT = { travail: 'tous', lieu: 'tous', linkedin: 'tous', presentation: 'tous', cv: 'laureats' };
+export const VIS_CHAMPS = { travail: ['entreprise', 'poste', 'secteur'], lieu: ['ville'], linkedin: ['linkedin'], presentation: ['bio', 'competences', 'disponibilite'], cv: ['cv_url', 'cv_path', 'cv_maj'] };
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
 // Salle de visio Jitsi : gratuite, sans compte pour l'invité, nom impossible à deviner
@@ -16,31 +25,72 @@ function safeGet(key) { try { return localStorage.getItem(key); } catch { return
 function safeSet(key, v) { try { localStorage.setItem(key, v); } catch { /* stockage indisponible */ } }
 
 class Base {
-  constructor() { this.data = Object.fromEntries(TABLES.map(t => [t, []])); this.listeners = new Set(); this.me = null; }
+  constructor() { this.data = Object.fromEntries(TABLES.map(t => [t, []])); this.listeners = new Set(); this.me = null; this.reglages = {}; }
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   emit() { this.data = { ...this.data }; for (const fn of this.listeners) fn(); }
   byId(table, id) { return this.data[table].find(r => r.id === id); }
+  // En ligne, la base a déjà masqué ce qui ne doit pas être vu : ces deux aides servent surtout à la démo.
+  voitChamp(p, champ) { return !!p; }
+  coordonneesDe(id) { return this.byId('coordonnees', id) || null; }
+  // Domaines de l'email de l'école (réglage de l'administration), en minuscules
+  domainesEcole() { return Array.isArray(this.reglages.domaines_ecole) ? this.reglages.domaines_ecole.map(d => String(d).trim().toLowerCase()).filter(Boolean) : []; }
+  // Demande de contact entre moi et ce membre (dans un sens ou dans l'autre)
+  contactAvec(id) {
+    const me = this.me?.id;
+    return this.data.demandes_contact.find(d => d.demandeur_id === me && d.cible_id === id) || this.data.demandes_contact.find(d => d.demandeur_id === id && d.cible_id === me) || null;
+  }
+}
+
+// Mêmes règles que en_relation() dans la base : une demande de contact acceptée, ou une candidature à son offre
+export function enRelation(data, viewer, owner) {
+  if (!viewer || !owner) return false;
+  return data.demandes_contact.some(d => d.status === 'acceptee' && ((d.demandeur_id === viewer && d.cible_id === owner) || (d.demandeur_id === owner && d.cible_id === viewer)))
+    || data.applications.some(a => a.student_id === owner && a.offer_id && data.offers.some(o => o.id === a.offer_id && o.author_id === viewer));
+}
+export function voitChampDemo(data, me, p, champ) {
+  if (!p || !me) return false;
+  if (p.id === me.id || me.role === 'admin') return true;
+  const a = (p.visibilite || {})[champ] || VIS_DEFAUT[champ] || 'tous';
+  if (a === 'tous') return true;
+  if (a === 'laureats' && me.role === 'laureat') return true;
+  return enRelation(data, me.id, p.id);
+}
+
+// Petit PDF d'exemple (une page de texte) pour les CV de la démo
+export function pdfSimple(lignes) {
+  const esc = t => Array.from(String(t)).map(c => { const k = c.charCodeAt(0); if (c === '(' || c === ')' || c === '\\') return '\\' + c; if (k < 32) return ' '; if (k < 127) return c; const w = { '’': 146, '–': 150, '—': 151, '…': 133, 'œ': 156, '€': 128 }[c] ?? (k < 256 ? k : 63); return '\\' + w.toString(8).padStart(3, '0'); }).join('');
+  const flux = ['BT', '/F1 11 Tf', '14 TL', '56 780 Td', ...lignes.flatMap((l, i) => [i === 0 ? '/F1 18 Tf' : i === 1 ? '/F1 11 Tf' : '', `(${esc(l)}) Tj T*`]).filter(Boolean), 'ET'].join('\n');
+  const objets = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+    `<< /Length ${flux.length} >>\nstream\n${flux}\nendstream`];
+  let out = '%PDF-1.4\n'; const pos = [];
+  objets.forEach((o, i) => { pos.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = out.length;
+  out += `xref\n0 ${objets.length + 1}\n0000000000 65535 f \n` + pos.map(p => String(p).padStart(10, '0') + ' 00000 n \n').join('') + `trailer\n<< /Size ${objets.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return new Blob([Uint8Array.from(out, c => c.charCodeAt(0) & 255)], { type: 'application/pdf' });
 }
 
 // ---------------------------------------------------------------------------
 // Démo : données d'exemple, gardées dans le navigateur du visiteur
 // ---------------------------------------------------------------------------
-const DEMO_KEY = 'ensam-demo-v8';
+const DEMO_KEY = 'ensam-demo-v9';
 class DemoStore extends Base {
-  constructor() { super(); this.mode = 'demo'; }
+  constructor() { super(); this.mode = 'demo'; this.fichiers = new Map(); }
   async init() {
     let saved = null;
     try { saved = JSON.parse(safeGet(DEMO_KEY) || 'null'); } catch { saved = null; }
-    this.data = saved?.data || buildSeed();
-    for (const t of TABLES) this.data[t] ||= [];
+    this.data = saved?.data || await chargerSeed();
+    for (const t of [...TABLES, 'guide_pays_historique', 'liste_officielle']) this.data[t] ||= [];
+    this.reglages = saved?.reglages || {};
     const meId = saved?.meId || this.data.profiles.find(p => p.role === 'etudiant' && p._persona)?.id;
     this.me = this.byId('profiles', meId) || null;
     this.ready = true;
   }
-  persist() { safeSet(DEMO_KEY, JSON.stringify({ data: this.data, meId: this.me?.id })); }
+  persist() { safeSet(DEMO_KEY, JSON.stringify({ data: this.data, meId: this.me?.id, reglages: this.reglages })); }
   personas() { const o = { etudiant: 0, laureat: 1, admin: 2 }; return this.data.profiles.filter(p => p._persona).sort((a, b) => o[a.role] - o[b.role]); }
   switchTo(id) { this.me = this.byId('profiles', id); this.persist(); this.emit(); }
-  reset() { this.data = buildSeed(); this.me = this.personas()[0]; this.persist(); this.emit(); }
+  async reset() { this.data = await chargerSeed(); for (const t of ['guide_pays_historique', 'liste_officielle']) this.data[t] ||= []; this.reglages = {}; this.me = this.personas()[0]; this.persist(); this.emit(); }
   async insert(table, row) {
     const r = { id: uuid(), created_at: new Date().toISOString(), ...row };
     if (table === 'placements') applyPlacementRules(this, r, null);
@@ -53,12 +103,15 @@ class DemoStore extends Base {
     if (table === 'invitations') applyInvitationRules(this, r, null);
     if (PHASE2.includes(table) && applyPhase2Rules(this, table, r, null) === false) return r;
     if (table === 'attestations') { if (this.me?.role !== 'laureat') throw new Error('Seul un lauréat peut obtenir une attestation.'); Object.assign(r, { laureat_id: this.me.id, stats: attestationStats(this.data, this.me.id) }); }
+    limiteDemo(this, table, r);
+    if (PHASE3.includes(table)) applyPhase3Rules(this, table, r, null);
     if (table === 'reactions' && this.data.reactions.some(x => x.offer_id === r.offer_id && x.user_id === r.user_id && x.kind === r.kind)) return r;
     if (table === 'votes' && this.data.votes.some(x => x.answer_id === r.answer_id && x.user_id === r.user_id)) return r;
     if (table === 'placements' && this.data.placements.some(x => x.student_id === r.student_id && x.saison === r.saison && x.status !== 'refuse')) throw new Error('Une réussite est déjà enregistrée pour cet étudiant cette saison.');
     this.data[table] = [r, ...this.data[table]];
     if (table === 'profiles' && r.id === this.me?.id) this.me = r;
     if (table === 'cafes') this.data.cafe_participants = [{ id: uuid(), cafe_id: r.id, user_id: r.organisateur_id, created_at: r.created_at }, ...this.data.cafe_participants];
+    if (table === 'verifications_pairs') { const c = this.byId('profiles', r.laureat_id); if (c && !c.verified && pairsValides(this.data, c) >= 2) this.data.profiles = this.data.profiles.map(p => p.id === c.id ? { ...p, verified: true } : p); }
     if (table === 'profiles') demoParrains(this);
     this.persist(); this.emit();
     return r;
@@ -73,6 +126,9 @@ class DemoStore extends Base {
     if (table === 'liens_rdv') applyLienRules(this, r, old);
     if (table === 'annonces' && this.me?.role !== 'admin') throw new Error('Action non autorisée pour ton compte.');
     if (PHASE2.includes(table)) applyPhase2Rules(this, table, r, old);
+    if (PHASE3.includes(table)) applyPhase3Rules(this, table, r, old);
+    if (table === 'profiles' && this.me?.role !== 'admin') { r.verified = r.role !== old.role ? false : old.verified; if (!r.verified && verifieAuto(this, r)) r.verified = true; }
+    if (table === 'profiles' && this.me?.role === 'admin' && old.verified && !r.verified) this.data.verifications_pairs = this.data.verifications_pairs.filter(v => v.laureat_id !== id);
     this.data[table] = this.data[table].map(x => x.id === id ? r : x);
     if (table === 'profiles' && id === this.me?.id) this.me = r;
     if (table === 'profiles' && r.parrain_dispo && !old.parrain_dispo) demoParrains(this);
@@ -85,6 +141,16 @@ class DemoStore extends Base {
     if (PHASE2.includes(table) && row && this.me?.role !== 'admin') {
       const own = { groupe_messages: 'author_id', groupe_membres: 'user_id', cafes: 'organisateur_id', cafe_participants: 'user_id', startups: 'fondateur_id' }[table];
       if (!own || row[own] !== this.me?.id) throw new Error('Action non autorisée pour ton compte.');
+    }
+    if (PHASE3.includes(table) && row && this.me?.role !== 'admin') {
+      const me = this.me?.id;
+      const ok = {
+        coordonnees: row.id === me, demandes_contact: row.demandeur_id === me && row.status === 'envoyee',
+        relectures_cv: row.student_id === me && ['demandee', 'annulee'].includes(row.status), relecture_commentaires: row.author_id === me,
+        entretiens: row.author_id === me, avis_stage: row.author_id === me, signalements: row.auteur_id === me && row.status === 'ouvert',
+        enquetes_insertion: row.user_id === me, verifications_pairs: row.verificateur_id === me, evenement_participants: row.user_id === me,
+      }[table];
+      if (!ok) throw new Error('Action non autorisée pour ton compte.');
     }
     this.data[table] = this.data[table].filter(x => x.id !== id);
     this.persist(); this.emit();
@@ -110,6 +176,269 @@ class DemoStore extends Base {
     const a = this.byId('attestations', id); if (!a) return null;
     const p = this.byId('profiles', a.laureat_id);
     return { id: a.id, full_name: p?.full_name, filiere: p?.filiere, promo: p?.promo, stats: a.stats, created_at: a.created_at };
+  }
+  // Phase 3
+  voitChamp(p, champ) { return voitChampDemo(this.data, this.me, p, champ); }
+  coordonneesDe(id) {
+    const me = this.me; if (!me) return null;
+    return id === me.id || me.role === 'admin' || enRelation(this.data, me.id, id) ? this.byId('coordonnees', id) || null : null;
+  }
+  async enregistrerCoordonnees(champs) {
+    const id = this.me.id;
+    return this.byId('coordonnees', id) ? this.update('coordonnees', id, champs) : this.insert('coordonnees', { id, ...champs });
+  }
+  // CV : en démo, le fichier reste dans l'onglet (pas de stockage réel)
+  async deposerCV(file) {
+    verifierPdf(file);
+    const ancien = this.me.cv_path;
+    const path = `${this.me.id}/cv-${Date.now()}.pdf`;
+    this.fichiers.set(path, file);
+    const r = await this.update('profiles', this.me.id, { cv_path: path, cv_maj: new Date().toISOString() });
+    if (ancien && !cvReference(this.data, ancien)) this.fichiers.delete(ancien);
+    return r;
+  }
+  async retirerCV() {
+    const ancien = this.me.cv_path;
+    const r = await this.update('profiles', this.me.id, { cv_path: null, cv_maj: null });
+    if (ancien && !cvReference(this.data, ancien)) this.fichiers.delete(ancien);
+    return r;
+  }
+  async lienCV(path) {
+    if (!path) return null;
+    const owner = this.byId('profiles', path.split('/')[0]);
+    const relu = this.data.relectures_cv.some(r => r.cv_path === path && r.status !== 'annulee' && (r.reviewer_id === this.me?.id || (!r.reviewer_id && r.status === 'demandee' && this.me?.role === 'laureat')));
+    if (!relu && !(owner && owner.cv_path === path && this.voitChamp(owner, 'cv'))) throw new Error('Ce CV n’est pas visible pour ton compte.');
+    const f = this.fichiers.get(path) || pdfSimple(cvDemo(owner));
+    return URL.createObjectURL(f);
+  }
+  async lireReglages() { return this.reglages; }
+  async enregistrerReglage(cle, valeur) {
+    if (this.me?.role !== 'admin') throw new Error('Réservé à l’administration.');
+    this.reglages = { ...this.reglages, [cle]: valeur }; this.persist(); this.emit();
+  }
+  async rapportInsertion() {
+    if (this.me?.role !== 'admin') throw new Error('Réservé à l’administration.');
+    return rapportInsertion(this.data);
+  }
+  async historiqueGuide(guideId) { return this.data.guide_pays_historique.filter(h => h.guide_id === guideId).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); }
+  async statsInsertion() { return statsInsertion(this.data.enquetes_insertion).filter(g => this.me?.role === 'admin' || g.n >= 5); }
+  async seDesabonnerAlertes() { return true; }
+  // Liste officielle (administration)
+  async importerListe(lignes, remplacer = false) {
+    if (this.me?.role !== 'admin') throw new Error('Réservé à l’administration.');
+    let L = this.data.liste_officielle; let importes = 0, rejetes = 0;
+    if (remplacer) { const promos = new Set(lignes.map(x => +x.promo).filter(Boolean)); L = L.filter(x => !promos.has(x.promo)); }
+    for (const x of lignes) {
+      const nom = String(x.nom || '').trim().replace(/\s+/g, ' ').slice(0, 120); const promo = /^\d{4}$/.test(String(x.promo ?? '')) ? +x.promo : null;
+      let email = String(x.email || '').trim().toLowerCase() || null; if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) email = null;
+      if (nom.length < 2 || !cleNom(nom) || !promo || promo < 1990 || promo > 2040) { rejetes++; continue; }
+      const old = L.find(l => l.promo === promo && cleNom(l.nom) === cleNom(nom));
+      const champs = { email, filiere: String(x.filiere || '').trim() || null, matricule: String(x.matricule || '').trim() || null };
+      if (old) { for (const [k, v] of Object.entries(champs)) if (v) old[k] = v; } else L = [...L, { id: uuid(), nom, promo, ...champs, created_at: new Date().toISOString() }];
+      importes++;
+    }
+    this.data.liste_officielle = L;
+    let verifies = 0;
+    this.data.profiles = this.data.profiles.map(p => { if (p.verified || p.role === 'admin' || !dansListe(this.data, p, demoEmail(p))) return p; verifies++; return { ...p, verified: true }; });
+    this.me = this.byId('profiles', this.me.id);
+    this.persist(); this.emit();
+    return { importes, rejetes, verifies };
+  }
+  async couvertureListe() {
+    if (this.me?.role !== 'admin') throw new Error('Réservé à l’administration.');
+    const g = new Map();
+    for (const l of this.data.liste_officielle) {
+      const k = l.promo + '|' + (l.filiere || ''); const x = g.get(k) || { promo: l.promo, filiere: l.filiere || '', total: 0, inscrits: 0 };
+      x.total++; if (inscritDeListe(this.data, l)) x.inscrits++; g.set(k, x);
+    }
+    return [...g.values()].sort((a, b) => b.promo - a.promo || a.filiere.localeCompare(b.filiere));
+  }
+  async manquantsListe(promo) {
+    if (this.me?.role !== 'admin') throw new Error('Réservé à l’administration.');
+    return this.data.liste_officielle.filter(l => l.promo === +promo && !inscritDeListe(this.data, l)).map(({ nom, email, filiere }) => ({ nom, email, filiere }));
+  }
+  async viderListe(promo) {
+    if (this.me?.role !== 'admin') throw new Error('Réservé à l’administration.');
+    this.data.liste_officielle = this.data.liste_officielle.filter(l => promo != null && l.promo !== +promo);
+    this.persist(); this.emit();
+  }
+}
+
+function verifierPdf(file) {
+  if (!file) throw new Error('Choisis un fichier PDF.');
+  if (file.type && file.type !== 'application/pdf' || !/\.pdf$/i.test(file.name || 'cv.pdf')) throw new Error('Seuls les fichiers PDF sont acceptés.');
+  if (file.size > CV_MAX) throw new Error('Le fichier dépasse 2 Mo. Exporte ton CV en PDF plus léger.');
+}
+// Un ancien CV reste gardé tant qu'une relecture en cours ou rendue s'y rapporte
+const cvReference = (data, path) => data.relectures_cv.some(r => r.cv_path === path && r.status !== 'annulee');
+const cvDemo = p => [p?.full_name || 'CV', `${p?.filiere || ''} · ENSAM Meknès · promo ${p?.promo || ''}`, '', 'CV de démonstration (données fictives).', '',
+  'Formation', '  Cycle ingénieur, ENSAM Meknès', '  Classes préparatoires intégrées', '', 'Expériences', '  Stage ingénieur adjoint (2 mois)', '  Stage ouvrier (1 mois)', '',
+  'Compétences', '  ' + ((p?.competences || []).join(', ') || 'Lean, Python, CAO'), '', 'Langues', '  Arabe, français, anglais'];
+const pairsValides = (data, c) => data.verifications_pairs.filter(v => v.laureat_id === c.id).map(v => data.profiles.find(x => x.id === v.verificateur_id)).filter(x => x && x.role === 'laureat' && x.verified && x.promo === c.promo).length;
+const emailEcole = (store, email) => store.domainesEcole().some(d => (email || '').toLowerCase().endsWith('@' + d) || (email || '').toLowerCase().endsWith('.' + d));
+const verifieAuto = (store, p) => dansListe(store.data, p, demoEmail(p)) || (p.role === 'etudiant' && emailEcole(store, demoEmail(p))) || (p.role === 'laureat' && pairsValides(store.data, p) >= 2);
+const dansListe = (data, p, email) => data.liste_officielle.some(l => (l.promo === p.promo && cleNom(l.nom) === cleNom(p.full_name)) || (l.email && l.email === (email || '').toLowerCase()));
+const inscritDeListe = (data, l) => data.profiles.some(p => (l.email && demoEmail(p) === l.email) || (p.promo === l.promo && cleNom(p.full_name) === cleNom(l.nom)));
+
+// Limites anti-spam : mêmes chiffres que limiter() dans la base
+const LIMITES = {
+  offers: ['author_id', 10, 864e5, 'titre'], comments: ['author_id', 40, 864e5, 'body'], questions: ['author_id', 5, 864e5, 'titre'],
+  answers: ['author_id', 30, 864e5, 'body'], groupe_messages: ['author_id', 60, 864e5, 'body'], invitations: ['laureat_id', 30, 864e5],
+  applications: ['student_id', 10, 864e5], evenement_participants: ['user_id', 30, 864e5], verifications_pairs: ['verificateur_id', 20, 864e5], mentorships: ['student_id', 6, 864e5], cafes: ['organisateur_id', 3, 864e5], startups: ['fondateur_id', 3, 864e5],
+  entretiens: ['author_id', 10, 864e5], avis_stage: ['author_id', 10, 864e5], demandes_contact: ['demandeur_id', 5, 864e5],
+  signalements: ['auteur_id', 10, 864e5], relectures_cv: ['student_id', 4, 864e5], relecture_commentaires: ['author_id', 60, 36e5],
+};
+function limiteDemo(store, table, r) {
+  const L = LIMITES[table]; const me = store.me;
+  if (!L || !me || me.role === 'admin') return;
+  const [col, max, ms, txt] = L; const now = Date.now();
+  const miens = store.data[table].filter(x => x[col] === me.id);
+  if (miens.filter(x => now - new Date(x.created_at) < ms).length >= max) throw new Error('Doucement : tu as beaucoup publié en peu de temps. Réessaie un peu plus tard.');
+  const t = txt && String(r[txt] || '').trim().toLowerCase();
+  if (t && miens.some(x => now - new Date(x.created_at) < 864e5 && String(x[txt] || '').trim().toLowerCase() === t)) throw new Error('Tu as déjà publié exactement ce texte.');
+}
+
+// Phase 3 : mêmes règles que les triggers de la base (protect_relecture, protect_avis, protect_guide…)
+function applyPhase3Rules(store, table, r, old) {
+  const me = store.me; const isAdmin = me?.role === 'admin'; const now = new Date().toISOString();
+  const deny = () => { throw new Error('Action non autorisée pour ton compte.'); };
+  if (table === 'coordonnees') {
+    if (!isAdmin && (old ? old.id : r.id) !== me.id) deny();
+    r.updated_at = now; return;
+  }
+  if (table === 'demandes_contact') {
+    if (!old) {
+      if (isAdmin) return;
+      r.demandeur_id = me.id; Object.assign(r, { status: 'envoyee', repondu_at: null });
+      if (r.cible_id === me.id) throw new Error('Choisis un autre membre que toi.');
+      if (store.data.demandes_contact.some(d => d.demandeur_id === me.id && d.cible_id === r.cible_id)) throw new Error('Tu as déjà envoyé une demande à ce membre.');
+      return;
+    }
+    if (isAdmin) return;
+    const v = r.status; Object.assign(r, old);
+    if (me.id === old.cible_id && ['acceptee', 'refusee'].includes(v) && v !== old.status) { r.status = v; r.repondu_at = now; }
+    return;
+  }
+  if (table === 'relectures_cv') {
+    if (isAdmin) return;
+    if (!old) {
+      r.student_id = me.id; r.cv_path = store.byId('profiles', me.id)?.cv_path || null;
+      if (!r.cv_path) throw new Error('Dépose d’abord ton CV en PDF dans ton profil.');
+      if (r.reviewer_id === me.id) throw new Error('Choisis un autre lauréat que toi.');
+      if (r.reviewer_id && store.byId('profiles', r.reviewer_id)?.role !== 'laureat') throw new Error('Choisis un lauréat.');
+      if (store.data.relectures_cv.filter(x => x.student_id === me.id && ['demandee', 'en_cours'].includes(x.status)).length >= 2) throw new Error('Tu as déjà 2 relectures en cours. Attends un retour avant d’en demander une autre.');
+      Object.assign(r, { reviewer_id: r.reviewer_id || null, status: 'demandee', synthese: null, merci: null, note: null, pris_at: null, rendue_at: null });
+      return;
+    }
+    const v = { ...r }; Object.assign(r, old);
+    if (!old.reviewer_id && old.status === 'demandee' && v.reviewer_id === me.id && me.id !== old.student_id) {
+      if (me.role !== 'laureat') throw new Error('Seul un lauréat peut relire un CV.');
+      r.reviewer_id = me.id;
+    }
+    if (r.reviewer_id === me.id && me.id !== old.student_id) {
+      if (['demandee', 'en_cours'].includes(old.status)) {
+        r.synthese = v.synthese;
+        if (!v.reviewer_id) Object.assign(r, { reviewer_id: null, status: 'demandee', pris_at: null });
+        else if (v.status === 'rendue') {
+          if (!(v.synthese || '').trim() && !store.data.relecture_commentaires.some(c => c.relecture_id === old.id && c.author_id === me.id)) throw new Error('Ajoute au moins un commentaire avant de rendre la relecture.');
+          Object.assign(r, { status: 'rendue', rendue_at: now, pris_at: old.pris_at || now });
+        } else if (old.status === 'demandee') Object.assign(r, { status: 'en_cours', pris_at: now });
+      }
+      return;
+    }
+    if (me.id === old.student_id) {
+      if (['demandee', 'en_cours'].includes(old.status) && v.status === 'annulee') r.status = 'annulee';
+      if (old.status === 'demandee') r.message = v.message;
+      if (old.status === 'rendue') { r.merci = v.merci; r.note = v.note; }
+      return;
+    }
+    if (v.reviewer_id === me.id) throw new Error('Un autre lauréat vient de prendre cette demande.');
+    return;
+  }
+  if (table === 'relecture_commentaires') {
+    if (old) deny();
+    if (isAdmin) return;
+    const rel = store.byId('relectures_cv', r.relecture_id);
+    r.author_id = me.id;
+    if (!rel || rel.status === 'annulee') throw new Error('Cette relecture n’est plus ouverte.');
+    if (me.id === rel.reviewer_id) return;
+    if (me.id === rel.student_id && rel.reviewer_id) { r.section = 'general'; return; }
+    throw new Error('Seuls l’étudiant et le lauréat qui relit peuvent commenter.');
+  }
+  if (table === 'entretiens') {
+    r.questions = (r.questions || []).map(x => String(x).trim().slice(0, 300)).filter(Boolean).slice(0, 20);
+    if (!r.questions.length) throw new Error('Ajoute au moins une question.');
+    if (isAdmin) return;
+    if (!old) { r.author_id = me.id; if (r.offer_id && !store.data.applications.some(a => a.offer_id === r.offer_id && a.student_id === me.id)) r.offer_id = null; return; }
+    for (const k of ['author_id', 'entreprise', 'type', 'saison', 'offer_id', 'created_at']) r[k] = old[k];
+    return;
+  }
+  if (table === 'avis_stage') {
+    if (!isAdmin) {
+      if (!old) r.author_id = me.id;
+      else for (const k of ['author_id', 'entreprise', 'type', 'saison', 'placement_id', 'created_at']) r[k] = old[k];
+    }
+    if (!old && store.data.avis_stage.some(a => a.author_id === r.author_id && a.saison === r.saison && entKey(a.entreprise) === entKey(r.entreprise))) throw new Error('Tu as déjà donné ton avis sur cette entreprise pour cette saison.');
+    if (r.placement_id && !store.data.placements.some(p => p.id === r.placement_id && p.student_id === r.author_id)) r.placement_id = null;
+    if (!r.placement_id) r.placement_id = store.data.placements.filter(p => p.student_id === r.author_id && p.saison === r.saison && p.status !== 'refuse' && sameCompany(p.entreprise, r.entreprise)).sort((a, b) => (b.status === 'confirme') - (a.status === 'confirme'))[0]?.id || null;
+    r.verifie = !!r.placement_id && store.byId('placements', r.placement_id)?.status === 'confirme';
+    return;
+  }
+  if (table === 'guide_pays') {
+    if (old) {
+      r.pays = old.pays; r.section = old.section; r.created_at = old.created_at;
+      if (r.contenu !== old.contenu) store.data.guide_pays_historique = [{ id: uuid(), guide_id: old.id, contenu: old.contenu, updated_by: old.updated_by, updated_at: old.updated_at, created_at: now }, ...store.data.guide_pays_historique];
+    } else if (store.data.guide_pays.some(g => norm(g.pays) === norm(r.pays) && g.section === r.section)) throw new Error('Cette rubrique existe déjà : recharge la page pour la modifier.');
+    if (!isAdmin && (norm(r.pays) === 'maroc' || me.role !== 'laureat' || norm(me.pays || '') !== norm(r.pays))) throw new Error('Seuls les lauréats qui vivent dans ce pays peuvent écrire son guide.');
+    r.updated_by = me.id; r.updated_at = now;
+    return;
+  }
+  if (table === 'signalements') {
+    if (!old) {
+      r.auteur_id = me.id; Object.assign(r, { status: 'ouvert', traite_par: null, traite_at: null });
+      if (store.data.signalements.some(s => s.auteur_id === me.id && s.cible_type === r.cible_type && s.cible_id === r.cible_id)) throw new Error('Tu as déjà signalé ce contenu. Merci !');
+      return;
+    }
+    if (!isAdmin) deny();
+    if (r.status !== old.status) { r.traite_par = me.id; r.traite_at = now; }
+    return;
+  }
+  if (table === 'verifications_pairs') {
+    if (old) deny();
+    if (!isAdmin) r.verificateur_id = me.id;
+    const c = store.byId('profiles', r.laureat_id), v = store.byId('profiles', r.verificateur_id);
+    if (c?.role !== 'laureat') throw new Error('Seul un profil de lauréat peut être confirmé.');
+    if (v?.role !== 'laureat' || !v.verified || v.promo !== c.promo || v.id === c.id) throw new Error('Seul un lauréat vérifié de la même promo peut confirmer ce profil.');
+    if (store.data.verifications_pairs.some(x => x.laureat_id === c.id && x.verificateur_id === v.id)) throw new Error('C’est déjà fait.');
+    return;
+  }
+  if (table === 'evenements') {
+    if (!isAdmin) deny();
+    if (!old) r.author_id = me.id;
+    if (r.lien && !/^https:\/\/\S+$/i.test(r.lien)) throw new Error('Le lien doit commencer par https://');
+    r.annule = !!r.annule; r.public ||= 'tous'; r.type ||= 'autre';
+    return;
+  }
+  if (table === 'evenement_participants') {
+    if (old) deny();
+    if (!isAdmin) r.user_id = me.id;
+    const e = store.byId('evenements', r.evenement_id);
+    if (!e) throw new Error('Cet événement n’existe plus.');
+    if (e.annule) throw new Error('Cet événement est annulé.');
+    if (new Date(e.fin || e.debut) < new Date()) throw new Error('Cet événement est déjà passé.');
+    if (store.data.evenement_participants.some(x => x.evenement_id === r.evenement_id && x.user_id === r.user_id)) throw new Error('C’est déjà fait.');
+    return;
+  }
+  if (table === 'enquetes_insertion') {
+    if (old) { r.user_id = old.user_id; r.vague = old.vague; r.created_at = old.created_at; }
+    if (!isAdmin) {
+      if (!old) r.user_id = me.id;
+      const p = store.byId('profiles', r.user_id);
+      if (p?.role !== 'laureat' && niveauOf(p, seasonOf()) < 6) throw new Error('L’enquête s’adresse aux lauréats.');
+      r.promo = p.promo; r.filiere = p.filiere;
+      if (!old && store.data.enquetes_insertion.some(e => e.user_id === r.user_id && e.vague === r.vague)) throw new Error('Tu as déjà répondu à cette enquête.');
+    }
+    r.updated_at = now;
   }
 }
 
@@ -287,6 +616,7 @@ class SupabaseStore extends Base {
       this.session = s;
       if (changed) { await this.loadAll(); this.emit(); }
     });
+    await this.lireReglages().catch(() => {});
     if (session) await this.loadAll();
     this.ready = true;
   }
@@ -298,9 +628,12 @@ class SupabaseStore extends Base {
     this.subscribe();
   }
   async loadTable(t) {
+    this.vues ||= {};
+    const vue = VUES[t] && this.vues[t] !== false ? VUES[t] : null;
     const all = [];
     for (let from = 0; ; from += 1000) {
-      const { data, error } = await this.sb.from(t).select('*').order('created_at', { ascending: false }).range(from, from + 999);
+      const { data, error } = await this.sb.from(vue || t).select('*').order('created_at', { ascending: false }).range(from, from + 999);
+      if (error && vue && from === 0) { this.vues[t] = false; return this.loadTable(t); }  // base pas encore à jour : la table
       if (error && OPTIONAL.has(t)) { this.data[t] = []; return; }
       if (error) throw error;
       all.push(...data);
@@ -311,18 +644,22 @@ class SupabaseStore extends Base {
   subscribe() {
     if (this.channel) return;
     const pending = new Set(); let timer = null;
+    // Un accord de contact change ce que chacun voit des coordonnées et des profils de l'autre
+    const LIES = { demandes_contact: ['coordonnees', 'profiles'] };
     this.channel = this.sb.channel('ensam-live');
-    for (const t of TABLES) {
-      this.channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => {
-        pending.add(t); clearTimeout(timer);
-        timer = setTimeout(async () => {
-          const ts = [...pending]; pending.clear();
-          await Promise.all(ts.map(x => this.loadTable(x)));
-          this.me = this.byId('profiles', this.userId) || null;
-          this.emit();
-        }, 400);
-      });
-    }
+    const recharger = t => {
+      pending.add(t); for (const x of LIES[t] || []) pending.add(x); clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const ts = [...pending]; pending.clear();
+        await Promise.all(ts.map(x => this.loadTable(x)));
+        this.me = this.byId('profiles', this.userId) || null;
+        this.emit();
+      }, 400);
+    };
+    for (const t of TABLES) this.channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => recharger(t));
+    // Les vues (profils, entretiens, avis) n'ont pas de temps réel : la base signale leurs changements ici
+    this.channel.on('postgres_changes', { event: '*', schema: 'public', table: 'maj_tables' }, e => { const t = e.new?.cle; if (TABLES.includes(t)) recharger(t); });
+    this.channel.on('postgres_changes', { event: '*', schema: 'public', table: 'reglages' }, () => this.lireReglages().then(() => this.emit()).catch(() => {}));
     this.channel.subscribe();
   }
   async insert(table, row) {
@@ -395,6 +732,9 @@ class SupabaseStore extends Base {
     return data || 0;
   }
   async supprimerCompte() {
+    // Les fichiers du stockage ne partent pas avec la base : on retire d'abord ses CV
+    const { data: f } = await this.sb.storage.from('cv').list(this.userId).catch(() => ({ data: null }));
+    if (f?.length) await this.sb.storage.from('cv').remove(f.map(x => `${this.userId}/${x.name}`)).catch(() => {});
     const { error } = await this.sb.rpc('supprimer_mon_compte');
     if (error) throw new Error(frError(error));
     await this.sb.auth.signOut().catch(() => {});
@@ -414,6 +754,84 @@ class SupabaseStore extends Base {
     if (error) throw new Error(frError(error));
   }
   async desabonnerPush(endpoint) { await this.sb.from('push_subscriptions').delete().eq('endpoint', endpoint); }
+  // Phase 3
+  async enregistrerCoordonnees(champs) {
+    const { data, error } = await this.sb.from('coordonnees').upsert({ id: this.userId, ...champs }).select().single();
+    if (error) throw new Error(frError(error));
+    this.data.coordonnees = [data, ...this.data.coordonnees.filter(x => x.id !== data.id)];
+    this.emit(); return data;
+  }
+  async deposerCV(file) {
+    verifierPdf(file);
+    const ancien = this.me?.cv_path;
+    const path = `${this.userId}/cv-${Date.now()}.pdf`;
+    const { error } = await this.sb.storage.from('cv').upload(path, file, { contentType: 'application/pdf', upsert: false });
+    if (error) throw new Error(frError(error));
+    const r = await this.update('profiles', this.userId, { cv_path: path, cv_maj: new Date().toISOString() });
+    if (ancien && ancien !== path && !cvReference(this.data, ancien)) await this.sb.storage.from('cv').remove([ancien]).catch(() => {});
+    return r;
+  }
+  async retirerCV() {
+    const ancien = this.me?.cv_path;
+    const r = await this.update('profiles', this.userId, { cv_path: null, cv_maj: null });
+    if (ancien && !cvReference(this.data, ancien)) await this.sb.storage.from('cv').remove([ancien]).catch(() => {});
+    return r;
+  }
+  // Lien temporaire (10 minutes) vers un CV, si la base autorise ce compte à le lire
+  async lienCV(path) {
+    if (!path) return null;
+    const { data, error } = await this.sb.storage.from('cv').createSignedUrl(path, 600);
+    if (error || !data?.signedUrl) throw new Error('Ce CV n’est pas visible pour ton compte.');
+    return data.signedUrl;
+  }
+  async lireReglages() {
+    const { data, error } = await this.sb.from('reglages').select('cle, valeur');
+    this.reglages = error ? {} : Object.fromEntries(data.map(x => [x.cle, x.valeur]));
+    return this.reglages;
+  }
+  async enregistrerReglage(cle, valeur) {
+    const { error } = await this.sb.from('reglages').upsert({ cle, valeur, updated_at: new Date().toISOString() });
+    if (error) throw new Error(frError(error));
+    this.reglages = { ...this.reglages, [cle]: valeur }; this.emit();
+  }
+  async rapportInsertion() {
+    const { data, error } = await this.sb.rpc('rapport_insertion');
+    if (error) throw new Error(frError(error));
+    return data || [];
+  }
+  async historiqueGuide(guideId) {
+    const { data, error } = await this.sb.from('guide_pays_historique').select('*').eq('guide_id', guideId).order('created_at', { ascending: false }).limit(20);
+    return error ? [] : data;
+  }
+  async statsInsertion() {
+    const { data, error } = await this.sb.rpc('stats_insertion');
+    if (error) throw new Error(frError(error));
+    return data || [];
+  }
+  async seDesabonnerAlertes(token) {
+    const { data, error } = await this.sb.rpc('se_desabonner_alertes', { p_token: token });
+    return !error && data === true;
+  }
+  async importerListe(lignes, remplacer = false) {
+    const { data, error } = await this.sb.rpc('importer_liste', { p_lignes: lignes, p_remplacer: remplacer });
+    if (error) throw new Error(frError(error));
+    await this.loadTable('profiles'); this.me = this.byId('profiles', this.userId); this.emit();
+    return data;
+  }
+  async couvertureListe() {
+    const { data, error } = await this.sb.rpc('couverture_liste');
+    if (error) throw new Error(frError(error));
+    return data || [];
+  }
+  async manquantsListe(promo) {
+    const { data, error } = await this.sb.rpc('manquants_liste', { p_promo: +promo });
+    if (error) throw new Error(frError(error));
+    return data || [];
+  }
+  async viderListe(promo) {
+    const { error } = await this.sb.from('liste_officielle').delete().eq('promo', +promo);
+    if (error) throw new Error(frError(error));
+  }
   async testPush() {
     const { data, error } = await this.sb.functions.invoke('notifier', { body: { job: 'test' } });
     if (error) throw new Error('La fonction de notifications ne répond pas encore.');
@@ -432,6 +850,17 @@ function frError(e) {
   if (m.includes('duplicate key') && m.includes('invitations')) return 'Cet étudiant est déjà invité sur cette offre.';
   if (m.includes('duplicate key') && (m.includes('cafe_participants') || m.includes('groupe_membres'))) return 'C’est déjà fait.';
   if (m.includes('startups_site_check')) return 'Le lien doit commencer par https://';
+  if (m.includes('avis_stage_un_par_saison')) return 'Tu as déjà donné ton avis sur cette entreprise pour cette saison.';
+  if (m.includes('guide_pays_pays_cle_section')) return 'Cette rubrique existe déjà : recharge la page pour la modifier.';
+  if (m.includes('demandes_contact_demandeur_id_cible_id')) return 'Tu as déjà envoyé une demande à ce membre.';
+  if (m.includes('signalements_auteur_id_cible_type_cible_id')) return 'Tu as déjà signalé ce contenu. Merci !';
+  if (m.includes('enquetes_insertion_user_id_vague')) return 'Tu as déjà répondu à cette enquête.';
+  if (m.includes('duplicate key') && (m.includes('verifications_pairs') || m.includes('evenement_participants'))) return 'C’est déjà fait.';
+  if (m.includes('evenements_lien_check')) return 'Le lien doit commencer par https://';
+  if (m.includes('entretiens_questions_check')) return 'Ajoute au moins une question.';
+  if (m.includes('maximum allowed size') || m.includes('payload too large') || m.includes('entity too large')) return 'Le fichier dépasse 2 Mo. Exporte ton CV en PDF plus léger.';
+  if (m.includes('mime type')) return 'Seuls les fichiers PDF sont acceptés.';
+  if (m.includes('bucket not found')) return 'Cette fonction arrive bientôt : la base est en cours de mise à jour.';
   if (m.includes('lien_check')) return 'Le lien doit commencer par https://';
   if (m.includes('could not find the') || m.includes('does not exist')) return 'Cette fonction arrive bientôt : la base est en cours de mise à jour.';
   if (m.includes('row-level security')) return "Action non autorisée pour ton compte.";

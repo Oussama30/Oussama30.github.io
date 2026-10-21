@@ -130,6 +130,9 @@ export const BAREME = [
   ['Meilleure réponse choisie', 15],
   ['Vote reçu sur une réponse', 2],
   ['Réussite enregistrée (étudiant)', 10],
+  ['CV relu et rendu à un étudiant', 15],
+  ['Rubrique du guide de l’étranger écrite', 10],
+  ['Entretien ou avis de stage partagé', 5],
 ];
 
 export const NIVEAUX_IMPACT = [
@@ -180,6 +183,14 @@ export function computeScores(data, since = null) {
   for (const a of data.answers) { add(a.author_id, 5, 'Réponse dans l’Entraide', a.created_at); get(a.author_id).reponses++; }
   for (const q of data.questions) if (q.best_answer_id && ansAuthor.get(q.best_answer_id)) { const a = ansAuthor.get(q.best_answer_id); add(a, 15, 'Meilleure réponse', q.created_at); get(a).meilleures++; }
   for (const v of data.votes) { const a = ansAuthor.get(v.answer_id); if (a && a !== v.user_id) add(a, 2, 'Vote sur ta réponse', v.created_at); }
+  // Phase 3 : relectures de CV, guide de l'étranger, entretiens et avis partagés (l'auteur d'un partage anonyme n'est connu que de lui)
+  for (const r of data.relectures_cv || []) if (r.status === 'rendue' && r.reviewer_id) {
+    add(r.reviewer_id, 15, 'CV relu et rendu', r.rendue_at || r.created_at); get(r.reviewer_id).relectures = (get(r.reviewer_id).relectures || 0) + 1;
+    if (r.merci) { add(r.reviewer_id, 10, 'Message de remerciement', r.rendue_at || r.created_at); get(r.reviewer_id).mercis++; }
+  }
+  for (const g of data.guide_pays || []) if (g.updated_by) add(g.updated_by, 10, `Guide de l’étranger : ${g.pays}`, g.updated_at || g.created_at);
+  for (const e of data.entretiens || []) if (e.author_id) add(e.author_id, 5, `Entretien partagé : ${e.entreprise}`, e.created_at);
+  for (const a of data.avis_stage || []) if (a.author_id) add(a.author_id, 5, `Avis de stage : ${a.entreprise}`, a.created_at);
   return S;
 }
 
@@ -231,7 +242,7 @@ export function mentorState(m, now = new Date()) {
 }
 export const futureSlots = (m, now = new Date()) => (m.creneaux || []).filter(c => new Date(c) > now).sort();
 
-const norm = t => (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+export const norm = t => (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 // Pourquoi ce lauréat est le bon pour cette demande (et l'inverse)
 export function helpMatch(m, laureat, student, now = new Date()) {
@@ -473,3 +484,83 @@ export function tonAnnee(data, me, saison) {
     mercis, rangPromo: coupe.findIndex(x => x.promo === me.promo) + 1, promos: coupe.length,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Phase 3
+// ---------------------------------------------------------------------------
+// Nom comparable (même règle que cle_nom() dans la base) : « EL AMRANI Salma » = « Salma El-Amrani »
+export const cleNom = t => norm(t).replace(/[^a-z]+/g, ' ').split(' ').filter(Boolean).sort().join(' ');
+
+// Enquête d'insertion : à 6 mois (janvier à juin après le diplôme) et à 12 mois (juillet à mars suivant).
+// Retourne la vague à remplir maintenant, ou null.
+export function enqueteDue(me, enquetes = [], now = new Date()) {
+  if (!me || me.role === 'admin' || !me.promo || (me.role !== 'laureat' && niveauOf(me, seasonOf(now)) < 6)) return null;
+  const P = me.promo; const t = now.getTime();
+  const vagues = [[6, new Date(P + 1, 0, 1), new Date(P + 1, 6, 1)], [12, new Date(P + 1, 6, 1), new Date(P + 2, 3, 1)]];
+  for (const [v, debut, fin] of vagues) if (t >= debut && t < fin && !enquetes.some(e => e.user_id === me.id && e.vague === v)) return { vague: v, fin };
+  return null;
+}
+
+export const SITUATIONS = { emploi: 'En emploi', entrepreneur: 'Création d’entreprise', volontariat: 'Volontariat ou VIE', recherche: 'En recherche', etudes: 'Poursuite d’études', autre: 'Autre' };
+export const SALAIRES = { lt6: 'Moins de 6 000 DH', '6_10': '6 000 à 10 000 DH', '10_15': '10 000 à 15 000 DH', '15_20': '15 000 à 20 000 DH', '20_30': '20 000 à 30 000 DH', gt30: 'Plus de 30 000 DH', nsp: 'Je préfère ne pas dire' };
+export const CANAUX = { reseau_ensam: 'Réseau ENSAM', plateforme: 'Cette plateforme', linkedin: 'LinkedIn', stage: 'Suite au stage ou PFE', candidature: 'Candidature spontanée', concours: 'Concours', autre: 'Autre' };
+
+// Mêmes chiffres que stats_insertion() dans la base (aucun détail sous 5 réponses)
+export function statsInsertion(rows = []) {
+  const groupes = new Map();
+  for (const e of rows) { const k = e.promo + '|' + e.vague; if (!groupes.has(k)) groupes.set(k, []); groupes.get(k).push(e); }
+  const enPoste = e => ['emploi', 'entrepreneur', 'volontariat'].includes(e.situation);
+  const compte = (l, k, min = 1) => { const m = {}; for (const e of l) if (e[k] != null && !(k === 'salaire' && e[k] === 'nsp')) m[e[k]] = (m[e[k]] || 0) + 1; for (const x of Object.keys(m)) if (m[x] < min) delete m[x]; return Object.keys(m).length ? m : null; };
+  const moy = (l, k) => { const v = l.map(e => e[k]).filter(x => x != null); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length * 10) / 10 : null; };
+  const mediane = v => { if (!v.length) return null; const s = [...v].sort((a, b) => a - b); const m = (s.length - 1) / 2; return (s[Math.floor(m)] + s[Math.ceil(m)]) / 2; };
+  return [...groupes.values()].map(l => {
+    const n = l.length; const filieres = {};
+    for (const e of l) if (e.filiere) { filieres[e.filiere] ||= { n: 0, en_poste: 0 }; filieres[e.filiere].n++; if (enPoste(e)) filieres[e.filiere].en_poste++; }
+    for (const f of Object.keys(filieres)) if (filieres[f].n < 5) delete filieres[f];
+    return {
+      promo: l[0].promo, vague: l[0].vague, n, en_poste: l.filter(enPoste).length, recherche: l.filter(e => e.situation === 'recherche').length,
+      etudes: l.filter(e => e.situation === 'etudes').length, etranger: l.filter(e => enPoste(e) && e.pays && norm(e.pays).trim() !== 'maroc').length,
+      delai_median: mediane(l.map(e => e.delai_mois).filter(x => x != null)), lien_formation: moy(l, 'lien_formation'), satisfaction: moy(l, 'satisfaction'),
+      canaux: compte(l, 'canal'), secteurs: n >= 5 ? compte(l, 'secteur', 2) : null, salaires: n >= 5 ? compte(l, 'salaire') : null,
+      filieres: Object.keys(filieres).length ? filieres : null,
+    };
+  }).sort((a, b) => b.promo - a.promo || a.vague - b.vague);
+}
+
+// Rubriques du guide de l'étranger
+export const GUIDE_SECTIONS = [
+  ['campus_france', 'Campus France et admission', 'cap'], ['visa', 'Visa et titre de séjour', 'shield'], ['convention', 'Convention de stage', 'check'],
+  ['logement', 'Logement', 'home'], ['budget', 'Budget et coût de la vie', 'briefcase'], ['stage', 'Trouver un stage ou un emploi', 'feed'], ['vie', 'Vie sur place', 'heart'],
+];
+
+// Taux d'insertion par promo, filière et vague (même calcul que rapport_insertion() dans la base) :
+// le taux exclut ceux qui poursuivent leurs études ; le taux de réponse se rapporte à la liste officielle si elle est importée.
+export function rapportInsertion(data, now = new Date()) {
+  const an = now.getFullYear(); const enPoste = e => ['emploi', 'entrepreneur', 'volontariat'].includes(e.situation);
+  const cohortes = new Map();
+  for (const p of data.profiles) if (p.role !== 'admin' && p.promo <= an && p.promo >= an - 6) { const k = p.promo + '|' + p.filiere; cohortes.set(k, (cohortes.get(k) || 0) + 1); }
+  const liste = data.liste_officielle || []; const enq = data.enquetes_insertion || [];
+  const mediane = v => { if (!v.length) return null; const s = [...v].sort((a, b) => a - b); const m = (s.length - 1) / 2; return (s[Math.floor(m)] + s[Math.ceil(m)]) / 2; };
+  const moy = v => v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length * 10) / 10 : null;
+  const rows = [];
+  for (const [k, inscrits] of cohortes) {
+    const [promoS, filiere] = k.split('|'); const promo = +promoS;
+    for (const vague of [6, 12]) {
+      const r = enq.filter(e => e.promo === promo && e.filiere === filiere && e.vague === vague);
+      if (!r.length && promo > an - 1) continue;
+      const eff = liste.filter(l => l.promo === promo && norm(l.filiere || '').trim() === norm(filiere).trim()).length || null;
+      const ep = r.filter(enPoste).length, etu = r.filter(e => e.situation === 'etudes').length;
+      rows.push({
+        promo, filiere, vague, effectif: eff, inscrits, repondants: r.length, en_poste: ep, recherche: r.filter(e => e.situation === 'recherche').length, etudes: etu,
+        etranger: r.filter(e => enPoste(e) && e.pays && norm(e.pays).trim() !== 'maroc').length,
+        taux_insertion: r.length - etu > 0 ? Math.round(ep / (r.length - etu) * 1000) / 1000 : null,
+        taux_reponse: (eff || inscrits) ? Math.round(r.length / (eff || inscrits) * 1000) / 1000 : null,
+        delai_median: mediane(r.map(e => e.delai_mois).filter(x => x != null)), satisfaction: moy(r.map(e => e.satisfaction).filter(x => x != null)),
+        lien_formation: moy(r.map(e => e.lien_formation).filter(x => x != null)),
+      });
+    }
+  }
+  return rows.sort((a, b) => b.promo - a.promo || a.filiere.localeCompare(b.filiere) || a.vague - b.vague);
+}
+
+export const TYPES_EVENEMENT = { forum: ['Forum', 'briefcase'], conference: ['Conférence', 'mentor'], portes_ouvertes: ['Portes ouvertes', 'home'], atelier: ['Atelier', 'wrench'], soutenance: ['Soutenances', 'cap'], autre: ['Événement', 'calendar'] };
