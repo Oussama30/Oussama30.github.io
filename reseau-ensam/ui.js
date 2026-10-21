@@ -1,5 +1,5 @@
 // Composants partagés de l'interface.
-import { html, useState, useEffect, useRef } from './vendor/preact-htm.js';
+import { html, useState, useEffect, useRef, useMemo } from './vendor/preact-htm.js';
 import { initials, levelOf, NIVEAUX, niveauOf, seasonOf } from './logic.js';
 import { sceneMarkup } from './scene.js';
 import { glyph, TUILE_DEFS, TUILE } from './logo.js';
@@ -73,12 +73,22 @@ const ICONS = {
   eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  chat: '<path d="M20.5 11.5a8.5 8.5 0 0 1-12.3 7.6L3.5 20.5l1.4-4.4A8.5 8.5 0 1 1 20.5 11.5z"/><path d="M8.5 10h7M8.5 13.5h4.5"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
+  play: '<path d="M8 5.2v13.6a.8.8 0 0 0 1.2.7l10.6-6.8a.8.8 0 0 0 0-1.4L9.2 4.5A.8.8 0 0 0 8 5.2z" fill="currentColor" stroke="none"/>',
+  pause: '<rect x="6.5" y="5" width="3.6" height="14" rx="1.2" fill="currentColor" stroke="none"/><rect x="13.9" y="5" width="3.6" height="14" rx="1.2" fill="currentColor" stroke="none"/>',
+  back: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  block: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+  checks: '<path d="M2.5 12.5 7 17l9.5-9.5"/><path d="M12.5 16.5l.5.5 9-9"/>',
 };
 
 // Fenêtres ouvertes, la plus récente à la fin : seule celle du dessus réagit au clavier
 const ouvertes = [];
 const FOCUSABLES = 'a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-export function Modal({ title, onClose, children, wide }) {
+// Sur téléphone, chaque fenêtre arrive par le bas comme une feuille (voir le CSS). « footer » reste collé
+// en bas, à portée du pouce : c'est là que va l'action principale.
+export function Modal({ title, onClose, children, wide, footer }) {
   const ref = useRef();
   const fermer = useRef(onClose);
   fermer.current = onClose;
@@ -107,9 +117,10 @@ export function Modal({ title, onClose, children, wide }) {
     };
   }, []);
   return html`<div class="modal-back" onClick=${e => { if (e.target === e.currentTarget) onClose(); }}>
-    <div class=${'modal' + (wide ? ' wide' : '')} role="dialog" aria-modal="true" aria-label=${title} ref=${ref}>
-      <header class="modal-head"><h2>${title}</h2><button class="icon-btn" onClick=${onClose} aria-label="Fermer"><${Icon} name="x"/></button></header>
+    <div class=${'modal' + (wide ? ' wide' : '') + (footer ? ' has-foot' : '')} role="dialog" aria-modal="true" aria-label=${title} ref=${ref}>
+      <header class="modal-head"><span class="sheet-grip" aria-hidden="true"></span><h2>${title}</h2><button class="icon-btn" onClick=${onClose} aria-label="Fermer"><${Icon} name="x"/></button></header>
       <div class="modal-body">${children}</div>
+      ${footer ? html`<footer class="modal-foot">${footer}</footer>` : null}
     </div>
   </div>`;
 }
@@ -128,14 +139,75 @@ export function Field({ label, hint, children }) {
   return html`<label class="field"><span class="field-label">${label}</span>${children}${hint ? html`<span class="field-hint">${hint}</span>` : null}</label>`;
 }
 
-export function Empty({ icon = 'spark', title, children }) {
-  return html`<div class="empty"><${Icon} name=${icon} size=${28}/><strong>${title}</strong><div>${children}</div></div>`;
+// Écran vide : une phrase chaleureuse et, si possible, une seule action pour avancer.
+// action = { label, onClick, icon }
+export function Empty({ icon = 'spark', title, children, action }) {
+  return html`<div class="empty"><span class="empty-ico"><${Icon} name=${icon} size=${26}/></span><strong>${title}</strong><div>${children}</div>
+    ${action ? html`<button type="button" class="btn primary small empty-act" onClick=${action.onClick}>${action.icon ? html`<${Icon} name=${action.icon} size=${15}/> ` : null}${action.label}</button>` : null}</div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Les grands moments : première candidature, rendez-vous fixé, recrutement confirmé, premier merci…
+// Une seule fois chacun (cle), avec une phrase chaleureuse et une seule prochaine étape.
+// ---------------------------------------------------------------------------
+let feteSet = null;
+export function celebrate({ cle, titre, texte, action, icon = 'trophy' }) {
+  if (cle) { try { if (localStorage.getItem('fete-' + cle)) return false; localStorage.setItem('fete-' + cle, '1'); } catch { /* pas de stockage : on fête quand même */ } }
+  if (!feteSet) return false;
+  feteSet({ titre, texte, action, icon, t: Date.now() });
+  return true;
+}
+export function Celebration() {
+  const [f, setF] = useState(null);
+  feteSet = setF;
+  // On quitte l'écran (bouton retour) : la fête ne suit pas sur la page suivante
+  useEffect(() => {
+    if (!f) return;
+    const k = () => { if (Date.now() - f.t > 800) setF(null); };
+    window.addEventListener('hashchange', k);
+    return () => window.removeEventListener('hashchange', k);
+  }, [f]);
+  return f ? html`<${Fete} f=${f} key=${f.t} onClose=${() => setF(null)}/>` : null;
+}
+const COULEURS_FETE = ['var(--em-o)', 'var(--em-b)', 'var(--orange)', 'var(--accent)', 'var(--good)', '#FFD166'];
+function Fete({ f, onClose }) {
+  const ref = useRef();
+  const morceaux = useMemo(() => Array.from({ length: 34 }, (_, i) => ({ x: Math.round(Math.random() * 100), dx: Math.round(Math.random() * 120 - 60), d: (1.1 + Math.random() * .9).toFixed(2), w: (Math.random() * .35).toFixed(2), r: Math.round(Math.random() * 720 - 360), c: COULEURS_FETE[i % COULEURS_FETE.length], rond: i % 3 === 0 })), []);
+  useEffect(() => {
+    const avant = document.activeElement;
+    ref.current?.querySelector('button')?.focus();
+    const k = e => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', k);
+    return () => { document.removeEventListener('keydown', k); if (avant?.isConnected) avant.focus?.(); };
+  }, []);
+  return html`<div class="fete-back" onClick=${e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div class="fete-pluie" aria-hidden="true">${morceaux.map(m => html`<i class=${m.rond ? 'rond' : ''} style=${`--x:${m.x}%;--dx:${m.dx}px;--d:${m.d}s;--w:${m.w}s;--r:${m.r}deg;--c:${m.c}`}></i>`)}</div>
+    <div class="fete" role="dialog" aria-modal="true" aria-labelledby="fete-titre" ref=${ref}>
+      <span class="fete-ico"><${Icon} name=${f.icon} size=${34}/></span>
+      <h2 id="fete-titre">${f.titre}</h2>
+      ${f.texte ? html`<p>${f.texte}</p>` : null}
+      <div class="fete-acts">
+        ${f.action ? html`<button type="button" class="btn primary" onClick=${() => { onClose(); f.action.onClick(); }}>${f.action.icon ? html`<${Icon} name=${f.action.icon} size=${16}/> ` : null}${f.action.label}</button>` : null}
+        <button type="button" class=${'btn ' + (f.action ? 'ghost' : 'primary')} onClick=${onClose}>${f.action ? 'Plus tard' : 'Merci !'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Bouton qui attend la fin de son action : il se grise et montre un petit cercle, ce qui évite le double clic
+export function useBusy() {
+  const [busy, setBusy] = useState(false);
+  const run = fn => async (...a) => { if (busy) return; setBusy(true); try { await fn(...a); } finally { setBusy(false); } };
+  return [busy, run];
 }
 
 export function LevelChip({ points }) {
   const l = levelOf(points || 0);
   return html`<span class=${'lvl lvl-' + l.idx} title=${`${points || 0} points d’impact`}>${l.nom}</span>`;
 }
+
+let rangsVisibles = true;
+export function voirRangs(v) { rangsVisibles = v; }
 
 export function RoleLine({ p, score }) {
   if (!p) return null;
@@ -147,13 +219,16 @@ export function RoleLine({ p, score }) {
   else parts.push(`Promo ${p.promo}${p.entreprise ? ' · ' + p.entreprise : ''}`);
   return html`<span class="role-line">${parts.join(' ')}
     ${p.role === 'laureat' && p.verified ? html`<span class="verif" title="Lauréat vérifié par l’école"><${Icon} name="shield" size=${13}/></span>` : null}
-    ${p.role === 'laureat' && score ? html` <${LevelChip} points=${score.points}/>` : null}</span>`;
+    ${p.role === 'laureat' && score && rangsVisibles ? html` <${LevelChip} points=${score.points}/>` : null}
+    ${p.role === 'laureat' && score && !rangsVisibles && aides(score) ? html` <span class="mini aide-chip"><${Icon} name="heart" size=${11}/> ${aides(score) > 1 ? `A aidé ${aides(score)} étudiants` : 'A aidé 1 étudiant'}</span>` : null}</span>`;
 }
+
+const aides = s => (s?.recrutes || 0) + (s?.mentorats || 0);
 
 export function Person({ p, score, onOpen, size = 36, sub }) {
   return html`<button class="person" onClick=${() => onOpen?.(p)} type="button">
     <${Avatar} p=${p} size=${size}/>
-    <span class="person-txt"><span class="person-name">${p?.full_name || 'Membre'}</span>${sub !== undefined ? html`<span class="role-line">${sub}</span>` : html`<${RoleLine} p=${p} score=${score}/>`}</span>
+    <span class="person-txt">${p?.full_name ? html`<span class="person-name" translate="no" dir="auto">${p.full_name}</span>` : html`<span class="person-name">Membre</span>`}${sub !== undefined ? html`<span class="role-line">${sub}</span>` : html`<${RoleLine} p=${p} score=${score}/>`}</span>
   </button>`;
 }
 

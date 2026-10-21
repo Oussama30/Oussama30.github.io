@@ -10,6 +10,7 @@ import { CoupePromos } from './saison.js';
 import { EntreprisesPage } from './entreprises.js';
 import { EtrangerPage } from './etranger.js';
 import { AgendaPage } from './agenda.js';
+import { MessageBtn } from './messages.js';
 import { CvButton } from './cv.js';
 import { SignalerBtn, ContactBlock, PairVerify, VisibiliteFields, groupesMasques, confirmations, VIS_LABELS, VIS_CHOIX } from './confiance.js';
 import { VIS_CHAMPS } from './store.js';
@@ -193,6 +194,7 @@ export function ProfileModal({ ctx, p: p0, onClose, onAskMentor }) {
       <${PairVerify} ctx=${ctx} p=${p}/>
       <${ContactBlock} ctx=${ctx} p=${p}/>
       <div class="profile-foot"><${SignalerBtn} ctx=${ctx} type="profil" id=${p.id}/><span class="spacer"></span>
+        ${p.id !== me.id ? html`<${MessageBtn} ctx=${ctx} p=${p} cls=${p.mentor_dispo && p.role === 'laureat' && me.role !== 'admin' ? 'btn' : 'btn primary'}/>` : null}
         ${p.mentor_dispo && p.role === 'laureat' && p.id !== me.id && me.role !== 'admin' ? html`<button class="btn primary" onClick=${() => onAskMentor(p)}><${Icon} name="mentor" size=${16}/> Demander de l’aide</button>` : null}</div>
     </div>
   <//>`;

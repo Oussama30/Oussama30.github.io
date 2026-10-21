@@ -418,7 +418,7 @@ export function NudgeAvis({ ctx }) {
         ? html`<strong>${item.emploi ? 'Comment se passent tes débuts chez' : 'Comment s’est passé ton stage chez'} <span translate="no">${item.ent}</span> ?</strong><span class="small muted">Ton avis, anonyme si tu veux, aide la promo suivante à choisir.</span>`
         : html`<strong>Partage les questions de ton entretien chez <span translate="no">${item.ent}</span></strong><span class="small muted">Même trois questions suffisent pour aider ceux qui passent après toi.</span>`}</div>
       <div class="ent-nudge-btns"><button class="btn ghost small" onClick=${() => setOff([...off, item.key])}>Plus tard</button>
-        <button class="btn primary small" id="nudge-ent-go" onClick=${() => setForm(item)}>${item.kind === 'avis' ? 'Donner mon avis' : 'Partager mes questions'}</button></div>
+        <button class="btn small" id="nudge-ent-go" onClick=${() => setForm(item)}>${item.kind === 'avis' ? 'Donner mon avis' : 'Partager mes questions'}</button></div>
     </div>` : null}
     ${form?.kind === 'avis' ? html`<${AvisForm} ctx=${ctx} initial=${form.initial} onClose=${() => setForm(null)}/>` : null}
     ${form?.kind === 'entretien' ? html`<${EntretienForm} ctx=${ctx} initial=${form.initial} onClose=${() => setForm(null)}/>` : null}

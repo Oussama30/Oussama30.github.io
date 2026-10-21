@@ -1334,6 +1334,7 @@ alter table public.profiles add column if not exists cv_maj timestamptz;
 alter table public.profiles add column if not exists visibilite jsonb not null default '{}';
 alter table public.profiles add column if not exists alertes_offres boolean not null default true;
 alter table public.profiles add column if not exists alertes_email boolean not null default true;
+alter table public.profiles add column if not exists emails_messages boolean not null default true;
 
 -- visibilite : { travail, lieu, linkedin, presentation, cv } -> tous | laureats | contacts
 create or replace function public.visibilite_valide(v jsonb) returns boolean
@@ -1498,7 +1499,8 @@ select p.id, p.full_name, p.role, p.filiere, p.promo,
   case when public.voit_champ(p.id, p.visibilite, 'cv') then p.cv_maj end as cv_maj,
   case when p.id = auth.uid() then p.visibilite else '{}'::jsonb end as visibilite,
   case when p.id = auth.uid() then p.alertes_offres end as alertes_offres,
-  case when p.id = auth.uid() then p.alertes_email end as alertes_email
+  case when p.id = auth.uid() then p.alertes_email end as alertes_email,
+  case when p.id = auth.uid() then p.emails_messages end as emails_messages
 from public.profiles p
 where auth.uid() is not null;
 revoke all on public.profils from public, anon;
@@ -2653,6 +2655,269 @@ end $$;
 do $$ begin
   if exists (select 1 from pg_extension where extname = 'pg_cron') then
     perform cron.schedule('ensam-alertes', '5 * * * *', 'select public.alertes_horaires()');
+  end if;
+end $$;
+
+-- =====================================================================
+-- Messagerie : texte, photos et messages vocaux entre deux membres déjà en lien
+-- (mentorat, candidature à une offre, coordonnées acceptées, parrainage, relecture de CV),
+-- ou avec l'administration. Les fichiers vont dans un stockage privé « chat »,
+-- rangés par auteur puis destinataire : <auteur>/<destinataire>/<fichier>.
+-- =====================================================================
+create table if not exists public.messages (
+  id uuid primary key default gen_random_uuid(),
+  author_id uuid not null references public.profiles(id) on delete cascade,
+  dest_id uuid not null references public.profiles(id) on delete cascade,
+  type text not null default 'texte' check (type in ('texte','photo','vocal')),
+  body text check (char_length(body) <= 2000),
+  fichier text check (char_length(fichier) <= 300),
+  duree int check (duree between 0 and 180),
+  largeur int check (largeur between 1 and 10000),
+  hauteur int check (hauteur between 1 and 10000),
+  onde text check (onde ~ '^[0-9]{0,64}$'),
+  lu_at timestamptz,
+  created_at timestamptz default now(),
+  check (author_id <> dest_id),
+  check (type <> 'texte' or char_length(btrim(coalesce(body, ''))) > 0),
+  check (type = 'texte' or fichier is not null)
+);
+create index if not exists messages_dest_lu on public.messages (dest_id, lu_at);
+create index if not exists messages_paire on public.messages (author_id, dest_id, created_at desc);
+
+-- « Bloquer » : plus aucun message dans un sens ni dans l'autre
+create table if not exists public.blocages (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  bloque_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz default now(),
+  unique (user_id, bloque_id),
+  check (user_id <> bloque_id)
+);
+
+-- Deux membres peuvent s'écrire quand un lien existe déjà entre eux, ou quand l'autre
+-- a écrit en premier. L'administration peut écrire à tout le monde. Un blocage ferme tout.
+create or replace function public.peut_discuter(p_moi uuid, p_autre uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select p_moi is not null and p_autre is not null and p_moi <> p_autre
+    and (auth.uid() is null or auth.uid() = p_moi)
+    and exists (select 1 from public.profiles where id = p_autre)
+    and not exists (select 1 from public.blocages b
+      where (b.user_id = p_moi and b.bloque_id = p_autre) or (b.user_id = p_autre and b.bloque_id = p_moi))
+    and (
+      exists (select 1 from public.profiles a where a.id = p_moi and a.role = 'admin')
+      or exists (select 1 from public.messages m where m.author_id = p_autre and m.dest_id = p_moi)
+      or public.en_relation(p_moi, p_autre) or public.en_relation(p_autre, p_moi)
+      or exists (select 1 from public.mentorships m where m.mentor_id is not null and m.status in ('demande','acceptee','terminee')
+        and ((m.student_id = p_moi and m.mentor_id = p_autre) or (m.student_id = p_autre and m.mentor_id = p_moi)))
+      or exists (select 1 from public.parrainages x
+        where (x.parrain_id = p_moi and x.filleul_id = p_autre) or (x.parrain_id = p_autre and x.filleul_id = p_moi))
+      or exists (select 1 from public.relectures_cv r where r.reviewer_id is not null and r.status <> 'annulee'
+        and ((r.student_id = p_moi and r.reviewer_id = p_autre) or (r.student_id = p_autre and r.reviewer_id = p_moi))));
+$$;
+revoke all on function public.peut_discuter(uuid, uuid) from public, anon;
+grant execute on function public.peut_discuter(uuid, uuid) to authenticated;
+
+create or replace function public.uuid_ou_null(p text) returns uuid
+language plpgsql immutable as $$
+begin return p::uuid; exception when others then return null; end $$;
+
+create or replace function public.protect_message() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v public.messages;
+begin
+  if tg_op = 'INSERT' then
+    if auth.uid() is not null then new.author_id := auth.uid(); end if;
+    new.lu_at := null; new.created_at := now();
+    new.body := nullif(btrim(new.body), '');
+    if new.type = 'texte' then new.fichier := null; new.duree := null; new.largeur := null; new.hauteur := null; new.onde := null; end if;
+    if new.type = 'photo' then new.duree := null; new.onde := null; end if;
+    if new.type = 'vocal' then new.body := null; new.largeur := null; new.hauteur := null; end if;
+    if new.fichier is not null and new.fichier not like new.author_id::text || '/' || new.dest_id::text || '/%' then
+      raise exception 'Fichier invalide.';
+    end if;
+    if auth.uid() is not null and not public.peut_discuter(new.author_id, new.dest_id) then
+      raise exception 'Conversation pas encore ouverte : elle s’ouvre avec un mentorat, une candidature ou une demande de contact acceptée.';
+    end if;
+    return new;
+  end if;
+  -- Ensuite, seule la date de lecture change, et seulement par le destinataire
+  if auth.uid() is null or public.is_admin() then return new; end if;
+  if auth.uid() <> old.dest_id then raise exception 'Action non autorisée pour ton compte.'; end if;
+  v := old;
+  v.lu_at := coalesce(old.lu_at, case when new.lu_at is not null then now() end);
+  return v;
+end $$;
+drop trigger if exists trg_protect_message on public.messages;
+create trigger trg_protect_message before insert or update on public.messages
+  for each row execute function public.protect_message();
+drop trigger if exists trg_limite on public.messages;
+create trigger trg_limite before insert on public.messages
+  for each row execute function public.limiter('author_id', '300', '1 day');
+
+create or replace function public.protect_blocage() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is not null then new.user_id := auth.uid(); end if;
+  new.created_at := now();
+  return new;
+end $$;
+drop trigger if exists trg_protect_blocage on public.blocages;
+create trigger trg_protect_blocage before insert on public.blocages
+  for each row execute function public.protect_blocage();
+
+-- Tout ce que l'autre m'a écrit est lu (ouvrir la conversation)
+create or replace function public.marquer_lus(p_de uuid) returns int
+language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  if auth.uid() is null then return 0; end if;
+  update public.messages set lu_at = now() where author_id = p_de and dest_id = auth.uid() and lu_at is null;
+  get diagnostics n = row_count;
+  return n;
+end $$;
+revoke all on function public.marquer_lus(uuid) from public, anon;
+grant execute on function public.marquer_lus(uuid) to authenticated;
+
+-- Notification sur le téléphone : une seule pour une rafale de messages
+create or replace function public.notif_message() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if exists (select 1 from public.messages m where m.author_id = new.author_id and m.dest_id = new.dest_id and m.id <> new.id
+      and m.lu_at is null and m.created_at > now() - interval '10 minutes') then
+    return null;
+  end if;
+  perform public.pousser(new.dest_id, 'message', jsonb_build_object(
+    'nom', (select full_name from public.profiles where id = new.author_id), 'de', new.author_id,
+    'type', new.type, 'texte', left(coalesce(new.body, ''), 140), 'duree', new.duree));
+  return null;
+exception when others then return null;
+end $$;
+drop trigger if exists trg_notif on public.messages;
+create trigger trg_notif after insert on public.messages for each row execute function public.notif_message();
+
+-- Signalement d'un message privé : l'administration le voit alors (et seulement alors)
+alter table public.signalements drop constraint if exists signalements_cible_type_check;
+alter table public.signalements add constraint signalements_cible_type_check
+  check (cible_type in ('offre','commentaire','question','reponse','message','profil','entretien','avis','guide','cafe','startup','relecture','prive'));
+
+create or replace function public.message_signale(p_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.signalements s where s.cible_type = 'prive' and s.cible_id = p_id);
+$$;
+
+alter table public.messages enable row level security;
+alter table public.blocages enable row level security;
+drop policy if exists "lecture membres" on public.messages;
+drop policy if exists "ecriture proprietaire" on public.messages;
+drop policy if exists "suppression proprietaire" on public.messages;
+create policy "lecture membres" on public.messages for select to authenticated using (
+  author_id = auth.uid() or dest_id = auth.uid() or (public.is_admin() and public.message_signale(id)));
+create policy "ecriture proprietaire" on public.messages for insert to authenticated with check (author_id = auth.uid());
+create policy "suppression proprietaire" on public.messages for delete to authenticated using (author_id = auth.uid() or public.is_admin());
+drop policy if exists "lecture membres" on public.blocages;
+drop policy if exists "ecriture proprietaire" on public.blocages;
+drop policy if exists "suppression proprietaire" on public.blocages;
+create policy "lecture membres" on public.blocages for select to authenticated using (user_id = auth.uid() or public.is_admin());
+create policy "ecriture proprietaire" on public.blocages for insert to authenticated with check (user_id = auth.uid());
+create policy "suppression proprietaire" on public.blocages for delete to authenticated using (user_id = auth.uid() or public.is_admin());
+
+-- Photos et vocaux : 5 Mo au plus ; lus par les deux personnes de la conversation seulement
+create or replace function public.peut_lire_fichier_chat(p_name text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select auth.uid() is not null and (
+    (storage.foldername(p_name))[1] = auth.uid()::text or (storage.foldername(p_name))[2] = auth.uid()::text
+    or (public.is_admin() and exists (select 1 from public.messages m where m.fichier = p_name and public.message_signale(m.id))));
+$$;
+do $$ begin
+  insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+    values ('chat', 'chat', false, 5242880, array['image/jpeg','image/png','image/webp','audio/webm','audio/ogg','audio/mp4','audio/mpeg','audio/aac'])
+    on conflict (id) do update set public = false, file_size_limit = 5242880,
+      allowed_mime_types = array['image/jpeg','image/png','image/webp','audio/webm','audio/ogg','audio/mp4','audio/mpeg','audio/aac'];
+  drop policy if exists "chat lecture" on storage.objects;
+  drop policy if exists "chat depot" on storage.objects;
+  drop policy if exists "chat suppression" on storage.objects;
+  create policy "chat lecture" on storage.objects for select to authenticated using (bucket_id = 'chat' and public.peut_lire_fichier_chat(name));
+  create policy "chat depot" on storage.objects for insert to authenticated with check (
+    bucket_id = 'chat' and (storage.foldername(name))[1] = auth.uid()::text
+    and public.peut_discuter(auth.uid(), public.uuid_ou_null((storage.foldername(name))[2])));
+  create policy "chat suppression" on storage.objects for delete to authenticated using (
+    bucket_id = 'chat' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
+exception when others then raise notice 'Stockage de la messagerie non configuré : %', sqlerrm;
+end $$;
+
+-- Email quand un message attend depuis 30 minutes sans être lu (un toutes les 6 heures au plus)
+alter table public.notif_etat add column if not exists messages_at timestamptz;
+
+create or replace function public.messages_a_signaler(p_max int default 100)
+returns table (id uuid, email text, langue text, token uuid, n int, noms jsonb)
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.notif_etat (user_id) select p.id from public.profiles p on conflict (user_id) do nothing;
+  return query
+    select p.id, u.email::text, p.langue, ne.token, count(*)::int,
+      (select jsonb_agg(x.full_name) from (select distinct a.full_name from public.messages m2 join public.profiles a on a.id = m2.author_id
+         where m2.dest_id = p.id and m2.lu_at is null and m2.created_at > now() - interval '3 days' limit 3) x)
+    from public.messages m
+      join public.profiles p on p.id = m.dest_id
+      join auth.users u on u.id = p.id
+      join public.notif_etat ne on ne.user_id = p.id
+    where m.lu_at is null and p.emails_messages and u.email is not null
+      and m.created_at < now() - interval '30 minutes' and m.created_at > now() - interval '3 days'
+      and m.created_at > coalesce(ne.messages_at, '-infinity'::timestamptz)
+      and (ne.messages_at is null or ne.messages_at < now() - interval '6 hours')
+    group by p.id, u.email, p.langue, ne.token
+    order by min(m.created_at)
+    limit greatest(0, least(p_max, 200));
+end $$;
+revoke all on function public.messages_a_signaler(int) from public, anon, authenticated;
+
+create or replace function public.messages_signales(p_ids uuid[]) returns void
+language sql security definer set search_path = public as $$
+  update public.notif_etat set messages_at = now() where user_id = any(p_ids);
+$$;
+revoke all on function public.messages_signales(uuid[]) from public, anon, authenticated;
+
+create or replace function public.se_desabonner_messages(p_token uuid) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare v uuid;
+begin
+  select user_id into v from public.notif_etat where token = p_token;
+  if v is null then return false; end if;
+  update public.profiles set emails_messages = false where id = v;
+  return true;
+end $$;
+revoke all on function public.se_desabonner_messages(uuid) from public;
+grant execute on function public.se_desabonner_messages(uuid) to anon, authenticated;
+
+-- Chaque heure : alertes d'offres, et emails des messages non lus
+create or replace function public.alertes_horaires() returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if exists (select 1 from public.offers where created_at > now() - interval '3 hours' and status = 'ouverte') then
+    perform public.appeler_notifier('alertes');
+  end if;
+  if exists (select 1 from public.messages where lu_at is null and created_at between now() - interval '3 days' and now() - interval '30 minutes') then
+    perform public.appeler_notifier('messages');
+  end if;
+end $$;
+revoke all on function public.alertes_horaires() from public, anon, authenticated;
+
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant execute on function public.messages_a_signaler(int) to service_role;
+    grant execute on function public.messages_signales(uuid[]) to service_role;
+  end if;
+end $$;
+
+do $$
+declare t text;
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    foreach t in array array['messages','blocages'] loop
+      if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename=t) then
+        execute format('alter publication supabase_realtime add table public.%I', t);
+      end if;
+    end loop;
   end if;
 end $$;
 

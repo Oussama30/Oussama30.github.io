@@ -13,7 +13,7 @@ addAR({
   'Vue d’ensemble': 'نظرة عامة', 'Modération': 'الإشراف', 'Liste officielle': 'اللائحة الرسمية', 'Réglages': 'الإعدادات', 'Agenda': 'المفكرة',
   'À traiter': 'للمعالجة', 'Signalements': 'التبليغات', 'Tout est à jour.': 'كل شيء محيَّن.',
   // Modération
-  'Offre': 'عرض', 'Commentaire': 'تعليق', 'Question': 'سؤال', 'Réponse': 'جواب', 'Message de groupe': 'رسالة في مجموعة', 'Profil': 'ملف شخصي',
+  'Offre': 'عرض', 'Commentaire': 'تعليق', 'Question': 'سؤال', 'Réponse': 'جواب', 'Message de groupe': 'رسالة في مجموعة', 'Message privé': 'رسالة خاصة', 'Voir la photo': 'عرض الصورة', 'Fichier indisponible.': 'الملف غير متاح.', 'Profil': 'ملف شخصي',
   'Entretien': 'مقابلة', 'Avis de stage': 'رأي حول تدريب', 'Guide de l’étranger': 'دليل الخارج', 'Café ENSAM': 'مقهى ENSAM', 'Startup': 'شركة ناشئة', 'Relecture de CV': 'مراجعة سيرة ذاتية',
   'Spam': 'رسائل مزعجة', 'Arnaque': 'احتيال', 'Inapproprié': 'غير لائق', 'Faux ou trompeur': 'خاطئ أو مضلل', 'Harcèlement': 'تحرش', 'Données personnelles': 'معطيات شخصية', 'Autre': 'آخر',
   'Rien à modérer': 'لا شيء للإشراف', 'Quand un membre signale un contenu, il apparaît ici. Tu décides de le retirer ou de le garder.': 'عندما يبلّغ عضو عن محتوى، يظهر هنا. تقرر حذفه أو إبقاءه.',
@@ -143,7 +143,7 @@ function VueEnsemble({ ctx, comptes, ouverts, toVerify }) {
 // Modération : les signalements, regroupés par contenu
 // ---------------------------------------------------------------------------
 export const MOTIFS = { spam: 'Spam', arnaque: 'Arnaque', inapproprie: 'Inapproprié', faux: 'Faux ou trompeur', harcelement: 'Harcèlement', donnees: 'Données personnelles', autre: 'Autre' };
-const TYPES_CIBLE = { offre: ['Offre', 'feed'], commentaire: ['Commentaire', 'comment'], question: ['Question', 'qa'], reponse: ['Réponse', 'qa'], message: ['Message de groupe', 'people'], profil: ['Profil', 'user'], entretien: ['Entretien', 'briefcase'], avis: ['Avis de stage', 'star'], guide: ['Guide de l’étranger', 'flag'], cafe: ['Café ENSAM', 'clap'], startup: ['Startup', 'spark'], relecture: ['Relecture de CV', 'eye'] };
+const TYPES_CIBLE = { offre: ['Offre', 'feed'], commentaire: ['Commentaire', 'comment'], question: ['Question', 'qa'], reponse: ['Réponse', 'qa'], message: ['Message de groupe', 'people'], profil: ['Profil', 'user'], entretien: ['Entretien', 'briefcase'], avis: ['Avis de stage', 'star'], guide: ['Guide de l’étranger', 'flag'], cafe: ['Café ENSAM', 'clap'], startup: ['Startup', 'spark'], relecture: ['Relecture de CV', 'eye'], prive: ['Message privé', 'chat'] };
 const court = (t, n = 220) => { const s = String(t || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 const nomGroupe = g => String(g || '').split(':').slice(1).join(':');
 
@@ -165,6 +165,12 @@ function cible(ctx, type, id) {
     case 'cafe': { const r = by('cafes'); return r && { r, titre: `${r.ville} · ${r.lieu}`, texte: r.message, auteur: r.organisateur_id, actions: r.annule ? [] : [['Annuler le café', () => store.update('cafes', id, { annule: true }), true]] }; }
     case 'startup': { const r = by('startups'); return r && { r, titre: r.nom, texte: r.pitch, auteur: r.fondateur_id, actions: [['Retirer la startup', rm('startups'), true]] }; }
     case 'relecture': { const r = by('relectures_cv'); const s = r && store.byId('profiles', r.student_id); return r && { r, titre: s?.full_name || '', texte: r.synthese || r.message, auteur: r.reviewer_id, actions: r.status === 'annulee' ? [] : [['Annuler la relecture', () => store.update('relectures_cv', id, { status: 'annulee' }), true]] }; }
+    case 'prive': {
+      const r = by('messages'); const nom = x => store.byId('profiles', x)?.full_name || '?';
+      // L'onglet s'ouvre tout de suite (sinon le navigateur le bloque), le lien temporaire arrive ensuite
+      const ouvrir = async () => { const w = window.open('', '_blank'); if (w) w.opener = null; const u = await store.lienChat(r.fichier).catch(() => null); if (u && w) w.location.href = u; else { w?.close(); toast('Fichier indisponible.', 'err'); } };
+      return r && { r, titre: `${nom(r.author_id)} → ${nom(r.dest_id)}`, texte: r.body, auteur: r.author_id, voir: r.fichier ? [r.type === 'vocal' ? 'Écouter le message vocal' : 'Voir la photo', ouvrir] : null, actions: [['Supprimer le message', () => store.supprimerMessage(id), true]] };
+    }
     default: return null;
   }
 }
@@ -567,9 +573,11 @@ export function AnnonceBanner({ ctx }) {
   const { data } = ctx;
   const a = data.annonces.filter(x => x.active).sort((x, y) => new Date(y.created_at) - new Date(x.created_at))[0];
   const [hidden, setHidden] = useState(() => { try { return localStorage.getItem('annonce-off') || ''; } catch { return ''; } });
+  const [lire, setLire] = useState(false);
   if (!a || hidden === a.id) return null;
   const hide = () => { setHidden(a.id); try { localStorage.setItem('annonce-off', a.id); } catch { /* */ } };
-  return html`<div class="annonce" role="status"><${Icon} name="bell" size=${18}/><span class="grow">${a.texte}${a.lien && /^https:\/\//i.test(a.lien) ? html` <a href=${a.lien} target="_blank" rel="noopener">En savoir plus</a>` : null}</span>
+  const long = (a.texte || '').length > 140;
+  return html`<div class="annonce" role="status"><${Icon} name="spark" size=${18}/><span class="grow"><span class=${'annonce-txt' + (long && !lire ? ' clamp' : '')} dir="auto" translate="no">${a.texte}</span>${long ? html` <button class="linkish small" onClick=${() => setLire(!lire)}>${lire ? 'Réduire' : 'Lire la suite'}</button>` : null}${a.lien && /^https:\/\//i.test(a.lien) ? html` <a href=${a.lien} target="_blank" rel="noopener">En savoir plus</a>` : null}</span>
     <button class="icon-btn small" aria-label="Masquer l’annonce" onClick=${hide}><${Icon} name="x" size=${15}/></button></div>`;
 }
 

@@ -339,7 +339,7 @@ async function preparerVapid(env: Env): Promise<Vapid> {
 type Abonnement = { id: string; user_id: string; endpoint: string; p256dh: string; auth: string };
 export type Notif = { title: string; body: string; url: string; tag: string };
 
-export const urgence = (kind: string) => (kind === 'rappel_rdv' || kind === 'mentorat_accepte' ? 'high' : 'normal');
+export const urgence = (kind: string) => (kind === 'rappel_rdv' || kind === 'mentorat_accepte' || kind === 'message' ? 'high' : 'normal');
 
 // Envoie une notification ; rend le code HTTP du service de push (0 si injoignable)
 async function pousserUn(a: Abonnement, n: Notif, urg: string, v: Vapid): Promise<number> {
@@ -369,7 +369,13 @@ async function pousserUn(a: Abonnement, n: Notif, urg: string, v: Vapid): Promis
 // ---------------------------------------------------------------------
 // Textes des notifications (fr / ar)
 // ---------------------------------------------------------------------
-type V = { nom: string; sujet: string; titre: string; entreprise: string; cible: string; ville: string; lieu: string; statut: string; date: string; heure: string; promo: string; n: number; vague: string; motif: string };
+type V = { nom: string; sujet: string; titre: string; entreprise: string; cible: string; ville: string; lieu: string; statut: string; date: string; heure: string; promo: string; n: number; vague: string; motif: string; texte: string; mtype: string; duree: number };
+
+// Aperçu d'un message privé : le début du texte, ou « Photo », « Message vocal (0:42) »
+const minSec = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+const apercuMessage = (v: V, l: Langue) => v.mtype === 'photo' ? (l === 'ar' ? '📷 صورة' : '📷 Photo')
+  : v.mtype === 'vocal' ? (l === 'ar' ? '🎤 رسالة صوتية' : '🎤 Message vocal') + (v.duree ? ` (${minSec(v.duree)})` : '')
+  : v.texte || (l === 'ar' ? 'رسالة جديدة' : 'Nouveau message');
 type Texte = (v: V) => [string, string] | null;
 
 const NOTIFS: Record<string, { route: string; fr: Texte; ar: Texte }> = {
@@ -527,6 +533,11 @@ const NOTIFS: Record<string, { route: string; fr: Texte; ar: Texte }> = {
     fr: v => ['Enquête d’insertion', `${v.vague || 6} mois après ton diplôme : 2 minutes pour aider l’école et les promos suivantes.`],
     ar: v => ['استمارة الإدماج المهني', `${v.vague || 6} أشهر بعد تخرجك: دقيقتان لمساعدة المدرسة والدفعات القادمة.`],
   },
+  message: {
+    route: 'messages',
+    fr: v => [v.nom, apercuMessage(v, 'fr')],
+    ar: v => [v.nom, apercuMessage(v, 'ar')],
+  },
   test: {
     route: 'accueil',
     fr: () => ['Notifications activées', 'Tu recevras ici les nouvelles importantes du Réseau ENSAM.'],
@@ -553,12 +564,14 @@ export function texteNotif(kind: string, data: unknown, langue: unknown, site: s
     date: q?.date || '', heure: q?.heure || '',
     promo: /^\d{4}$/.test(txt(d.promo)) ? txt(d.promo) : '', n: Number(d.n) || 0,
     vague: txt(d.vague) === '12' ? '12' : txt(d.vague) === '6' ? '6' : '', motif: txt(d.motif),
+    texte: s('texte'), mtype: txt(d.type), duree: Math.max(0, Math.min(600, Number(d.duree) || 0)),
   };
   const t = g[l](v);
   if (!t) return null;
-  // Une alerte ouvre directement l'offre
-  const route = kind === 'offre_alerte' && estUuid(d.offre) ? `offre/${d.offre}` : g.route;
-  return { title: couper(t[0], 80), body: couper(t[1], 180), url: site + '#' + route, tag: kind === 'offre_alerte' && estUuid(d.offre) ? `offre-${d.offre}` : kind };
+  // Une alerte ouvre directement l'offre, un message sa conversation (une notification par personne)
+  const route = kind === 'offre_alerte' && estUuid(d.offre) ? `offre/${d.offre}` : kind === 'message' && estUuid(d.de) ? `messages/${d.de}` : g.route;
+  const tag = kind === 'offre_alerte' && estUuid(d.offre) ? `offre-${d.offre}` : kind === 'message' && estUuid(d.de) ? `message-${d.de}` : kind;
+  return { title: couper(t[0], 80), body: couper(t[1], 180), url: site + '#' + route, tag };
 }
 
 // ---------------------------------------------------------------------
@@ -1311,6 +1324,32 @@ export function rendreAlerte(offres: OffreAlerte[], langue: Langue, site: string
   return { sujet, html, texte, desabo };
 }
 
+// Messages non lus depuis 30 minutes : qui t'a écrit, et un bouton pour répondre (jamais le contenu)
+export function rendreMessages(n: number, noms: string[], langue: Langue, site: string, token: string): Courriel {
+  const ar = langue === 'ar', f = ar ? HTML_AR : HTML, b = ar ? BRUT_AR : BRUT;
+  const desabo = `${site}#desabo/${token}/messages`;
+  const url = `${site}#messages`;
+  const qui = noms.map(txt).filter(Boolean).slice(0, 3);
+  const liste = (F: Fmt) => qui.map(x => F.g(x)).join(ar ? ' و' : ', ');
+  const sujet = couper(ar
+    ? (qui.length === 1 ? `رسالة من ${qui[0]}` : arN(n, ['رسالة جديدة', 'رسالتان جديدتان', '{n} رسائل جديدة', '{n} رسالة جديدة'])) + ' · شبكة ENSAM'
+    : (qui.length === 1 ? `${qui[0]} t’a écrit` : `${n} nouveaux messages`) + ' · Réseau ENSAM', 110);
+  const ligne = (F: Fmt) => ar
+    ? `${arN(n, ['رسالة واحدة', 'رسالتان', '{n} رسائل', '{n} رسالة'])} في انتظارك${qui.length ? ` من ${liste(F)}` : ''}.`
+    : `${n > 1 ? `${n} messages t’attendent` : 'Un message t’attend'}${qui.length ? ` de la part de ${liste(F)}` : ''}.`;
+  const html = cadreEmail({
+    langue, sujet, apercu: ligne(b), sousTitre: ar ? 'الرسائل' : 'Messages',
+    intro: [esc(ar ? 'مرحبًا،' : 'Bonjour,'), ligne(f)],
+    blocs: [{ lignes: [esc(ar ? 'اقرأ وأجب من المنصة، بالكتابة أو بالصور أو برسالة صوتية.' : 'Lis et réponds depuis la plateforme : par écrit, en photo ou en message vocal.')], bouton: { texte: ar ? 'قراءة الرسائل' : 'Lire et répondre', url } }],
+    pied: ar ? 'يصلك هذا البريد إذا بقيت رسالة غير مقروءة نصف ساعة، مرة كل 6 ساعات على الأكثر.' : 'Tu reçois cet email quand un message reste non lu 30 minutes, une fois toutes les 6 heures au plus.',
+    liens: [[ar ? 'فتح المنصة' : 'Ouvrir la plateforme', site], [ar ? 'إيقاف بريد الرسائل' : 'Ne plus recevoir ces emails', desabo]],
+  });
+  const texte = [`${(ar ? AR : FR).marque} · ${ar ? 'الرسائل' : 'Messages'}`, '', ar ? 'مرحبًا،' : 'Bonjour,', ligne(b), '',
+    `${ar ? 'قراءة الرسائل' : 'Lire et répondre'}${ar ? ': ' : ' : '}${url}`, '', '--',
+    `${ar ? 'إيقاف بريد الرسائل' : 'Ne plus recevoir ces emails'}${ar ? ': ' : ' : '}${desabo}`].join('\n');
+  return { sujet, html, texte, desabo };
+}
+
 // Enquête d'insertion : invitation, ou rappel trois semaines après
 export function rendreEnquete(vague: number, rappel: boolean, langue: Langue, site: string, token: string): Courriel {
   const ar = langue === 'ar', v = vague === 12 ? 12 : 6;
@@ -1824,6 +1863,32 @@ async function jobAlertes(env: Env): Promise<Response> {
   return json(b);
 }
 
+// Messages non lus depuis 30 minutes : un email, toutes les 6 heures au plus par personne
+async function jobMessages(env: Env): Promise<Response> {
+  const f = facteur(env);
+  if (!f.pret) return json({ skipped: 'email' });
+  const dest = ((await rpc(env, 'messages_a_signaler', { p_max: 100 })) || []) as { id: string; email: string; langue: string; token: string; n: number; noms: string[] | null }[];
+  const b: { sent: number; errors: number; via?: string } = { sent: 0, errors: 0 };
+  if (!dest.length) return json(b);
+  const envoyes: string[] = [];
+  const limite = Date.now() + 100_000;
+  await parallele(dest, f.paralleles, async x => {
+    if (Date.now() > limite) return;
+    if (!x.email || !x.token || !estUuid(x.id) || !(Number(x.n) > 0)) { b.errors++; return; }
+    try {
+      if (await f.envoyer(x.email, rendreMessages(Number(x.n), Array.isArray(x.noms) ? x.noms : [], langueDe(x.langue), env.site, x.token))) { b.sent++; envoyes.push(x.id); }
+      else b.errors++;
+    } catch (e) {
+      b.errors++;
+      console.error('notifier : email de messages impossible', e instanceof Error ? e.message : String(e));
+    }
+  });
+  await f.fermer();
+  b.via = f.via();
+  if (envoyes.length) await rpc(env, 'messages_signales', { p_ids: envoyes });
+  return json(b);
+}
+
 // Enquête d'insertion : invitation à l'ouverture de la vague, puis un rappel ; la notification
 // sur le téléphone part avec enquetes_invitees, même sans email
 async function jobEnquetes(env: Env): Promise<Response> {
@@ -1859,7 +1924,7 @@ export async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') return json({ error: 'Méthode non autorisée' }, 405);
   let job: unknown;
   try { job = (await req.json())?.job; } catch { return json({ error: 'Requête invalide' }, 400); }
-  if (typeof job !== 'string' || !['cle', 'test', 'push', 'resume', 'essai_email', 'alertes', 'enquetes'].includes(job)) return json({ error: 'Tâche inconnue' }, 400);
+  if (typeof job !== 'string' || !['cle', 'test', 'push', 'resume', 'essai_email', 'alertes', 'enquetes', 'messages'].includes(job)) return json({ error: 'Tâche inconnue' }, 400);
   const env = lireEnv();
   if (!env.url || !env.cle) {
     console.error('notifier : SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY manquant');
@@ -1872,6 +1937,7 @@ export async function handler(req: Request): Promise<Response> {
     if (job === 'essai_email') return await jobEssaiEmail(env);
     if (job === 'alertes') return await jobAlertes(env);
     if (job === 'enquetes') return await jobEnquetes(env);
+    if (job === 'messages') return await jobMessages(env);
     return job === 'push' ? await jobPush(env) : await jobResume(env);
   } catch (e) {
     console.error(`notifier : échec de « ${job} »`, e instanceof Error ? e.message : String(e));

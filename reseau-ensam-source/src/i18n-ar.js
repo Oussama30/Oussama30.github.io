@@ -506,7 +506,29 @@ export const AR = {
   'mercis reçus': 'رسائل شكر مستلمة', 'un bon début': 'بداية جيدة',
 };
 
+// Passe UX : accueil, premiers pas, moments fêtés, messagerie dans la navigation
+Object.assign(AR, {
+  'Bonsoir': 'مساء الخير', 'Une demande pour toi': 'طلب موجّه إليك', 'Choisir un horaire': 'اختر موعدًا', 'Un message t’attend': 'رسالة في انتظارك',
+  'Ta prochaine étape': 'خطوتك التالية', 'Y aller': 'اذهب', 'Premiers pas': 'الخطوات الأولى', 'Une offre faite pour toi': 'عرض مناسب لك', 'Voir l’offre': 'عرض التفاصيل',
+  'Quand tu as 20 minutes': 'حين يكون لديك 20 دقيقة', 'Un étudiant aimerait un conseil.': 'طالب يودّ نصيحة.', 'Voir qui': 'من هم',
+  'Tout est à jour.': 'كل شيء محدَّث.', 'Merci pour ce que tu fais pour les étudiants.': 'شكرًا على ما تقدّمه للطلبة.', 'Rien ne presse : avance à ton rythme.': 'لا شيء مستعجل: تقدّم بإيقاعك.',
+  'Quand tu as 5 minutes': 'حين يكون لديك 5 دقائق', 'Pour avancer': 'لتتقدّم', 'Pour toi': 'لك', 'Dans le réseau': 'في الشبكة', 'Un merci récent': 'شكر حديث',
+  'Tu as aidé 1 étudiant': 'ساعدت طالبًا واحدًا', 'Ton espace et tes mercis': 'فضاؤك وكلمات الشكر', '1 étudiant recruté grâce à ses offres. Merci !': 'طالب واحد وُظّف بفضل عروضه. شكرًا!',
+  'Merci pour son aide ce mois-ci.': 'شكرًا على مساعدته هذا الشهر.', '1 réussite vérifiée grâce aux lauréats cette saison.': 'نجاح واحد موثق بفضل الخريجين هذا الموسم.',
+  'Les premières réussites de la saison arrivent.': 'أولى نجاحات الموسم في الطريق.', 'Trouver ton stage avec les lauréats': 'ابحث عن تدريبك مع الخريجين', 'Aider les étudiants de l’école': 'ساعد طلبة المدرسة',
+  'Voir les étapes': 'عرض الخطوات', 'Premiers pas terminés !': 'أنهيت الخطوات الأولى!', 'Ton profil est prêt et les lauréats peuvent t’aider. Bravo pour ta démarche.': 'ملفك جاهز ويمكن للخريجين مساعدتك. أحسنت!',
+  'Merci ! Les étudiants de l’école peuvent compter sur toi.': 'شكرًا! يمكن لطلبة المدرسة الاعتماد عليك.', 'Merci !': 'شكرًا!', 'A aidé 1 étudiant': 'ساعد طالبًا واحدًا',
+  'Réduire': 'إخفاء', 'Lire la suite': 'اقرأ المزيد', 'Plus du réseau': 'المزيد من الشبكة', 'Moins': 'أقل', 'Messages': 'الرسائل',
+});
+
 export const AR_PATTERNS = [
+  [/^(.+) t’a écrit (\d+) messages\.$/, (x, n) => `راسلك ${x} ${arCount(n, ['رسالة واحدة', 'رسالتين', 'رسائل', 'رسالة'])}.`],
+  [/^(.+) t’a écrit\.$/, x => `راسلك ${x}.`],
+  [/^Répondre à (.+)$/, x => `الرد على ${x}`],
+  [/^(\d+) étudiants aimeraient un conseil\.$/, n => `${arCount(n, ['طالب واحد', 'طالبان', 'طلاب', 'طالبًا'])} يودّون نصيحة.`],
+  [/^Tu as aidé (\d+) étudiants$/, n => `ساعدت ${arCount(n, ['طالبًا واحدًا', 'طالبين', 'طلاب', 'طالبًا'])}`],
+  [/^A aidé (\d+) étudiants$/, n => `ساعد ${arCount(n, ['طالبًا واحدًا', 'طالبين', 'طلاب', 'طالبًا'])}`],
+  [/^(\d+) étudiants recrutés grâce à ses offres\. Merci !$/, n => `${arCount(n, ['طالب واحد', 'طالبان', 'طلاب', 'طالبًا'])} وُظّفوا بفضل عروضه. شكرًا!`],
   [/^Promo (\d{4})$/i, (y) => `دفعة ${y}`],
   [/^promo (\d{4})$/, (y) => `دفعة ${y}`],
   [/^(\d+) points? d’impact$/, (n) => `${n} نقطة تأثير`],
