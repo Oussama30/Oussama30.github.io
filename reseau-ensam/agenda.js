@@ -309,7 +309,7 @@ injectCSS('agenda', `
 .ev-card.off, .ev-card.past { background: color-mix(in srgb, var(--surface) 65%, var(--surface-2)); }
 .ev-card.past .ev-date, .ev-card.off .ev-date { background: var(--surface-2); color: var(--ink-2); }
 .ev-date { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 4.2rem; padding: .45rem .5rem .5rem; border-radius: 12px; background: var(--accent-soft); color: var(--accent); line-height: 1.15; align-self: start; flex: none; }
-.ev-date .ev-wd { font-size: .7rem; font-weight: 650; text-transform: capitalize; opacity: .85; }
+.ev-date .ev-wd { font-size: .7rem; font-weight: 650; text-transform: capitalize; }
 .ev-date .ev-d { font-size: 1.65rem; font-weight: 600; }
 .ev-date .ev-m { font-size: .76rem; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; }
 .ev-date.compact { min-width: 3.4rem; padding: .35rem .4rem; }
@@ -337,7 +337,7 @@ injectCSS('agenda', `
 .ev-people { display: flex; flex-wrap: wrap; gap: .4rem .9rem; }
 .next-ev-row { display: flex; gap: .7rem; align-items: flex-start; }
 .ev-admin-list li { flex-wrap: nowrap; }
-.ev-admin-list li.dim { opacity: .65; }
+.ev-admin-list li.dim .ev-date { background: var(--surface-2); color: var(--ink-2); }
 .ev-admin-list .grow { min-width: 0; flex: 1 1 200px; display: flex; flex-direction: column; gap: .2rem; align-items: flex-start; }
 .ev-admin-list li > .btn { margin-inline-start: auto; }
 @media (max-width: 640px) {

@@ -14,9 +14,19 @@ import { CvButton } from './cv.js';
 import { SignalerBtn, ContactBlock, PairVerify, VisibiliteFields, groupesMasques, confirmations, VIS_LABELS, VIS_CHOIX } from './confiance.js';
 import { VIS_CHAMPS } from './store.js';
 import { addAR } from './i18n.js';
+import { oublierInvitation } from './invitation.js';
+import { parseLinkedin } from './parse-linkedin.js';
 
 // Arabe : textes du profil ajoutés en Phase 3
 addAR({
+  // Profil en une minute depuis LinkedIn
+  'Remplir depuis LinkedIn': 'الملء من LinkedIn', 'Remplir mon profil': 'املأ ملفي', 'Bio': 'نبذة',
+  'Sur LinkedIn (ordinateur), ouvre ton profil, puis « Plus » › « Enregistrer au format PDF ».': 'على LinkedIn (من الحاسوب)، افتح ملفك، ثم «المزيد» › «حفظ بصيغة PDF».',
+  'Ouvre le PDF, sélectionne tout (Ctrl+A), copie, puis colle ici. Sur téléphone, colle simplement ta section Infos.': 'افتح ملف PDF، حدّد الكل (Ctrl+A)، انسخ ثم الصق هنا. على الهاتف، الصق فقط قسم «نبذة».',
+  'Colle ici le texte de ton profil LinkedIn': 'الصق هنا نص ملفك على LinkedIn',
+  'Rempli :': 'تم ملء:', 'Vérifie avant d’enregistrer.': 'تحقق قبل الحفظ.',
+  'Rien de reconnu : colle tout le texte du PDF LinkedIn.': 'لم يتم التعرف على شيء: الصق كل نص ملف PDF من LinkedIn.',
+  'Rien de nouveau : les champs étaient déjà remplis.': 'لا جديد: الحقول كانت معبأة من قبل.',
   'Inscris-toi avec ton email de l’école.': 'سجّل باستعمال بريد المدرسة.',
   'Les comptes étudiants utilisent l’email de l’école :': 'تستعمل حسابات الطلبة بريد المدرسة:',
   'Ton compte actuel n’en fait pas partie :': 'حسابك الحالي ليس منها:',
@@ -188,9 +198,22 @@ export function ProfileModal({ ctx, p: p0, onClose, onAskMentor }) {
   <//>`;
 }
 
-export function ProfileForm({ ctx, initial, onDone, onboarding }) {
+// « Profil en une minute » : le texte du profil LinkedIn collé remplit les champs encore vides
+function LinkedinBox({ onFill }) {
+  const [txt, setTxt] = useState('');
+  const [faits, setFaits] = useState(null);
+  return html`<details class="li-box">
+    <summary><${Icon} name="link" size=${16}/> Remplir depuis LinkedIn</summary>
+    <ol class="small li-steps"><li>Sur LinkedIn (ordinateur), ouvre ton profil, puis « Plus » › « Enregistrer au format PDF ».</li><li>Ouvre le PDF, sélectionne tout (Ctrl+A), copie, puis colle ici. Sur téléphone, colle simplement ta section Infos.</li></ol>
+    <textarea id="pf-litxt" rows="5" aria-label="Colle ici le texte de ton profil LinkedIn" placeholder="Colle ici le texte de ton profil LinkedIn" value=${txt} onInput=${e => setTxt(e.target.value)}></textarea>
+    <div class="row"><button type="button" class="btn small" id="pf-lifill" disabled=${txt.trim().length < 20} onClick=${() => setFaits(onFill(txt))}><${Icon} name="spark" size=${15}/> Remplir mon profil</button></div>
+    ${faits ? html`<p class="small li-faits" role="status">${faits.ok === false ? 'Rien de reconnu : colle tout le texte du PDF LinkedIn.' : !faits.length ? 'Rien de nouveau : les champs étaient déjà remplis.' : html`<span>Rempli :</span> ${faits.map(x => html`<span class="tag">${x}</span>`)} <span>Vérifie avant d’enregistrer.</span>`}</p>` : null}
+  </details>`;
+}
+
+export function ProfileForm({ ctx, initial, preset, onDone, onboarding }) {
   const { store, act } = ctx;
-  const [f, setF] = useState(() => ({ full_name: '', role: 'etudiant', filiere: FILIERES[0], promo: new Date().getFullYear() + 1, entreprise: '', poste: '', ville: '', pays: 'Maroc', bio: '', competences: [], linkedin: '', contact: '', cv_url: '', disponibilite: '', mentor_dispo: false, mentor_sujets: '', vitrine: true, secteur: '', parrain_dispo: false, ...(initial || {}) }));
+  const [f, setF] = useState(() => ({ full_name: '', role: 'etudiant', filiere: FILIERES[0], promo: new Date().getFullYear() + 1, entreprise: '', poste: '', ville: '', pays: 'Maroc', bio: '', competences: [], linkedin: '', contact: '', cv_url: '', disponibilite: '', mentor_dispo: false, mentor_sujets: '', vitrine: true, secteur: '', parrain_dispo: false, ...(preset || {}), ...(initial || {}) }));
   const set = (k, v) => setF({ ...f, [k]: v });
   const [comp, setComp] = useState((f.competences || []).join(', '));
   // Base à jour (Phase 3) : coordonnées privées et visibilité ; sinon l'ancien champ « contact » public
@@ -222,12 +245,33 @@ export function ProfileForm({ ctx, initial, onDone, onboarding }) {
     const champs = { telephone: co.telephone.trim() || null, email: co.email.trim() || null, contact: co.contact.trim() || null };
     const coordChange = v3 && ['telephone', 'email', 'contact'].some(k => (champs[k] || '') !== (coord0[k] || ''));
     act(async () => {
-      if (onboarding) await store.insert('profiles', { id: store.userId, ...row });
+      if (onboarding) { await store.insert('profiles', { id: store.userId, ...row }); oublierInvitation(); }
       else await store.update('profiles', initial.id, row);
       if (coordChange) await store.enregistrerCoordonnees(champs);
       toast(onboarding ? 'Bienvenue dans le réseau !' : 'Profil enregistré.');
       onDone?.();
     });
+  };
+  // Ne remplit que les champs vides (et, à l'inscription, la promo, la filière et le rôle)
+  const remplir = txt => {
+    const r = parseLinkedin(txt);
+    if (!Object.keys(r).length) return Object.assign([], { ok: false });
+    const n = { ...f }, faits = [];
+    const vide = k => !String(f[k] ?? '').trim();
+    const neuf = !initial;
+    if (neuf && !preset && r.role && f.role !== 'admin' && r.role !== f.role) { n.role = r.role; faits.push(r.role === 'laureat' ? 'Lauréat(e)' : 'Étudiant(e)'); }
+    for (const [k, l] of [['full_name', 'Nom'], ['poste', 'Poste'], ['entreprise', 'Entreprise'], ['ville', 'Ville'], ['bio', 'Bio'], ['linkedin', 'LinkedIn']]) if (r[k] && vide(k)) { n[k] = r[k]; faits.push(l); }
+    if (r.pays && r.pays !== f.pays && (vide('pays') || (neuf && f.pays === 'Maroc'))) { n.pays = r.pays; faits.push('Pays'); }
+    if (neuf && !preset?.promo && r.promo && r.promo !== +f.promo) { n.promo = r.promo; faits.push('Promo'); }
+    if (neuf && r.filiere && r.filiere !== f.filiere) { n.filiere = r.filiere; faits.push('Filière'); }
+    setF(n);
+    if (r.competences?.length) {
+      const deja = comp.split(',').map(x => x.trim()).filter(Boolean);
+      const vu = new Set(deja.map(x => x.toLowerCase()));
+      const plus = r.competences.filter(c => !vu.has(c.toLowerCase()));
+      if (plus.length && deja.length < 15) { setComp([...deja, ...plus].slice(0, 15).join(', ')); faits.push('Compétences'); }
+    }
+    return faits;
   };
   const isStudent = f.role === 'etudiant';
   const n = !isStudent && initial && !initial.verified ? confirmations(store.data, initial) : 0;
@@ -237,6 +281,7 @@ export function ProfileForm({ ctx, initial, onDone, onboarding }) {
       <p class="small">Les comptes étudiants utilisent l’email de l’école : <span dir="ltr" translate="no">${domaines.map(d => '@' + d).join(', ')}</span></p>
       <p class="small">Ton compte actuel n’en fait pas partie : <span dir="ltr" translate="no">${email}</span></p>
       <div><button type="button" class="btn small" id="pf-relog" onClick=${() => store.signOut()}><${Icon} name="logout" size=${15}/> Me déconnecter et recommencer</button></div></div>` : null}
+    ${f.role !== 'admin' ? html`<${LinkedinBox} onFill=${remplir}/>` : null}
     <div class="grid2">
       <${Field} label="Nom complet"><input id="pf-name" required value=${f.full_name} onInput=${e => set('full_name', e.target.value)} maxlength="80"/><//>
       <${Field} label=${isStudent ? 'Promo (année de diplôme prévue)' : 'Promo (année de diplôme)'} hint=${isStudent ? 'Ex. en 5A cette année : ' + (new Date().getMonth() >= 8 ? new Date().getFullYear() + 1 : new Date().getFullYear()) + '. Ton niveau se met à jour tout seul chaque année.' : ''}><input id="pf-promo" type="number" min="1990" max="2040" required value=${f.promo} onInput=${e => set('promo', e.target.value)}/><//>

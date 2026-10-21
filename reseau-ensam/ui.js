@@ -75,13 +75,36 @@ const ICONS = {
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
 };
 
+// Fenêtres ouvertes, la plus récente à la fin : seule celle du dessus réagit au clavier
+const ouvertes = [];
+const FOCUSABLES = 'a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 export function Modal({ title, onClose, children, wide }) {
   const ref = useRef();
+  const fermer = useRef(onClose);
+  fermer.current = onClose;
   useEffect(() => {
-    const k = e => { if (e.key === 'Escape') onClose(); };
+    const avant = document.activeElement;
+    const moi = {};
+    ouvertes.push(moi);
+    const k = e => {
+      if (ouvertes[ouvertes.length - 1] !== moi || !ref.current) return;
+      if (e.key === 'Escape') { fermer.current(); return; }
+      if (e.key !== 'Tab') return;
+      // Tab et Maj+Tab tournent dans la fenêtre au lieu de repartir dans la page derrière
+      const f = [...ref.current.querySelectorAll(FOCUSABLES)].filter(x => x.getClientRects().length);
+      if (!f.length) return;
+      const ici = document.activeElement, dedans = ref.current.contains(ici);
+      if (e.shiftKey && (!dedans || ici === f[0])) { e.preventDefault(); f[f.length - 1].focus(); }
+      else if (!e.shiftKey && (!dedans || ici === f[f.length - 1])) { e.preventDefault(); f[0].focus(); }
+    };
     document.addEventListener('keydown', k);
     ref.current?.querySelector('input,textarea,select,button')?.focus();
-    return () => document.removeEventListener('keydown', k);
+    return () => {
+      document.removeEventListener('keydown', k);
+      ouvertes.splice(ouvertes.indexOf(moi), 1);
+      // On rend le focus au bouton qui avait ouvert la fenêtre, s'il est toujours là
+      if (avant?.isConnected) avant.focus?.();
+    };
   }, []);
   return html`<div class="modal-back" onClick=${e => { if (e.target === e.currentTarget) onClose(); }}>
     <div class=${'modal' + (wide ? ' wide' : '')} role="dialog" aria-modal="true" aria-label=${title} ref=${ref}>
@@ -97,7 +120,8 @@ export function Toaster() {
   const [t, setT] = useState(null);
   toastSet = setT;
   useEffect(() => { if (!t) return; const h = setTimeout(() => setT(null), 3800); return () => clearTimeout(h); }, [t]);
-  return t ? html`<div class=${'toast ' + t.kind} role="status">${t.msg}</div>` : null;
+  // La zone reste toujours là (vide entre deux messages) pour que les lecteurs d'écran annoncent chaque message
+  return html`<div class="toast-zone" role="status" aria-live="polite">${t ? html`<div class=${'toast ' + t.kind} key=${t.t}>${t.msg}</div>` : null}</div>`;
 }
 
 export function Field({ label, hint, children }) {
