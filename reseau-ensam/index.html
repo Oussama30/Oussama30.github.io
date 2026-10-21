@@ -652,6 +652,16 @@ button.panel:hover, button.impact-strip:hover, button.objective:hover { border-c
 @media (max-width: 760px) { .lang-btn .lang-long { display: none; } .lang-btn > span:first-of-type { display: inline; } .lang-btn { padding: 0 .55rem; } }
 .menu-pop .menu-theme { display: none; }
 @media (max-width: 480px) { .top .theme-btn { display: none; } .menu-pop .menu-theme { display: flex; } }
+/* Petit téléphone : la barre du haut ne déborde jamais, c'est le sélecteur qui se resserre (pas les boutons) */
+@media (max-width: 480px) {
+  .top { gap: .3rem; }
+  .top > :not(.persona):not(.spacer) { flex: none; }
+  .persona { flex: 0 1 auto; min-width: 0; }
+  .persona select { min-width: 0; width: 100%; }
+  .top .icon-btn { width: 36px; }
+  .top .lang-btn { padding: 0 .75rem; }
+  .top .lang-btn .ico { display: none; }
+}
 /* ===== Thème ENSAM Meknès : emblème, ciel et porte de l'école, mouvement ===== */
 .brand-logo { --lg-o: #F7A11A; --lg-b: #4FA9E6; --lg-k: #FFFFFF; --lg-in: transparent; --lg-cap: #FFFFFF; --lg-cap2: #DCE6F3; --lg-bg: #1D3150; }
 .brand-logo.draw .lg-glyph { transform-box: view-box; transform-origin: 256px 258px; animation: lg-in .9s var(--ease) .1s backwards; }
