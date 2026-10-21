@@ -1,17 +1,21 @@
 // Couche de données : même interface en mode démo (navigateur) et en mode réel (Supabase).
 // Les données de démonstration (seed.js) ne sont chargées qu'en démo : le site réel n'en a pas besoin
 const chargerSeed = () => import('./seed.js').then(m => m.buildSeed());
-import { attestationStats, seasonOf, niveauOf, sameCompany, entKey, norm, statsInsertion, rapportInsertion, cleNom } from './logic.js';
+import { attestationStats, seasonOf, niveauOf, sameCompany, entKey, norm, statsInsertion, rapportInsertion, cleNom, peutDiscuter, nonLus } from './logic.js';
 
 const PHASE2 = ['groupe_messages', 'groupe_membres', 'cafes', 'cafe_participants', 'startups', 'defis', 'parrainages'];
 const PHASE3 = ['coordonnees', 'demandes_contact', 'relectures_cv', 'relecture_commentaires', 'entretiens', 'avis_stage', 'guide_pays', 'signalements', 'enquetes_insertion', 'verifications_pairs', 'evenements', 'evenement_participants'];
-export const TABLES = ['profiles', 'offers', 'comments', 'reactions', 'applications', 'placements', 'mentorships', 'questions', 'answers', 'votes', 'shortlists', 'invitations', 'kudos', 'attestations', 'liens_rdv', 'annonces', ...PHASE2, ...PHASE3];
+const MESSAGERIE = ['messages', 'blocages'];
+export const TABLES = ['profiles', 'offers', 'comments', 'reactions', 'applications', 'placements', 'mentorships', 'questions', 'answers', 'votes', 'shortlists', 'invitations', 'kudos', 'attestations', 'liens_rdv', 'annonces', ...PHASE2, ...PHASE3, ...MESSAGERIE];
 // Tables ajoutées par supabase/mise-a-jour.sql : tant que la base n'est pas à jour, elles restent vides au lieu de bloquer le site.
-const OPTIONAL = new Set(['shortlists', 'invitations', 'kudos', 'attestations', 'liens_rdv', 'annonces', ...PHASE2, ...PHASE3]);
+const OPTIONAL = new Set(['shortlists', 'invitations', 'kudos', 'attestations', 'liens_rdv', 'annonces', ...PHASE2, ...PHASE3, ...MESSAGERIE]);
 // Lues par une vue qui masque ce que chacun a choisi de cacher (auteur anonyme, visibilité du profil).
 // Tant que la base n'a pas ces vues, on lit la table elle-même.
 const VUES = { profiles: 'profils', entretiens: 'entretiens_publics', avis_stage: 'avis_publics' };
 export const CV_MAX = 2 * 1024 * 1024;
+// Messagerie : photos et vocaux (5 Mo au plus, 2 minutes de vocal)
+export const CHAT_MAX = 5 * 1024 * 1024;
+export const VOCAL_MAX = 120;
 // Qui voit quoi sur un profil : tous | laureats | contacts (personnes acceptées). Le CV est réservé aux lauréats par défaut.
 export const VIS_DEFAUT = { travail: 'tous', lieu: 'tous', linkedin: 'tous', presentation: 'tous', cv: 'laureats' };
 export const VIS_CHAMPS = { travail: ['entreprise', 'poste', 'secteur'], lieu: ['ville'], linkedin: ['linkedin'], presentation: ['bio', 'competences', 'disponibilite'], cv: ['cv_url', 'cv_path', 'cv_maj'] };
@@ -34,6 +38,9 @@ class Base {
   coordonneesDe(id) { return this.byId('coordonnees', id) || null; }
   // Domaines de l'email de l'école (réglage de l'administration), en minuscules
   domainesEcole() { return Array.isArray(this.reglages.domaines_ecole) ? this.reglages.domaines_ecole.map(d => String(d).trim().toLowerCase()).filter(Boolean) : []; }
+  // Messagerie : peut-on écrire à ce membre, combien de messages attendent
+  peutDiscuter(id) { return peutDiscuter(this.data, this.me, id, x => this.byId('profiles', x)); }
+  nonLus() { return this.me ? nonLus(this.data, this.me.id) : 0; }
   // Demande de contact entre moi et ce membre (dans un sens ou dans l'autre)
   contactAvec(id) {
     const me = this.me?.id;
@@ -74,7 +81,7 @@ export function pdfSimple(lignes) {
 // ---------------------------------------------------------------------------
 // Démo : données d'exemple, gardées dans le navigateur du visiteur
 // ---------------------------------------------------------------------------
-const DEMO_KEY = 'ensam-demo-v9';
+const DEMO_KEY = 'ensam-demo-v10';
 class DemoStore extends Base {
   constructor() { super(); this.mode = 'demo'; this.fichiers = new Map(); }
   async init() {
@@ -101,6 +108,7 @@ class DemoStore extends Base {
     if (table === 'shortlists') { r.laureat_id = this.me?.id; if (this.data.shortlists.some(x => x.laureat_id === r.laureat_id && x.student_id === r.student_id)) return r; }
     if (table === 'kudos') { r.user_id = this.me?.id; if (this.data.kudos.some(x => x.placement_id === r.placement_id && x.user_id === r.user_id)) return r; }
     if (table === 'invitations') applyInvitationRules(this, r, null);
+    if (MESSAGERIE.includes(table) && applyMessagerieRules(this, table, r, null) === false) return r;
     if (PHASE2.includes(table) && applyPhase2Rules(this, table, r, null) === false) return r;
     if (table === 'attestations') { if (this.me?.role !== 'laureat') throw new Error('Seul un lauréat peut obtenir une attestation.'); Object.assign(r, { laureat_id: this.me.id, stats: attestationStats(this.data, this.me.id) }); }
     limiteDemo(this, table, r);
@@ -125,6 +133,7 @@ class DemoStore extends Base {
     if (table === 'mentorships') applyMentorshipRules(this, r, old);
     if (table === 'liens_rdv') applyLienRules(this, r, old);
     if (table === 'annonces' && this.me?.role !== 'admin') throw new Error('Action non autorisée pour ton compte.');
+    if (MESSAGERIE.includes(table)) applyMessagerieRules(this, table, r, old);
     if (PHASE2.includes(table)) applyPhase2Rules(this, table, r, old);
     if (PHASE3.includes(table)) applyPhase3Rules(this, table, r, old);
     if (table === 'profiles' && this.me?.role !== 'admin') { r.verified = r.role !== old.role ? false : old.verified; if (!r.verified && verifieAuto(this, r)) r.verified = true; }
@@ -142,6 +151,7 @@ class DemoStore extends Base {
       const own = { groupe_messages: 'author_id', groupe_membres: 'user_id', cafes: 'organisateur_id', cafe_participants: 'user_id', startups: 'fondateur_id' }[table];
       if (!own || row[own] !== this.me?.id) throw new Error('Action non autorisée pour ton compte.');
     }
+    if (MESSAGERIE.includes(table) && row && this.me?.role !== 'admin' && row[table === 'messages' ? 'author_id' : 'user_id'] !== this.me?.id) throw new Error('Action non autorisée pour ton compte.');
     if (PHASE3.includes(table) && row && this.me?.role !== 'admin') {
       const me = this.me?.id;
       const ok = {
@@ -223,6 +233,33 @@ class DemoStore extends Base {
   async historiqueGuide(guideId) { return this.data.guide_pays_historique.filter(h => h.guide_id === guideId).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); }
   async statsInsertion() { return statsInsertion(this.data.enquetes_insertion).filter(g => this.me?.role === 'admin' || g.n >= 5); }
   async seDesabonnerAlertes() { return true; }
+  async seDesabonnerMessages() { return true; }
+  // Messagerie : en démo, les photos et vocaux restent dans l'onglet (pas de stockage réel)
+  async envoyerMessage({ dest, type = 'texte', body = null, fichier: blob = null, ext = 'jpg', ...meta }) {
+    let fichier = null;
+    if (blob) { verifierFichierChat(blob); fichier = `${this.me.id}/${dest}/${uuid()}.${ext}`; this.fichiers.set(fichier, blob); }
+    try { return await this.insert('messages', { author_id: this.me.id, dest_id: dest, type, body, fichier, ...meta }); }
+    catch (e) { if (fichier) this.fichiers.delete(fichier); throw e; }
+  }
+  async lienChat(path) {
+    const f = path && this.fichiers.get(path);
+    if (!f) return null;
+    this.urlsChat ||= new Map();
+    if (!this.urlsChat.has(path)) this.urlsChat.set(path, URL.createObjectURL(f));
+    return this.urlsChat.get(path);
+  }
+  async marquerLus(de) {
+    const me = this.me?.id; const now = new Date().toISOString(); let n = 0;
+    this.data.messages = this.data.messages.map(m => { if (m.author_id !== de || m.dest_id !== me || m.lu_at) return m; n++; return { ...m, lu_at: now }; });
+    if (n) { this.persist(); this.emit(); }
+    return n;
+  }
+  async supprimerMessage(id) {
+    const m = this.byId('messages', id);
+    await this.remove('messages', id);
+    if (m?.fichier) this.fichiers.delete(m.fichier);
+  }
+  canal() { return { tape() {}, fermer() {} }; }
   // Liste officielle (administration)
   async importerListe(lignes, remplacer = false) {
     if (this.me?.role !== 'admin') throw new Error('Réservé à l’administration.');
@@ -287,6 +324,7 @@ const LIMITES = {
   applications: ['student_id', 10, 864e5], evenement_participants: ['user_id', 30, 864e5], verifications_pairs: ['verificateur_id', 20, 864e5], mentorships: ['student_id', 6, 864e5], cafes: ['organisateur_id', 3, 864e5], startups: ['fondateur_id', 3, 864e5],
   entretiens: ['author_id', 10, 864e5], avis_stage: ['author_id', 10, 864e5], demandes_contact: ['demandeur_id', 5, 864e5],
   signalements: ['auteur_id', 10, 864e5], relectures_cv: ['student_id', 4, 864e5], relecture_commentaires: ['author_id', 60, 36e5],
+  messages: ['author_id', 300, 864e5],
 };
 function limiteDemo(store, table, r) {
   const L = LIMITES[table]; const me = store.me;
@@ -296,6 +334,35 @@ function limiteDemo(store, table, r) {
   if (miens.filter(x => now - new Date(x.created_at) < ms).length >= max) throw new Error('Doucement : tu as beaucoup publié en peu de temps. Réessaie un peu plus tard.');
   const t = txt && String(r[txt] || '').trim().toLowerCase();
   if (t && miens.some(x => now - new Date(x.created_at) < 864e5 && String(x[txt] || '').trim().toLowerCase() === t)) throw new Error('Tu as déjà publié exactement ce texte.');
+}
+
+// Messagerie : mêmes règles que protect_message(), peut_discuter() et protect_blocage() dans la base
+function applyMessagerieRules(store, table, r, old) {
+  const me = store.me; const isAdmin = me?.role === 'admin';
+  if (table === 'blocages') {
+    if (old) throw new Error('Action non autorisée pour ton compte.');
+    r.user_id = me.id;
+    if (r.bloque_id === me.id) throw new Error('Choisis un autre membre que toi.');
+    if (store.data.blocages.some(b => b.user_id === me.id && b.bloque_id === r.bloque_id)) return false;
+    return;
+  }
+  if (!old) {
+    r.author_id = me.id; r.lu_at = null; r.body = String(r.body || '').trim() || null;
+    if (r.type === 'texte' && !r.body) throw new Error('Écris ton message.');
+    if (r.body && r.body.length > 2000) throw new Error('Ton message est trop long (2 000 caractères au plus).');
+    if (r.type !== 'texte' && !r.fichier) throw new Error('Fichier manquant.');
+    if (r.type === 'vocal') r.body = null;
+    if (!peutDiscuter(store.data, me, r.dest_id, x => store.byId('profiles', x))) throw new Error('Conversation pas encore ouverte : elle s’ouvre avec un mentorat, une candidature ou une demande de contact acceptée.');
+    return;
+  }
+  const v = r.lu_at; Object.assign(r, old);
+  if (isAdmin || me.id === old.dest_id) r.lu_at = old.lu_at || (v ? new Date().toISOString() : null);
+}
+
+function verifierFichierChat(f) {
+  if (!f) throw new Error('Fichier manquant.');
+  if (f.size > CHAT_MAX) throw new Error('Fichier trop lourd (5 Mo au plus).');
+  if (f.type && !/^(image\/(jpeg|png|webp)|audio\/(webm|ogg|mp4|mpeg|aac))/.test(f.type)) throw new Error('Ce format n’est pas accepté : une photo ou un message vocal.');
 }
 
 // Phase 3 : mêmes règles que les triggers de la base (protect_relecture, protect_avis, protect_guide…)
@@ -656,7 +723,13 @@ class SupabaseStore extends Base {
         this.emit();
       }, 400);
     };
-    for (const t of TABLES) this.channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => recharger(t));
+    for (const t of TABLES) if (t !== 'messages') this.channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => recharger(t));
+    // Un message arrive tel quel, sans relire toute la table : la conversation suit en direct
+    this.channel.on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, e => {
+      if (e.eventType === 'DELETE') this.data.messages = this.data.messages.filter(x => x.id !== e.old?.id);
+      else if (e.new?.id) this.data.messages = this.data.messages.some(x => x.id === e.new.id) ? this.data.messages.map(x => x.id === e.new.id ? e.new : x) : [e.new, ...this.data.messages];
+      this.emit();
+    });
     // Les vues (profils, entretiens, avis) n'ont pas de temps réel : la base signale leurs changements ici
     this.channel.on('postgres_changes', { event: '*', schema: 'public', table: 'maj_tables' }, e => { const t = e.new?.cle; if (TABLES.includes(t)) recharger(t); });
     this.channel.on('postgres_changes', { event: '*', schema: 'public', table: 'reglages' }, () => this.lireReglages().then(() => this.emit()).catch(() => {}));
@@ -735,6 +808,12 @@ class SupabaseStore extends Base {
     // Les fichiers du stockage ne partent pas avec la base : on retire d'abord ses CV
     const { data: f } = await this.sb.storage.from('cv').list(this.userId).catch(() => ({ data: null }));
     if (f?.length) await this.sb.storage.from('cv').remove(f.map(x => `${this.userId}/${x.name}`)).catch(() => {});
+    // Photos et vocaux envoyés : un dossier par destinataire
+    const { data: dossiers } = await this.sb.storage.from('chat').list(this.userId).catch(() => ({ data: null }));
+    for (const d of dossiers || []) {
+      const { data: g } = await this.sb.storage.from('chat').list(`${this.userId}/${d.name}`).catch(() => ({ data: null }));
+      if (g?.length) await this.sb.storage.from('chat').remove(g.map(x => `${this.userId}/${d.name}/${x.name}`)).catch(() => {});
+    }
     const { error } = await this.sb.rpc('supprimer_mon_compte');
     if (error) throw new Error(frError(error));
     await this.sb.auth.signOut().catch(() => {});
@@ -811,6 +890,62 @@ class SupabaseStore extends Base {
   async seDesabonnerAlertes(token) {
     const { data, error } = await this.sb.rpc('se_desabonner_alertes', { p_token: token });
     return !error && data === true;
+  }
+  async seDesabonnerMessages(token) {
+    const { data, error } = await this.sb.rpc('se_desabonner_messages', { p_token: token });
+    return !error && data === true;
+  }
+  // Messagerie : le fichier part d'abord dans le stockage privé, puis le message ; s'il échoue, le fichier est retiré
+  async envoyerMessage({ dest, type = 'texte', body = null, fichier: blob = null, ext = 'jpg', ...meta }) {
+    let fichier = null;
+    if (blob) {
+      verifierFichierChat(blob);
+      fichier = `${this.userId}/${dest}/${uuid()}.${ext}`;
+      const { error } = await this.sb.storage.from('chat').upload(fichier, blob, { contentType: (blob.type || '').split(';')[0] || undefined, upsert: false });
+      if (error) {
+        const m = (error.message || '').toLowerCase();
+        throw new Error(m.includes('bucket not found') ? 'Les photos et vocaux arrivent bientôt : la base est en cours de mise à jour.'
+          : m.includes('size') || m.includes('too large') ? 'Fichier trop lourd (5 Mo au plus).'
+          : m.includes('mime') ? 'Ce format n’est pas accepté : une photo ou un message vocal.'
+          : m.includes('row-level security') ? 'Conversation pas encore ouverte.' : 'Envoi du fichier impossible. Vérifie ta connexion et réessaie.');
+      }
+    }
+    try { return await this.insert('messages', { author_id: this.userId, dest_id: dest, type, body, fichier, ...meta }); }
+    catch (e) { if (fichier) this.sb.storage.from('chat').remove([fichier]).catch(() => {}); throw e; }
+  }
+  // Lien temporaire (1 heure) vers une photo ou un vocal, gardé pour ne pas le redemander à chaque affichage
+  async lienChat(path) {
+    if (!path) return null;
+    this.urlsChat ||= new Map();
+    const c = this.urlsChat.get(path);
+    if (c && c.fin > Date.now()) return c.url;
+    const { data, error } = await this.sb.storage.from('chat').createSignedUrl(path, 3600);
+    if (error || !data?.signedUrl) return null;
+    this.urlsChat.set(path, { url: data.signedUrl, fin: Date.now() + 3300e3 });
+    return data.signedUrl;
+  }
+  async marquerLus(de) {
+    const me = this.userId; const now = new Date().toISOString();
+    if (!this.data.messages.some(m => m.author_id === de && m.dest_id === me && !m.lu_at)) return 0;
+    this.data.messages = this.data.messages.map(m => m.author_id === de && m.dest_id === me && !m.lu_at ? { ...m, lu_at: now } : m);
+    this.emit();
+    const { data } = await this.sb.rpc('marquer_lus', { p_de: de });
+    return data || 0;
+  }
+  async supprimerMessage(id) {
+    const m = this.byId('messages', id);
+    await this.remove('messages', id);
+    if (m?.fichier) await this.sb.storage.from('chat').remove([m.fichier]).catch(() => {});
+  }
+  // « écrit… » : un signal éphémère entre les deux personnes de la conversation (rien n'est enregistré)
+  canal(autre, onTape) {
+    const ch = this.sb.channel('chat-' + [this.userId, autre].sort().join('-'), { config: { broadcast: { self: false } } });
+    ch.on('broadcast', { event: 'tape' }, p => { if (p.payload?.de === autre) onTape(); }).subscribe();
+    let dernier = 0;
+    return {
+      tape: () => { if (Date.now() - dernier < 2500) return; dernier = Date.now(); ch.send({ type: 'broadcast', event: 'tape', payload: { de: this.userId } }).catch(() => {}); },
+      fermer: () => { this.sb.removeChannel(ch).catch(() => {}); },
+    };
   }
   async importerListe(lignes, remplacer = false) {
     const { data, error } = await this.sb.rpc('importer_liste', { p_lignes: lignes, p_remplacer: remplacer });

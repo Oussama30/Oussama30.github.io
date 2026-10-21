@@ -5,6 +5,7 @@ import { Icon, Modal, Field, Empty, Person, toast, injectCSS } from './ui.js';
 import { addAR, t as tr } from './i18n.js';
 import { timeAgo, niveauOf, NIVEAUX } from './logic.js';
 import { CV_MAX } from './store.js';
+import { MessageBtn } from './messages.js';
 
 const firstName = p => (p?.full_name || '').split(' ')[0];
 const href = u => (/^https?:\/\//i.test(u) ? u : 'https://' + u);
@@ -162,8 +163,11 @@ export function RelecturesPage({ ctx }) {
     ? [['inbox', 'Un étudiant demande une relecture'], ['edit', 'Tu commentes rubrique par rubrique'], ['heart', 'Il te remercie : +15 points']]
     : [['upload', 'Tu déposes ton CV en PDF'], ['eye', 'Un lauréat le relit et le commente'], ['check', 'Tu reçois ses conseils, rubrique par rubrique']];
 
+  // Le mode d'emploi en grand pour qui découvre ; replié pour celles et ceux qui ont déjà une relecture (comme les rendez-vous)
+  const how = html`<ol class="how">${steps.map(([ic, t], i) => html`<li><span class="how-n">${i + 1}</span><${Icon} name=${ic} size=${18}/><span>${t}</span></li>`)}</ol>`;
+  const connu = mine.length || done.length || toMe.length;
   return html`<div class="sub-page relectures">
-    <ol class="how">${steps.map(([ic, t], i) => html`<li><span class="how-n">${i + 1}</span><${Icon} name=${ic} size=${18}/><span>${t}</span></li>`)}</ol>
+    ${connu ? null : how}
 
     ${toMe.length ? html`<div class="section-head"><h2 class="h-ico"><${Icon} name="edit"/> Mes relectures <span class="count">${toMe.length}</span></h2></div>
       <div class="list">${toMe.map(r => html`<${RelectureCard} key=${r.id} ctx=${ctx} r=${r} side="reviewer"/>`)}</div>` : null}
@@ -181,6 +185,7 @@ export function RelecturesPage({ ctx }) {
     ${hist.length ? html`<button class="linkish small past-toggle" onClick=${() => setPast(!past)}>${past ? 'Masquer l’historique' : `Voir l’historique (${hist.length})`}</button>
       ${past ? html`<div class="list">${hist.slice(0, 12).map(r => html`<${RelectureCard} key=${r.id} ctx=${ctx} r=${r} side=${isLaureat ? 'reviewer' : 'student'}/>`)}</div>` : null}` : null}
     ${isLaureat && !mineActive.length && me.cv_path ? html`<p class="small muted center">Toi aussi, tu veux un regard neuf sur ton CV ? <button class="linkish" onClick=${() => setAsk(true)}>Demande à un lauréat plus expérimenté</button></p>` : null}
+    ${connu ? html`<details class="m-how"><summary>Comment ça marche ?</summary>${how}</details>` : null}
     ${ask ? html`<${DemandeRelecture} ctx=${ctx} onClose=${() => setAsk(false)}/>` : null}
   </div>`;
 }
@@ -201,7 +206,7 @@ function RelectureCard({ ctx, r, side }) {
   return html`<article class=${'mreq rel-card st-' + (r.status === 'rendue' ? 'terminee' : r.status === 'en_cours' ? 'rdv' : r.status === 'annulee' ? 'annulee' : 'demande')}>
     <div class="mrow-head">
       ${other ? html`<${Person} p=${other} onOpen=${openProfile} size=${36} sub=${side === 'student' ? undefined : sub}/>` : html`<span class="open-to"><span class="open-ico"><${Icon} name="people" size=${18}/></span><span><strong>Tous les lauréats</strong><span class="small muted">Le premier disponible relit ton CV</span></span></span>`}
-      <span class="spacer"></span><span class=${'state-pill ' + cls}>${label}</span></div>
+      <span class="spacer"></span><span class=${'state-pill ' + cls}>${label}</span>${other && side !== 'queue' ? html`<${MessageBtn} ctx=${ctx} p=${other} cls="btn tiny ghost"/>` : null}</div>
     ${r.message ? html`<p class="quote" dir="auto" translate="no">${r.message}</p>` : null}
     <p class="small muted">${r.status === 'rendue' && r.rendue_at ? `Demandée ${timeAgo(r.created_at)} · rendue ${timeAgo(r.rendue_at)}` : `Demandée ${timeAgo(r.created_at)}`}</p>
     ${side !== 'queue' && r.status !== 'annulee' ? html`<${Etapes} r=${r}/>` : null}
@@ -216,7 +221,7 @@ function RelectureCard({ ctx, r, side }) {
     ${r.status === 'rendue' && side !== 'queue' ? html`<${Retour} ctx=${ctx} r=${r} side=${side}/>` : null}
 
     ${side === 'student' && ACTIVES.includes(r.status) ? html`<div class="row"><span class="small muted">${r.status === 'en_cours' ? `${firstName(reviewer) || 'Un lauréat'} relit ton CV. Tu seras prévenu(e).` : reviewer ? `En attente de ${firstName(reviewer)}…` : 'En attente d’un lauréat…'}</span><span class="spacer"></span>
-      <button class="linkish small danger-t" onClick=${() => ctx.confirm('Annuler cette demande de relecture ?', () => act(() => store.update('relectures_cv', r.id, { status: 'annulee' })), 'Annuler la demande')}>Annuler</button></div>` : null}
+      <button class="linkish small m-quiet" onClick=${() => ctx.confirm('Annuler cette demande de relecture ?', () => act(() => store.update('relectures_cv', r.id, { status: 'annulee' })), 'Annuler la demande')}>Annuler</button></div>` : null}
     ${side === 'student' && r.status === 'annulee' ? html`<div class="row"><span class="spacer"></span><button class="linkish small" onClick=${() => act(() => store.remove('relectures_cv', r.id))}>Supprimer</button></div>` : null}
   </article>`;
 }

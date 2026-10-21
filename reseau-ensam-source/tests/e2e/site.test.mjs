@@ -12,7 +12,7 @@ const AXE = fs.readFileSync(createRequire(import.meta.url).resolve('axe-core/axe
 
 const SITE = path.resolve(process.env.SITE_DIR || new URL('../../dist', import.meta.url).pathname);
 const TYPES = { '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
-const ECRANS = ['accueil', 'offres', 'mentorat', 'mentorat/cv', 'parcours', 'espace', 'reseau/groupes', 'reseau/agenda', 'reseau/entraide',
+const ECRANS = ['accueil', 'offres', 'mentorat', 'mentorat/cv', 'messages', 'parcours', 'espace', 'reseau/groupes', 'reseau/agenda', 'reseau/entraide',
   'reseau/entreprises', 'reseau/etranger', 'reseau/annuaire', 'reseau/classement', 'reseau/talents', 'suivi', 'profil', 'enquete',
   'confidentialite', 'admin', 'admin/moderation', 'admin/membres', 'admin/liste', 'admin/inviter', 'admin/agenda', 'admin/reglages'];
 
@@ -90,6 +90,40 @@ test('coordonnées : visibles seulement après accord', async () => {
   await s.fermer();
   await s.comme('Nadia'); await s.fiche('Youssef El Amrani');
   assert.ok(!(await s.page.locator('.modal').innerText()).includes('06 12 34 56 78'));
+  assert.deepEqual(s.erreurs, []);
+  await s.ctx.close();
+});
+
+test('messagerie : écrire, être lu, bloquer ; pas de conversation sans lien', async () => {
+  const s = await ouvrir({ largeur: 390 });
+  const id = nom => s.profils.find(x => x[1].includes(nom))[0];
+  const salma = id('Salma'), youssef = id('Youssef');
+  await s.comme('Salma'); await s.aller('messages/' + youssef); await s.page.waitForTimeout(300);
+  await s.page.fill('#chat-txt', 'Merci pour vos conseils, je prépare mes questions !');
+  await s.page.click('.composer .send-btn'); await s.page.waitForTimeout(400);
+  const dernier = () => s.page.locator('.msg.mine').last();
+  assert.match(await dernier().innerText(), /Merci pour vos conseils/);
+  assert.equal(await dernier().locator('.msg-etat').getAttribute('title'), 'Envoyé');
+  await s.page.addScriptTag({ content: AXE });
+  await s.page.evaluate(() => document.getAnimations().forEach(a => { try { a.finish(); } catch { /* animation sans fin */ } }));
+  const v = await s.page.evaluate(async () => (await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'] }, resultTypes: ['violations'] })).violations.map(x => `${x.id} : ${x.nodes[0].target.join(' ')}`));
+  assert.deepEqual(v, [], 'conversation ouverte : axe');
+  // Youssef voit le message non lu, l'ouvre ; Salma voit « Vu »
+  await s.aller('accueil'); await s.comme('Youssef'); await s.aller('messages');
+  assert.equal(await s.page.locator('.conv-item.unread', { hasText: 'Salma' }).count(), 1);
+  await s.aller('messages/' + salma); await s.page.waitForTimeout(300);
+  await s.aller('accueil'); await s.comme('Salma'); await s.aller('messages/' + youssef); await s.page.waitForTimeout(300);
+  assert.equal(await dernier().locator('.msg-etat').getAttribute('title'), 'Vu');
+  // Salma bloque : plus personne ne peut écrire
+  await s.page.click('.conv-menu > .icon-btn'); await s.page.click('.conv-menu .danger-t');
+  await s.page.locator('.modal .btn.danger').click(); await s.page.waitForTimeout(300);
+  assert.equal(await s.page.locator('#chat-txt').count(), 0);
+  await s.aller('accueil'); await s.comme('Youssef'); await s.aller('messages/' + salma); await s.page.waitForTimeout(200);
+  assert.equal(await s.page.locator('#chat-txt').count(), 0);
+  // Une nouvelle lauréate sans lien avec Salma ne peut pas lui écrire
+  await s.aller('accueil'); await s.comme('Nadia'); await s.aller('messages/' + salma); await s.page.waitForTimeout(200);
+  assert.equal(await s.page.locator('#chat-txt').count(), 0);
+  assert.equal(await s.page.locator('.composer.ferme').count(), 1);
   assert.deepEqual(s.erreurs, []);
   await s.ctx.close();
 });
@@ -199,6 +233,8 @@ for (const [largeur, langue, theme] of [[1280, 'fr', 'light'], [390, 'ar', 'dark
       for (const e of ECRANS) {
         await s.aller(e);
         if (!(await s.page.evaluate(() => !!window.axe))) await s.page.addScriptTag({ content: AXE });
+        // Les fondus d'arrivée (même courts) faussent la mesure des contrastes : on les termine avant l'audit
+        await s.page.evaluate(() => document.getAnimations().forEach(a => { try { a.finish(); } catch { /* animation sans fin */ } }));
         const v = await s.page.evaluate(async () => (await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'] }, resultTypes: ['violations'] }))
           .violations.map(x => `${x.id} : ${x.nodes.slice(0, 2).map(n => n.target.join(' ')).join(' ; ')}`));
         for (const x of v) problemes.push(`${nom} · ${e} · ${x}`);

@@ -1,10 +1,10 @@
 // Ce que les lauréats y gagnent : vivier de talents (shortlist, invitations), attestation vérifiable,
 // et fil des réussites à partager sur LinkedIn.
 import { html, useState, useEffect } from './vendor/preact-htm.js';
-import { Icon, Modal, Field, Empty, Person, Avatar, RoleLine, BrandLogo, toast } from './ui.js';
+import { Icon, Modal, Field, Empty, Person, Avatar, RoleLine, BrandLogo, toast, injectCSS } from './ui.js';
 import { FILIERES, FOUND, niveauOf, statutOf, timeAgo, attestationStats } from './logic.js';
 import { OfferComposer, matchesMe } from './offers.js';
-import { getLang } from './i18n.js';
+import { getLang, addAR } from './i18n.js';
 import { CvButton } from './cv.js';
 
 const firstName = p => (p?.full_name || '').split(' ')[0];
@@ -197,14 +197,23 @@ export function VerifyPage({ store, id }) {
 // ---------------------------------------------------------------------------
 const WHAT = { stage: 'son stage', pfe: 'son PFE', etranger: 'son stage à l’étranger', emploi: 'son premier emploi' };
 
-export function SuccessFeed({ ctx }) {
+// max : nombre de réussites montrées. S'il en reste : un lien discret vers le Suivi, où elles sont toutes ;
+// sur le Suivi lui-même (lien=false), on les déplie sur place.
+export function SuccessFeed({ ctx, max = 5, lien = true }) {
   const { data, me, saison, store, act, openProfile } = ctx;
   const [share, setShare] = useState(null);
+  const [tout, setTout] = useState(false);
   const myN = me.role === 'etudiant' ? niveauOf(me, saison) : null; // un étudiant voit les réussites de sa promo
-  const items = data.placements.filter(p => p.saison === saison && FOUND.has(p.status) && (myN === null || p.niveau === myN || p.student_id === me.id))
-    .sort((a, b) => new Date(b.confirmed_at || b.created_at) - new Date(a.confirmed_at || a.created_at)).slice(0, 5);
+  const toutes = data.placements.filter(p => p.saison === saison && FOUND.has(p.status) && (myN === null || p.niveau === myN || p.student_id === me.id))
+    .sort((a, b) => new Date(b.confirmed_at || b.created_at) - new Date(a.confirmed_at || a.created_at));
+  const items = tout ? toutes : toutes.slice(0, max);
+  const reste = toutes.length - items.length;
   if (!items.length) return null;
-  return html`<div class="panel wins-panel">
+  const voirTout = () => {
+    ctx.go('suivi');
+    setTimeout(() => document.getElementById('reussites')?.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }), 400);
+  };
+  return html`<div class="panel wins-panel" id=${lien ? undefined : 'reussites'}>
     <div class="section-head"><h2 class="h-ico"><${Icon} name="trophy"/> ${myN ? 'Réussites de ma promo' : 'Réussites de la saison'}</h2></div>
     <ul class="wins">${items.map(p => {
       const st = store.byId('profiles', p.student_id); const la = p.status === 'confirme' && p.laureat_id ? store.byId('profiles', p.laureat_id) : null;
@@ -212,7 +221,7 @@ export function SuccessFeed({ ctx }) {
       const own = p.student_id === me.id || (la && la.id === me.id);
       return html`<li class="win" key=${p.id}>
         <${Avatar} p=${st} size=${38}/>
-        <div class="win-txt"><p><button class="linkish strong" onClick=${() => openProfile(st)}>${st?.full_name || 'Un étudiant'}</button> a décroché ${WHAT[p.type]} chez <strong>${p.entreprise}</strong>${la ? html` grâce à <button class="linkish strong" onClick=${() => openProfile(la)}>${la.full_name}</button>` : null}</p>
+        <div class="win-txt"><p><button class="linkish strong" onClick=${() => openProfile(st)}>${st ? html`<span translate="no" dir="auto">${st.full_name}</span>` : 'Un étudiant'}</button> a décroché ${WHAT[p.type]} chez <strong translate="no">${p.entreprise}</strong>${la ? html` grâce à <button class="linkish strong" onClick=${() => openProfile(la)}><span translate="no" dir="auto">${la.full_name}</span></button>` : null}</p>
           <span class="muted small">${p.status === 'confirme' ? 'Vérifié des deux côtés' : 'Trouvé hors plateforme'} · ${timeAgo(p.confirmed_at || p.created_at)}</span></div>
         <div class="win-act">
           <button class=${'kudo' + (mine ? ' on' : '')} aria-pressed=${!!mine} disabled=${p.student_id === me.id} title=${mine ? 'Retirer mon bravo' : 'Dire bravo'} onClick=${() => act(() => (mine ? store.remove('kudos', mine.id) : store.insert('kudos', { placement_id: p.id, user_id: me.id })))}><${Icon} name="clap" size=${16}/><span>Bravo</span>${k.length ? html`<b class="mono">${k.length}</b>` : null}</button>
@@ -220,9 +229,18 @@ export function SuccessFeed({ ctx }) {
         </div>
       </li>`;
     })}</ul>
+    ${reste > 0 ? (lien ? html`<button type="button" class="btn small ghost wins-all" onClick=${voirTout}>Voir toutes les réussites <${Icon} name="arrow" size=${14}/></button>`
+      : html`<button type="button" class="btn small ghost wins-all" onClick=${() => setTout(true)}>${reste > 1 ? `Voir les ${reste} autres réussites` : 'Voir l’autre réussite'}</button>`) : null}
     ${share ? html`<${ShareModal} ctx=${ctx} pl=${share} onClose=${() => setShare(null)}/>` : null}
   </div>`;
 }
+
+injectCSS('growth-ux', `
+.wins-all { align-self: flex-start; margin-inline-start: -.5rem; color: var(--blue-text); }
+`);
+addAR({ 'Voir toutes les réussites': 'عرض كل النجاحات', 'Voir l’autre réussite': 'عرض النجاح الآخر' }, [
+  [/^Voir les (\d+) autres réussites$/, n => `عرض ${n} نجاحات أخرى`],
+]);
 
 const POUR_MOI = { stage: 'mon stage', pfe: 'mon projet de fin d’études', etranger: 'mon stage à l’étranger', emploi: 'mon premier poste d’ingénieur' };
 const POUR_LUI = { stage: 'son stage', pfe: 'son projet de fin d’études', etranger: 'son stage', emploi: 'son premier poste d’ingénieur' };

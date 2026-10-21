@@ -4,7 +4,9 @@ import { html, useState, useMemo, useEffect } from './vendor/preact-htm.js';
 import { Icon, Bar, Person, Tabs, Num, injectCSS, toast } from './ui.js';
 import { seasonStats, monthlyActivity, seasonLabel, NIVEAUX, pct, OBJECTIFS, statutOf, FOUND, niveauOf, enqueteDue, SITUATIONS, SALAIRES, CANAUX } from './logic.js';
 import { CompanyLogo } from './ui.js';
-import { addAR } from './i18n.js';
+import { addAR, arCount } from './i18n.js';
+import { PoulsReseau } from './pouls.js';
+import { SuccessFeed } from './growth.js';
 import { useStatsInsertion, tauxInsertion, KpisInsertion, virgule } from './enquete.js';
 
 export function DashboardPage(ctx) {
@@ -64,6 +66,7 @@ function SeasonPage({ ctx }) {
       </button>`;
     })}</div>
     <p class="legend small muted"><span class="lg-fill"></span> part des étudiants qui ont trouvé <span class="lg-pace"></span> rythme attendu à cette date (temps écoulé vers l’échéance)</p>
+    <${SuccessFeed} ctx=${ctx} max=${5} lien=${false}/>
 
     <div class="two-col">
       <div class="panel">
@@ -91,7 +94,7 @@ function SeasonPage({ ctx }) {
       <div class="panel"><div class="section-head"><h2>Destinations à l’étranger</h2><span class="muted small">${seasonLabel(saison)}</span></div>
         ${st.countries.length ? html`<ol class="rank">${st.countries.slice(0, 6).map(([c, k]) => html`<li><span>${c}</span><span class="mono">${k}</span></li>`)}</ol>` : html`<p class="muted">Aucun départ à l’étranger déclaré pour l’instant.</p>`}</div>
       <div class="panel"><div class="section-head"><h2>Entreprises qui accueillent</h2><span class="muted small">${seasonLabel(saison)}</span></div>
-        <ol class="rank">${st.companies.slice(0, 6).map(([c, k]) => html`<li><span>${c}</span><span class="mono">${k}</span></li>`)}</ol></div>
+        <ol class="rank">${st.companies.slice(0, 6).map(([c, k]) => html`<li><span translate="no" dir="auto">${c}</span><span class="mono">${k}</span></li>`)}</ol></div>
     </div>
     ${me.role === 'admin' ? html`<${ExportBox} data=${data} saison=${saison} rows=${st.rows}/>` : null}
   </section>`;
@@ -133,9 +136,11 @@ function ExportBox({ data, saison, rows }) {
   </div>`;
 }
 
-// Vue étudiant : seulement sa propre promo, sans échéances ni alertes, pour encourager plutôt que stresser.
+// Vue étudiant : seulement sa propre promo, tournée vers ce qui vient (offres ouvertes, lauréats qui aident).
+// Pas d'échéance, pas de rythme attendu, pas de barre vide : encourager plutôt que comparer.
+
 function PromoPage({ ctx }) {
-  const { data, saison, me } = ctx;
+  const { data, saison, me, go } = ctx;
   const n = niveauOf(me, saison);
   const st = useMemo(() => seasonStats(data, saison), [data, saison]);
   const row = st.rows.find(r => r.n === n);
@@ -146,21 +151,73 @@ function PromoPage({ ctx }) {
   for (const pl of row.foundList) companies.set(pl.entreprise, (companies.get(pl.entreprise) || 0) + 1);
   const comp = [...companies.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   const mine = row.byFiliere.find(f => f.filiere === me.filiere);
-  return html`<section class="page">
+  // Les mêmes offres que dans « Offres » : ouvertes, pour les étudiants de cette année
+  const ouvertes = data.offers.filter(o => o.status === 'ouverte' && o.audience !== 'laureats' && (o.annees || []).includes(n)).length;
+  const aidants = data.profiles.filter(p => p.role === 'laureat' && p.filiere === me.filiere).length;
+  const pourFiliere = data.offers.filter(o => o.status === 'ouverte' && o.audience !== 'laureats' && (o.annees || []).includes(n) && o.filieres?.includes(me.filiere)).length;
+  return html`<section class="page promo">
     <header class="page-head"><div><p class="eyebrow">Saison ${seasonLabel(saison)} · ${NIVEAUX[n].label}</p><h1>Ma promo</h1></div></header>
     <${SuiviSeg} ctx=${ctx} on="placement"/>
-    <div class="promo-hero">
-      <span class="obj-ico"><${Icon} name="people" size=${26}/></span>
-      <div><p class="big mono">${row.found}<small> / ${row.total}</small></p>
-        <p>camarades de ${NIVEAUX[n].short} ont déjà trouvé leur ${row.objectif.court.toLowerCase()}${row.via ? html`, dont <b>${row.via}</b> grâce aux lauréats du réseau` : ''}.</p>
-        <${Bar} value=${row.rate} label=${`${pct(row.rate)} de la promo`}/></div>
+    <div class="pr-avant">
+      <button type="button" class="pr-stat" onClick=${() => go('offres')}>
+        <span class="pr-stat-ico"><${Icon} name="feed" size=${18}/></span>
+        <span class="pr-stat-num mono"><${Num} v=${ouvertes}/></span>
+        <span class="pr-stat-lbl">${ouvertes > 1 ? 'offres ouvertes pour ta promo' : 'offre ouverte pour ta promo'}</span>
+        <span class="pr-stat-go">Voir les offres <${Icon} name="arrow" size=${14}/></span>
+      </button>
+      ${row.via ? html`<div class="pr-stat good">
+        <span class="pr-stat-ico"><${Icon} name="heart" size=${18}/></span>
+        <span class="pr-stat-num mono"><${Num} v=${row.via}/></span>
+        <span class="pr-stat-lbl">${row.via > 1 ? 'camarades ont trouvé grâce à un lauréat' : 'camarade a trouvé grâce à un lauréat'}</span>
+      </div>` : html`<button type="button" class="pr-stat good" onClick=${() => go('mentorat')}>
+        <span class="pr-stat-ico"><${Icon} name="mentor" size=${18}/></span>
+        <span class="pr-stat-num mono"><${Num} v=${aidants}/></span>
+        <span class="pr-stat-lbl">${aidants > 1 ? 'lauréats de ta filière dans le réseau' : 'lauréat de ta filière dans le réseau'}</span>
+        <span class="pr-stat-go">Trouver un mentor <${Icon} name="arrow" size=${14}/></span>
+      </button>`}
     </div>
-    ${mine ? html`<div class="panel"><div class="section-head"><h2>${me.filiere}</h2><span class="mono">${mine.found}/${mine.total}</span></div><${Bar} value=${mine.total ? mine.found / mine.total : 0}/>
-      <p class="small muted">Chacun avance à son rythme. Les lauréats publient des offres toute l’année.</p></div>` : null}
+    <${PoulsReseau} ctx=${ctx}/>
+    ${mine ? html`<div class="panel pr-fil"><div class="section-head"><h2>${me.filiere}</h2>${mine.found ? html`<span class="muted small">${mine.found > 1 ? `${mine.found} camarades ont trouvé` : '1 camarade a trouvé'}</span>` : null}</div>
+      ${mine.found ? html`<${Bar} value=${mine.total ? mine.found / mine.total : 0} label=${mine.found > 1 ? `${mine.found} camarades ont trouvé` : '1 camarade a trouvé'}/>` : null}
+      <p class="small muted">Chacun avance à son rythme : les lauréats publient toute l’année.</p>
+      ${pourFiliere ? html`<button type="button" class="linkish small pr-fil-go" onClick=${() => go('offres')}>${pourFiliere > 1 ? `${pourFiliere} offres ciblent ta filière` : '1 offre cible ta filière'} <${Icon} name="arrow" size=${13}/></button>` : null}</div>` : null}
+    <${SuccessFeed} ctx=${ctx} max=${3} lien=${false}/>
     ${comp.length ? html`<div class="panel"><div class="section-head"><h2>Où va ta promo</h2></div>
-      <ul class="company-cloud">${comp.map(([c, k]) => html`<li><${CompanyLogo} name=${c} size=${34}/><span>${c}</span><span class="count">${k}</span></li>`)}</ul></div>` : null}
+      <ul class="company-cloud">${comp.map(([c, k]) => html`<li><${CompanyLogo} name=${c} size=${34}/><span translate="no" dir="auto">${c}</span><span class="count">${k}</span></li>`)}</ul></div>` : null}
   </section>`;
 }
+
+injectCSS('dashboard-promo', `
+.pr-avant { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
+.pr-stat { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; padding: 1rem 1.1rem; border-radius: var(--r-xl); border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line)); background: linear-gradient(160deg, var(--accent-soft), var(--surface) 78%); text-align: start; font: inherit; color: inherit; min-width: 0; }
+button.pr-stat { cursor: pointer; transition: transform .25s var(--ease), box-shadow .25s, border-color .2s; }
+button.pr-stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.pr-stat.good { background: linear-gradient(160deg, var(--good-soft), var(--surface) 78%); border-color: color-mix(in srgb, var(--good) 24%, var(--line)); }
+.pr-stat-ico { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); color: var(--accent); margin-bottom: .2rem; }
+.pr-stat.good .pr-stat-ico { color: var(--good); }
+.pr-stat-num { font-size: var(--fs-7); line-height: 1.05; color: var(--ink); }
+.pr-stat-lbl { color: var(--ink-2); font-size: var(--fs-2); line-height: 1.35; }
+.pr-stat-go { margin-top: auto; padding-top: .3rem; display: inline-flex; align-items: center; gap: .3rem; font-weight: 600; font-size: var(--fs-2); color: var(--blue-text); }
+.pr-stat.good .pr-stat-go { color: var(--good); }
+.pr-fil .bar-fill { background: var(--good); }
+.pr-fil-go { align-self: flex-start; display: inline-flex; align-items: center; gap: .3rem; font-weight: 600; }
+@media (max-width: 420px) { .pr-avant { gap: .55rem; } .pr-stat { padding: .9rem .85rem; } .pr-stat-num { font-size: var(--fs-6); } }
+`);
+
+addAR({
+  'offres ouvertes pour ta promo': 'عروض مفتوحة لدفعتك',
+  'offre ouverte pour ta promo': 'عرض مفتوح لدفعتك',
+  'camarades ont trouvé grâce à un lauréat': 'زملاء وجدوا فرصتهم بفضل خريج',
+  'camarade a trouvé grâce à un lauréat': 'زميل وجد فرصته بفضل خريج',
+  'lauréats de ta filière dans le réseau': 'خريجون من شعبتك في الشبكة',
+  'lauréat de ta filière dans le réseau': 'خريج من شعبتك في الشبكة',
+  '1 camarade a trouvé': 'زميل واحد وجد فرصته',
+  '1 offre cible ta filière': 'عرض واحد يستهدف شعبتك',
+  'Chacun avance à son rythme : les lauréats publient toute l’année.': 'كل واحد يتقدم بإيقاعه: ينشر الخريجون العروض طوال السنة.',
+}, [
+  [/^(\d+) offres ciblent ta filière$/, k => `${arCount(k, ['عرض واحد', 'عرضان', 'عروض', 'عرضًا'])} تستهدف شعبتك`],
+  [/^(\d+) camarades ont trouvé$/, k => `${arCount(k, ['زميل واحد', 'زميلان', 'زملاء', 'زميلًا'])} وجدوا فرصتهم`],
+]);
 
 // ---------------------------------------------------------------------------
 // Insertion des diplômés : résultats de l'enquête à 6 et 12 mois (agrégés, 5 réponses minimum),

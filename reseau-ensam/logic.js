@@ -564,3 +564,74 @@ export function rapportInsertion(data, now = new Date()) {
 }
 
 export const TYPES_EVENEMENT = { forum: ['Forum', 'briefcase'], conference: ['Conférence', 'mentor'], portes_ouvertes: ['Portes ouvertes', 'home'], atelier: ['Atelier', 'wrench'], soutenance: ['Soutenances', 'cap'], autre: ['Événement', 'calendar'] };
+
+// ---------------------------------------------------------------------------
+// Messagerie : mêmes règles que peut_discuter() dans la base. On s'écrit quand un lien existe
+// déjà (mentorat, relecture de CV, candidature, parrainage, coordonnées acceptées), quand l'autre
+// a écrit en premier, ou avec l'administration. Un blocage, dans un sens ou dans l'autre, ferme tout.
+// ---------------------------------------------------------------------------
+const entre = (x, a, b, k1, k2) => (x[k1] === a && x[k2] === b) || (x[k1] === b && x[k2] === a);
+export const bloque = (data, a, b) => (data.blocages || []).some(x => entre(x, a, b, 'user_id', 'bloque_id'));
+
+// Ce qui relie deux membres, du plus utile au plus général : sert de sous-titre à la conversation
+export function lienAvec(data, me, autre, profil = () => null) {
+  if (!me || !autre || me.id === autre) return null;
+  const m = data.mentorships.filter(x => x.mentor_id && ['demande', 'acceptee', 'terminee'].includes(x.status) && entre(x, me.id, autre, 'student_id', 'mentor_id'))
+    .sort((a, b) => (a.status === 'acceptee' ? 0 : 1) - (b.status === 'acceptee' ? 0 : 1) || new Date(b.created_at) - new Date(a.created_at))[0];
+  if (m) return { type: 'mentorat', label: 'Mentorat', detail: m.sujet, m };
+  const r = (data.relectures_cv || []).find(x => x.reviewer_id && x.status !== 'annulee' && entre(x, me.id, autre, 'student_id', 'reviewer_id'));
+  if (r) return { type: 'relecture', label: 'Relecture de CV' };
+  for (const a of data.applications) {
+    if (!a.offer_id || !(a.student_id === me.id || a.student_id === autre)) continue;
+    const o = data.offers.find(x => x.id === a.offer_id);
+    if (o && ((a.student_id === autre && o.author_id === me.id) || (a.student_id === me.id && o.author_id === autre))) return { type: 'candidature', label: 'Candidature', detail: o.titre, offer: o.id };
+  }
+  if ((data.parrainages || []).some(x => entre(x, me.id, autre, 'parrain_id', 'filleul_id'))) return { type: 'parrainage', label: 'Parrainage' };
+  if ((data.demandes_contact || []).some(d => d.status === 'acceptee' && entre(d, me.id, autre, 'demandeur_id', 'cible_id'))) return { type: 'contact', label: 'Contact accepté' };
+  if (me.role === 'admin' || profil(autre)?.role === 'admin') return { type: 'admin', label: 'Administration' };
+  if ((data.messages || []).some(x => x.author_id === autre && x.dest_id === me.id)) return { type: 'message', label: 'Conversation' };
+  return null;
+}
+export function peutDiscuter(data, me, autre, profil = () => null) {
+  if (!me || !autre || me.id === autre || bloque(data, me.id, autre) || !profil(autre)) return false;
+  if (me.role === 'admin') return true;
+  const l = lienAvec(data, me, autre, profil);
+  // On répond à l'administration, mais on ne lui écrit pas en premier
+  return !!l && (l.type !== 'admin' || (data.messages || []).some(x => x.author_id === autre && x.dest_id === me.id));
+}
+
+// Conversations de « me », la plus récente d'abord : l'autre personne, ses messages (du plus ancien au plus récent), les non lus
+export function conversations(data, meId) {
+  const g = new Map();
+  for (const m of data.messages || []) {
+    if (m.author_id !== meId && m.dest_id !== meId) continue;
+    const autre = m.author_id === meId ? m.dest_id : m.author_id;
+    if (!g.has(autre)) g.set(autre, []);
+    g.get(autre).push(m);
+  }
+  return [...g.entries()].map(([autre, ms]) => {
+    ms.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    return { autre, messages: ms, dernier: ms[ms.length - 1], nonLus: ms.filter(m => m.dest_id === meId && !m.lu_at).length };
+  }).sort((a, b) => new Date(b.dernier.created_at) - new Date(a.dernier.created_at));
+}
+export const nonLus = (data, meId) => (data.messages || []).filter(m => m.dest_id === meId && !m.lu_at).length;
+
+// ---------------------------------------------------------------------------
+// « Cette semaine dans le réseau » : qui a aidé qui ces 7 derniers jours (sinon ces 30 derniers jours).
+// Sert de preuve douce que ça marche, sans classement ni comparaison.
+// ---------------------------------------------------------------------------
+export function poulsReseau(data, now = new Date()) {
+  const calc = jours => {
+    const depuis = now.getTime() - jours * 864e5;
+    const dans = iso => iso && new Date(iso).getTime() >= depuis && new Date(iso).getTime() <= now.getTime();
+    const aidants = new Map(); const aides = new Set(); let recrutes = 0, rdv = 0, cv = 0;
+    const aide = (l, s, at) => { if (!l || !s) return; aidants.set(l, Math.max(aidants.get(l) || 0, new Date(at).getTime())); aides.add(s); };
+    for (const m of data.mentorships || []) if (m.mentor_id && ['acceptee', 'terminee'].includes(m.status) && dans(m.accepted_at || m.rdv_at)) { aide(m.mentor_id, m.student_id, m.accepted_at || m.rdv_at); rdv++; }
+    for (const r of data.relectures_cv || []) if (r.status === 'rendue' && dans(r.rendue_at)) { aide(r.reviewer_id, r.student_id, r.rendue_at); cv++; }
+    for (const p of data.placements || []) if (p.status === 'confirme' && p.laureat_id && dans(p.confirmed_at)) { aide(p.laureat_id, p.student_id, p.confirmed_at); recrutes++; }
+    const ids = [...aidants.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
+    return { jours, aidants: ids, nbAides: aides.size, recrutes, rdv, cv };
+  };
+  const semaine = calc(7);
+  return semaine.aidants.length >= 2 ? semaine : { ...calc(30), semaine };
+}
