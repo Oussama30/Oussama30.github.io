@@ -22,6 +22,7 @@ import { NudgeAvis } from './entreprises.js';
 import { ConfianceHome } from './confiance.js';
 import { EnquetePage, EnqueteCard } from './enquete.js';
 import { NextEvent } from './agenda.js';
+import { lireInvitation, promoInvitee, roleDePromo } from './invitation.js';
 
 const ROUTES = ['accueil', 'offres', 'mentorat', 'parcours', 'espace', 'reseau', 'suivi', 'profil', 'admin', 'verifier', 'confidentialite', 'desabo', 'enquete', 'offre'];
 const ALIASES = { impact: 'espace', tableau: 'suivi', communaute: 'reseau', entraide: 'reseau/entraide', groupes: 'reseau/groupes', sujets: 'offres/sujets', 'reseau/mentorat': 'mentorat', 'reseau/mentorat/rdv': 'mentorat', agenda: 'reseau/agenda', entreprises: 'reseau/entreprises', etranger: 'reseau/etranger', relecture: 'mentorat/cv', cv: 'mentorat/cv', moderation: 'admin/moderation' };
@@ -89,9 +90,9 @@ function App({ store }) {
 
   const relang = () => setTick(t => t + 1);
   // Pages publiques, sans compte : vérification d'une attestation, désabonnement des emails, confidentialité
-  if (route.base === 'verifier') return html`<div class="auth verify-wrap"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><${VerifyPage} store=${store} id=${route.sub}/></div>`;
-  if (route.base === 'desabo') return html`<div class="auth verify-wrap"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><${DesaboPage} store=${store} token=${route.sub} quoi=${route.sub2}/></div>`;
-  if (route.base === 'confidentialite' && (store.mode !== 'live' || !store.session || !me)) return html`<div class="auth verify-wrap privacy-wrap"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><${PrivacyPage} onBack=${() => { history.back(); setTimeout(() => setRoute(readRoute()), 50); }}/></div>`;
+  if (route.base === 'verifier') return html`<main class="auth verify-wrap"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><${VerifyPage} store=${store} id=${route.sub}/></main>`;
+  if (route.base === 'desabo') return html`<main class="auth verify-wrap"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><${DesaboPage} store=${store} token=${route.sub} quoi=${route.sub2}/></main>`;
+  if (route.base === 'confidentialite' && (store.mode !== 'live' || !store.session || !me)) return html`<main class="auth verify-wrap privacy-wrap"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><${PrivacyPage} onBack=${() => { history.back(); setTimeout(() => setRoute(readRoute()), 50); }}/></main>`;
   if (store.mode === 'live' && !store.session) return html`<${AuthScreen} store=${store} relang=${relang}/>`;
   if (store.mode === 'live' && !me) return html`<${Onboarding} store=${store} relang=${relang}/>`;
 
@@ -119,6 +120,7 @@ function App({ store }) {
   const dotFor = k => ((k === 'parcours' || k === 'espace') && notifs.some(n => n.action && n.mine)) || (k === 'mentorat' && notifs.some(n => n.action && n.to === 'mentorat'));
 
   return html`<div class="shell">
+    <a class="skip" href="#contenu" onClick=${e => { e.preventDefault(); document.getElementById('contenu')?.focus(); }}>Aller au contenu</a>
     <aside class="side">
       <a class="brand" href="#accueil" onClick=${e => { e.preventDefault(); go('accueil'); }}><${BrandLogo} size=${40}/><span class="brand-txt"><strong>Réseau ENSAM</strong><span>Meknès · Lauréats & étudiants</span></span></a>
       <nav class="side-nav">${nav.map(([k, l, i]) => html`<a href=${'#' + k} class=${page === k ? 'on' : ''} onClick=${e => { e.preventDefault(); go(k); }}><span class="nav-ico"><${Icon} name=${i}/></span> ${l}${dotFor(k) ? html`<span class="dotn"></span>` : null}</a>`)}</nav>
@@ -126,7 +128,7 @@ function App({ store }) {
     </aside>
     <div class="main">
       <header class="top">
-        <a class="brand mobile-only" href="#accueil" onClick=${e => { e.preventDefault(); go('accueil'); }}><${BrandLogo} size=${34}/><strong>Réseau ENSAM</strong></a>
+        <a class="brand mobile-only" href="#accueil" aria-label="Réseau ENSAM · Accueil" onClick=${e => { e.preventDefault(); go('accueil'); }}><${BrandLogo} size=${34}/><strong>Réseau ENSAM</strong></a>
         <span class="spacer"></span>
         ${store.mode === 'demo' ? html`<${PersonaSwitch} store=${store} go=${go}/>` : null}
         <${ThemeToggle} onChange=${relang}/>
@@ -149,8 +151,8 @@ function App({ store }) {
           </div>` : null}
         </div>
       </header>
-      ${store.mode === 'demo' ? html`<div class="demo-band"><${Icon} name="spark" size=${15}/><span>Démo avec des données fictives. Essaie le mentorat : <b translate="no">Salma</b> demande de l’aide, <b translate="no">Youssef</b> (lauréat) clique sur un horaire, la visio est prête. Change de rôle en haut.</span></div>` : null}
-      <main class="content">
+      ${store.mode === 'demo' ? html`<section class="demo-band" aria-label="Démo"><${Icon} name="spark" size=${15}/><span>Démo avec des données fictives. Essaie le mentorat : <b translate="no">Salma</b> demande de l’aide, <b translate="no">Youssef</b> (lauréat) clique sur un horaire, la visio est prête. Change de rôle en haut.</span></section>` : null}
+      <main class="content" id="contenu" tabindex="-1">
         ${page === 'accueil' ? html`<${Home} ...${ctx} notifs=${notifs} openNotif=${openNotif}/>` : null}
         ${page === 'offres' ? html`<${OffersPage} ...${ctx}/>` : null}
         ${page === 'mentorat' ? html`<${MentoratPage} ...${ctx}/>` : null}
@@ -205,7 +207,7 @@ export function LangToggle({ onChange, store, me }) {
 function PersonaSwitch({ store, go }) {
   const ps = store.personas();
   return html`<label class="persona"><span class="small muted">Voir en tant que</span>
-    <select id="persona" value=${store.me?.id} onChange=${e => { store.switchTo(e.target.value); go('accueil'); }}>${ps.map(p => html`<option value=${p.id}>${p._persona}</option>`)}</select></label>`;
+    <select id="persona" aria-label="Voir en tant que" value=${store.me?.id} onChange=${e => { store.switchTo(e.target.value); go('accueil'); }}>${ps.map(p => html`<option value=${p.id}>${p._persona}</option>`)}</select></label>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -409,7 +411,7 @@ function Home(ctx) {
           <div class="offer-grid one">${latest.length ? latest.map(o => html`<${OfferCard} key=${o.id} o=${o} ctx=${ctx} onOpen=${() => openOffer(o.id)}/>`) : html`<${Empty} icon="feed" title="Pas encore d’offre">Publie la première : les étudiants concernés la voient tout de suite.<//>`}</div>`}
         <${SuccessFeed} ctx=${ctx}/>
       </div>
-      <aside class="home-side">
+      <div class="home-side">
         <${NextEvent} ctx=${ctx}/>
         <${DefisPanel} ctx=${ctx}/>
         <${NextCafe} ctx=${ctx}/>
@@ -427,7 +429,7 @@ function Home(ctx) {
         ${mercis.length ? html`<div class="panel"><div class="section-head"><h2 class="h-ico"><${Icon} name="heart"/> Mur des mercis</h2></div>
           ${mercis.map(m => html`<blockquote class="merci"><p>« ${m.txt} »</p><footer><span class="small">${store.byId('profiles', m.from)?.full_name?.split(' ')[0] || 'Un étudiant'} → <button class="linkish" onClick=${() => openProfile(store.byId('profiles', m.to))}>${store.byId('profiles', m.to)?.full_name}</button></span></footer></blockquote>`)}
         </div>` : null}
-      </aside>
+      </div>
     </div>
     ${compose ? html`<${OfferComposer} ctx=${ctx} onClose=${() => setCompose(false)}/>` : null}
   </section>`;
@@ -480,7 +482,9 @@ function MyProfile({ ctx }) {
 // ---------------------------------------------------------------------------
 function AuthScreen({ store, relang }) {
   const recovery = /type=recovery/.test(location.hash);
-  const [mode, setMode] = useState(recovery ? 'nouveau' : 'connexion');
+  // Arrivé(e) par le lien d'invitation d'une promo : on commence par « Créer mon compte »
+  const invite = promoInvitee();
+  const [mode, setMode] = useState(recovery ? 'nouveau' : invite ? 'inscription' : 'connexion');
   const [email, setEmail] = useState(''); const [pw, setPw] = useState('');
   const [ok, setOk] = useState(false); const [mails, setMails] = useState(true);
   const [msg, setMsg] = useState(null); const [busy, setBusy] = useState(false);
@@ -493,7 +497,7 @@ function AuthScreen({ store, relang }) {
     else if (mode === 'oubli') run(async () => { await store.resetPassword(email.trim()); setMsg({ t: 'Si un compte existe, un lien de réinitialisation vient d’être envoyé.' }); });
     else run(async () => { await store.setPassword(pw); setMsg({ t: 'Mot de passe changé.' }); });
   };
-  return html`<div class="auth">
+  return html`<main class="auth">
     <div class="auth-lang"><${LangToggle} onChange=${relang}/></div>
     <section class="auth-hero sky">
       <div class="auth-hero-txt">
@@ -506,6 +510,7 @@ function AuthScreen({ store, relang }) {
     <div class="auth-right">
     <form class="auth-card form" onSubmit=${submit}>
       <h2>${{ connexion: 'Se connecter', inscription: 'Créer mon compte', oubli: 'Mot de passe oublié', nouveau: 'Nouveau mot de passe' }[mode]}</h2>
+      ${invite && mode === 'inscription' ? html`<p class="invite-band"><${Icon} name="send" size=${18}/><span><strong>Bienvenue, promo ${invite} !</strong> Ta promo est déjà remplie : crée ton compte, puis vérifie tes informations.</span></p>` : null}
       ${mode !== 'nouveau' ? html`<${Field} label="Email" hint=${mode === 'inscription' && ecole.length ? `Étudiant(e) : ${store.reglages?.email_ecole_obligatoire ? 'inscris-toi' : 'de préférence'} avec ton email de l’école (${ecole.map(d => '@' + d).join(', ')}). Ton compte est alors vérifié tout de suite.` : ''}><input id="au-email" type="email" required autocomplete="email" value=${email} onInput=${e => setEmail(e.target.value)}/><//>` : null}
       ${mode !== 'oubli' ? html`<${Field} label="Mot de passe" hint=${mode === 'connexion' ? '' : '6 caractères minimum'}><input id="au-pw" type="password" required minlength="6" autocomplete=${mode === 'connexion' ? 'current-password' : 'new-password'} value=${pw} onInput=${e => setPw(e.target.value)}/><//>` : null}
       ${mode === 'inscription' ? html`<label class="check small"><input id="au-ok" type="checkbox" required checked=${ok} onChange=${e => setOk(e.target.checked)}/> <span>J’accepte que mes données servent au réseau (<a href="#confidentialite">Confidentialité</a>)</span></label>
@@ -525,23 +530,26 @@ function AuthScreen({ store, relang }) {
     </ul>
     <p class="small muted center"><a href="#confidentialite">Confidentialité</a></p>
     </div>
-  </div>`;
+  </main>`;
 }
 
 function Onboarding({ store, relang }) {
   const act = async fn => { try { await fn(); } catch (e) { toast(e.message, 'err'); } };
   const ctx = { store, act };
-  return html`<div class="auth"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><div class="auth-card wide">
+  const invite = promoInvitee();
+  const preset = invite ? { promo: invite, role: roleDePromo(invite) } : null;
+  return html`<main class="auth"><div class="auth-lang"><${LangToggle} onChange=${relang}/></div><div class="auth-card wide">
     <div class="row"><${BrandLogo} size=${44}/><div><p class="eyebrow">Dernière étape</p><h2>Présente-toi à la communauté</h2></div></div>
     <p class="muted">Ces informations permettent de te proposer les bonnes offres et de suivre ta promo.</p>
-    <${ProfileForm} ctx=${ctx} onboarding/>
+    <${ProfileForm} ctx=${ctx} preset=${preset} onboarding/>
     <button class="linkish small" onClick=${() => store.signOut()}>Se déconnecter</button>
-  </div><${Toaster}/></div>`;
+  </div><${Toaster}/></main>`;
 }
 
 // ---------------------------------------------------------------------------
 (async () => {
   const root = document.getElementById('app');
+  lireInvitation();
   try {
     // L'arabe se charge en même temps que les données, seulement si c'est la langue choisie
     const [store] = await Promise.all([createStore(), getLang() === 'ar' ? chargerAR().catch(() => setLang('fr')) : null]);

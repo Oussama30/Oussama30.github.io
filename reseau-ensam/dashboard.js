@@ -105,7 +105,7 @@ function MonthChart({ months }) {
   const y = v => T + (H - T - B) * (1 - v / top);
   const gw = (W - L) / months.length, bw = Math.min(16, gw / 3.2);
   const ticks = []; for (let v = 0; v <= top; v += step) ticks.push(v);
-  return html`<div class="chart-wrap"><svg viewBox=${`0 0 ${W} ${H}`} class="chart" role="img" aria-label="Offres publiées et réussites confirmées par mois">
+  return html`<div class="chart-wrap" tabindex="0" role="region" aria-label="Graphique : offres et réussites par mois"><svg viewBox=${`0 0 ${W} ${H}`} class="chart" role="img" aria-label="Offres publiées et réussites confirmées par mois">
     ${ticks.map(v => html`<g><line x1=${L} x2=${W} y1=${y(v)} y2=${y(v)} class="grid"/><text x=${L - 6} y=${y(v) + 4} class="axis" text-anchor="end">${v}</text></g>`)}
     ${months.map((m, i) => { const x = L + i * gw + gw / 2; return html`<g>
       <rect x=${x - bw - 1} y=${y(m.offres)} width=${bw} height=${Math.max(0, y(0) - y(m.offres))} rx="3" class="s1"><title>${m.label} : ${m.offres} offres publiées</title></rect>
@@ -331,7 +331,8 @@ function InsertionPage({ ctx }) {
           </tbody></table></div>` : null}
         <div class="panel"><div class="section-head"><h2>Toutes les promos</h2></div>
           <div class="tbl-scroll"><table class="tbl ins-all"><thead><tr><th>Promotion</th><th>Vague</th><th class="num">Réponses</th><th class="num">Taux d’insertion</th><th class="num">Délai médian</th><th class="num">Satisfaction</th></tr></thead><tbody>
-            ${rows.map(x => { const t = tauxInsertion(x); return html`<tr class=${'click' + (x === r ? ' sel' : '')} onClick=${() => { setPromo(x.promo); setVague(x.vague); }}>
+            ${rows.map(x => { const t = tauxInsertion(x); const choisir = () => { setPromo(x.promo); setVague(x.vague); };
+              return html`<tr class=${'click' + (x === r ? ' sel' : '')} tabindex="0" aria-current=${x === r ? 'true' : null} onClick=${choisir} onKeyDown=${e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choisir(); } }}>
               <td class="mono">${x.promo}</td><td>${x.vague} mois</td><td class="num mono">${x.n}</td><td class="num mono">${t == null ? '—' : pct(t)}</td>
               <td class="num mono">${x.delai_median == null ? '—' : `${virgule(x.delai_median)} mois`}</td><td class="num mono">${x.satisfaction == null ? '—' : `${virgule(x.satisfaction)} / 5`}</td></tr>`; })}
           </tbody></table></div>

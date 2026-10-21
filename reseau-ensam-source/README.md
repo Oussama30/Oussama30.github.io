@@ -24,7 +24,7 @@ sh build.sh
 cd tests && npm ci && npx playwright install chromium && npm test
 ```
 
-- `npm run unit` : calculs (saisons, niveaux, enquête, taux d'insertion).
+- `npm run unit` : calculs (saisons, niveaux, enquête, taux d'insertion), lecture d'un profil LinkedIn collé, traductions arabes.
 - `npm run sql` : la base dans un Postgres local (PGlite) : règles d'accès, limites, enquête, liste officielle, mise à jour depuis la Phase 2.
 - `npm run notifier` : emails (Gmail puis Brevo en secours), notifications push, résumé de la semaine, alertes, enquêtes.
-- `npm run site` : le site en démo dans Chromium : tous les écrans pour chaque profil (ordinateur en français, téléphone en arabe), coordonnées après accord, signalement et modération, agenda, mode sombre, hors ligne.
+- `npm run site` : le site en démo dans Chromium : tous les écrans pour chaque profil (ordinateur en français, téléphone en arabe), coordonnées après accord, signalement et modération, agenda, mode sombre, hors ligne, lien d'invitation par promo, remplissage depuis LinkedIn, clavier, et audit d'accessibilité (axe-core : contrastes, noms, repères) sur chaque écran.

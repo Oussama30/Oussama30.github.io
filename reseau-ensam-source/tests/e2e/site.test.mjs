@@ -6,12 +6,15 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
+import { createRequire } from 'node:module';
+
+const AXE = fs.readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
 
 const SITE = path.resolve(process.env.SITE_DIR || new URL('../../dist', import.meta.url).pathname);
 const TYPES = { '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
 const ECRANS = ['accueil', 'offres', 'mentorat', 'mentorat/cv', 'parcours', 'espace', 'reseau/groupes', 'reseau/agenda', 'reseau/entraide',
   'reseau/entreprises', 'reseau/etranger', 'reseau/annuaire', 'reseau/classement', 'reseau/talents', 'suivi', 'profil', 'enquete',
-  'confidentialite', 'admin', 'admin/moderation', 'admin/membres', 'admin/liste', 'admin/agenda', 'admin/reglages'];
+  'confidentialite', 'admin', 'admin/moderation', 'admin/membres', 'admin/liste', 'admin/inviter', 'admin/agenda', 'admin/reglages'];
 
 let serveur, adresse, navigateur;
 before(async () => {
@@ -35,8 +38,8 @@ before(async () => {
 after(async () => { await navigateur?.close(); serveur?.close(); });
 
 // Une page neuve, dans la langue voulue, avec un relevé des erreurs
-async function ouvrir({ largeur = 1280, langue = 'fr', sw = false } = {}) {
-  const ctx = await navigateur.newContext({ viewport: { width: largeur, height: largeur > 800 ? 900 : 844 }, serviceWorkers: sw ? 'allow' : 'block' });
+async function ouvrir({ largeur = 1280, langue = 'fr', sw = false, theme = 'light' } = {}) {
+  const ctx = await navigateur.newContext({ viewport: { width: largeur, height: largeur > 800 ? 900 : 844 }, serviceWorkers: sw ? 'allow' : 'block', colorScheme: theme, reducedMotion: 'reduce' });
   await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, r => r.abort());
   const page = await ctx.newPage(); const erreurs = [];
   page.on('pageerror', e => erreurs.push(e.message));
@@ -142,3 +145,67 @@ test('hors ligne : le site s’ouvre depuis la copie gardée sur le téléphone'
   assert.deepEqual(s.erreurs, []);
   await s.ctx.close();
 });
+
+test('lien d’invitation d’une promo : la promo est gardée, l’adresse nettoyée, le message prêt pour WhatsApp', async () => {
+  const s = await ouvrir();
+  await s.page.goto(adresse + '?promo=2027'); await s.page.waitForSelector('.hello');
+  assert.equal(await s.page.evaluate(() => localStorage.getItem('ensam-invite-promo')), '2027');
+  assert.equal(await s.page.evaluate(() => location.search), '');
+  await s.comme('Admin'); await s.aller('admin/inviter');
+  assert.ok(await s.page.locator('.inv-row').count() >= 9);
+  const wa = await s.page.locator('.inv-row', { hasText: 'Promo 2027' }).locator('a[href^="https://wa.me/"]').getAttribute('href');
+  const msg = decodeURIComponent(wa.split('text=')[1]);
+  assert.match(msg, /promo 2027/); assert.ok(msg.includes(adresse + '?promo=2027'));
+  await s.page.click('.inv-opts .seg button:nth-child(3)');
+  assert.match(await s.page.locator('.inv-msg').innerText(), /مرحبا دفعة/);
+  assert.deepEqual(s.erreurs, []);
+  await s.ctx.close();
+});
+
+test('profil : remplir depuis le texte LinkedIn collé', async () => {
+  const s = await ouvrir();
+  await s.comme('Amine'); await s.aller('profil');
+  await s.page.click('.li-box summary');
+  await s.page.fill('#pf-litxt', 'Amine Kettani\nÉlève ingénieur à l’ENSAM Meknès\nCompétences : SolidWorks · Ansys · Gestion de projet');
+  await s.page.click('#pf-lifill'); await s.page.waitForTimeout(200);
+  assert.match(await s.page.inputValue('#pf-comp'), /SolidWorks, Ansys, Gestion de projet/);
+  assert.match(await s.page.locator('.li-faits').innerText(), /Compétences/);
+  assert.deepEqual(s.erreurs, []);
+  await s.ctx.close();
+});
+
+test('clavier : lien « Aller au contenu », fenêtre qui garde le focus puis le rend', async () => {
+  const s = await ouvrir();
+  await s.page.keyboard.press('Tab');
+  assert.equal(await s.page.evaluate(() => document.activeElement.className), 'skip');
+  await s.page.keyboard.press('Enter');
+  assert.equal(await s.page.evaluate(() => document.activeElement.id), 'contenu');
+  await s.comme('Amine'); await s.fiche('Youssef El Amrani');
+  for (let i = 0; i < 25; i++) await s.page.keyboard.press('Tab');
+  assert.ok(await s.page.evaluate(() => !!document.activeElement.closest('.modal')), 'le focus est sorti de la fenêtre');
+  await s.fermer();
+  assert.ok(await s.page.evaluate(() => document.activeElement.matches('.person')), 'le focus n’est pas revenu sur la fiche ouverte');
+  assert.deepEqual(s.erreurs, []);
+  await s.ctx.close();
+});
+
+// Audit automatique (axe-core) : contrastes, noms des boutons et champs, repères pour les lecteurs d'écran
+for (const [largeur, langue, theme] of [[1280, 'fr', 'light'], [390, 'ar', 'dark']]) {
+  test(`accessibilité : aucun problème relevé par axe (${largeur} px, ${langue}, ${theme})`, async () => {
+    const s = await ouvrir({ largeur, langue, theme });
+    const problemes = [];
+    for (const [id, nom] of s.profils) {
+      await s.page.selectOption('#persona', id); await s.page.waitForTimeout(250);
+      for (const e of ECRANS) {
+        await s.aller(e);
+        if (!(await s.page.evaluate(() => !!window.axe))) await s.page.addScriptTag({ content: AXE });
+        const v = await s.page.evaluate(async () => (await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'] }, resultTypes: ['violations'] }))
+          .violations.map(x => `${x.id} : ${x.nodes.slice(0, 2).map(n => n.target.join(' ')).join(' ; ')}`));
+        for (const x of v) problemes.push(`${nom} · ${e} · ${x}`);
+      }
+    }
+    assert.deepEqual(problemes, []);
+    assert.deepEqual(s.erreurs, []);
+    await s.ctx.close();
+  });
+}

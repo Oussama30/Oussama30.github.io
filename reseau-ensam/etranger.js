@@ -124,7 +124,7 @@ function PaysView({ ctx, cle }) {
       <div class="home-main gp-sections">
         ${GUIDE_SECTIONS.map(([sec, label, ico]) => html`<${Rubrique} ctx=${ctx} key=${sec} sec=${sec} label=${label} ico=${ico} row=${rubrique(e, sec)} ecrire=${ecrire} editing=${edit === sec} onEdit=${() => setEdit(sec)} onDone=${() => setEdit(null)}/>`)}
       </div>
-      <aside class="home-side">
+      <div class="home-side">
         <div class="panel">
           <div class="section-head"><h2 class="h-ico"><${Icon} name="people"/> Lauréats sur place <span class="count">${lau.length}</span></h2></div>
           ${lau.length ? html`<ul class="people-list gp-people">${lau.slice(0, tous ? 40 : 5).map(p => html`<li key=${p.id}><${Person} p=${p} onOpen=${openProfile} sub=${[p.poste, p.entreprise, p.ville].filter(Boolean).join(' · ') || `Promo ${p.promo}`}/></li>`)}</ul>
@@ -136,7 +136,7 @@ function PaysView({ ctx, cle }) {
         </div>
         ${e.offres.length ? html`<div class="section-head"><h2 class="h-ico"><${Icon} name="feed"/> Offres dans ce pays <span class="count">${e.offres.length}</span></h2></div>
           <div class="offer-grid one">${e.offres.slice(0, 4).map(o => html`<${OfferCard} key=${o.id} o=${o} ctx=${ctx} onOpen=${() => ctx.openOffer(o.id)}/>`)}</div>` : null}
-      </aside>
+      </div>
     </div>
   </div>`;
 }

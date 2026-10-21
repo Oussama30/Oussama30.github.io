@@ -360,6 +360,7 @@ export const AR = {
   'Demande un conseil': 'اطلب نصيحة', 'Un lauréat choisit un de tes horaires et t’appelle 20 minutes en visio.': 'يختار خريج أحد توقيتاتك ويتصل بك 20 دقيقة عبر اتصال مرئي.',
   'Aide un étudiant': 'ساعد طالبًا', 'Clique sur un de ses horaires : la visio et l’invitation sont prêtes.': 'انقر على أحد توقيتاته: الاتصال المرئي والدعوة جاهزان.',
   'À faire aujourd’hui': 'مهام اليوم', 'Besoin d’un conseil ?': 'تحتاج نصيحة؟', 'CV, stage, entretien, étranger : un lauréat te parle 20 minutes en visio.': 'السيرة الذاتية، التدريب، المقابلة، الخارج: يتحدث معك خريج 20 دقيقة عبر اتصال مرئي.',
+  'Aller au contenu': 'الانتقال إلى المحتوى', 'Démo': 'عرض تجريبي', 'Graphique : offres et réussites par mois': 'رسم بياني: العروض والنجاحات حسب الشهر',
   'Pas encore d’offre': 'لا عروض بعد', 'Publie la première : les étudiants concernés la voient tout de suite.': 'انشر أول عرض: يراه الطلبة المعنيون فورًا.',
   'Ton attestation sera disponible après ton premier mentorat terminé ou recrutement confirmé.': 'ستكون شهادتك متاحة بعد أول إرشاد منتهٍ أو توظيف مؤكد.',
   'Aucune startup pour l’instant': 'لا شركات ناشئة حاليًا', 'La coupe démarre': 'الكأس تنطلق',

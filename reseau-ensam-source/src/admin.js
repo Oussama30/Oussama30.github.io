@@ -1,12 +1,13 @@
 // Administration, par onglets : vue d'ensemble (chiffres, annonce, défis, parrains, recrutements, offres),
 // modération des signalements, membres (rôle, vérification), liste officielle des étudiants,
-// agenda de l'école et réglages (email de l'école).
+// liens d'invitation par promo, agenda de l'école et réglages (email de l'école).
 import { html, useState, useEffect, useMemo } from './vendor/preact-htm.js';
 import { Icon, Field, Person, Num, Empty, Bar, toast, injectCSS } from './ui.js';
 import { addAR } from './i18n.js';
 import { NIVEAUX, niveauOf, timeAgo, mentorState, cleNom, norm, GUIDE_SECTIONS, pct } from './logic.js';
 import { DefisAdmin } from './saison.js';
 import { AgendaAdmin } from './agenda.js';
+import { InvitationsAdmin } from './invitation.js';
 
 addAR({
   'Vue d’ensemble': 'نظرة عامة', 'Modération': 'الإشراف', 'Liste officielle': 'اللائحة الرسمية', 'Réglages': 'الإعدادات', 'Agenda': 'المفكرة',
@@ -65,7 +66,7 @@ addAR({
 ]);
 
 const ROLES = [['etudiant', 'Étudiant(e)'], ['laureat', 'Lauréat(e)']];
-const TABS = [['', 'Vue d’ensemble', 'chart'], ['moderation', 'Modération', 'flag'], ['membres', 'Membres', 'people'], ['liste', 'Liste officielle', 'file'], ['agenda', 'Agenda', 'calendar'], ['reglages', 'Réglages', 'wrench']];
+const TABS = [['', 'Vue d’ensemble', 'chart'], ['moderation', 'Modération', 'flag'], ['membres', 'Membres', 'people'], ['liste', 'Liste officielle', 'file'], ['inviter', 'Inviter', 'send'], ['agenda', 'Agenda', 'calendar'], ['reglages', 'Réglages', 'wrench']];
 
 // Comptes (emails, dernière connexion), lus une fois pour toute la page
 function useComptes(store, n) {
@@ -88,6 +89,7 @@ export function AdminPage(ctx) {
     ${tab === 'moderation' ? html`<${Moderation} ctx=${ctx}/>` : null}
     ${tab === 'membres' ? html`<${Membres} ctx=${ctx} comptes=${comptes} toVerify=${toVerify}/>` : null}
     ${tab === 'liste' ? html`<${ListeOfficielle} ctx=${ctx}/>` : null}
+    ${tab === 'inviter' ? html`<${InvitationsAdmin} ctx=${ctx}/>` : null}
     ${tab === 'agenda' ? html`<${AgendaAdmin} ctx=${ctx}/>` : null}
     ${tab === 'reglages' ? html`<${Reglages} ctx=${ctx}/>` : null}
   </section>`;
