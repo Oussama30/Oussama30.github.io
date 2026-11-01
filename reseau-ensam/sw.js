@@ -6,7 +6,7 @@ self.addEventListener('activate', e => e.waitUntil((async () => {
   for (const k of await caches.keys()) await caches.delete(k);
   await self.clients.claim();
   for (const c of await self.clients.matchAll({ type: 'window' })) {
-    try { const u = new URL(c.url); await c.navigate(NOUVEAU + u.search + u.hash); } catch { /* la page se redirigera en se rechargeant */ }
+    try { const u = new URL(c.url); await c.navigate(NOUVEAU + (u.search ? u.search + '&' : '?') + 'depuis=ancienne' + u.hash); } catch { /* la page se redirigera en se rechargeant */ }
   }
   await self.registration.unregister();
 })()));
